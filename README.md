@@ -1,6 +1,6 @@
 # Obsidian Polyglot Study Assistant 🌐📖
 
-> **A seamless, non-intrusive multilingual language learning companion for [Obsidian](https://obsidian.md). Effortlessly study English, Japanese, Chinese, Korean, French, German, Spanish, Russian, and more with instant lookups, native Romaji/Pinyin transliteration, CJK-aware routing, AI grammar insights with Gemini 2.0 Flash, authentic TTS pronunciation, and contextual vocabulary accumulation directly in your Markdown Vault.**
+> **A seamless, non-intrusive multilingual language learning companion for [Obsidian](https://obsidian.md). Effortlessly study English, Japanese, Chinese, Korean, French, German, Spanish, Russian, and more with instant lookups, native Romaji/Pinyin transliteration, CJK-aware routing, AI grammar insights with Gemini Flash, authentic TTS pronunciation, and contextual vocabulary accumulation directly in your Markdown Vault.**
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -57,7 +57,7 @@ Highlight any text in **Edit Mode** or **Reading Mode** $\to$ view instant defin
   - Prioritizes idiom dictionary entries before falling back to phrase translation.
 - **Tier 3: Sentences & Deep Context Analysis**:
   - Smooth translation into Vietnamese (or your chosen target language).
-  - **Gemini 2.0 Flash AI Integration**: When enabled, acts as your private language tutor — providing nuanced grammatical breakdown, Kanji breakdown, honorific explanations (Keigo/Jondaemal), and contextual usage notes.
+  - **Gemini Flash AI Integration**: When enabled, acts as your private language tutor — providing nuanced grammatical breakdown, Kanji breakdown, honorific explanations (Keigo/Jondaemal), and contextual usage notes.
 
 ---
 
@@ -117,7 +117,7 @@ Highlight any text in **Edit Mode** or **Reading Mode** $\to$ view instant defin
         ▼                                       ▼
   Single Word / Phrase                     Full Sentence
     • Script Detection (CJK vs Latin)        • Neural Translation
-    • FreeDict (English IPA & definitions)   • Gemini 2.0 Flash AI
+    • FreeDict (English IPA & definitions)   • Gemini Flash AI
     • Google Translate (dt=t&dt=rm)            (Deep grammar breakdown)
     • Romaji / Pinyin Transliteration
         │                                       │

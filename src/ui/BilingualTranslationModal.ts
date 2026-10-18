@@ -81,7 +81,7 @@ export class BilingualTranslationModal extends Modal {
       .addDropdown((dropdown) => {
         dropdown.addOption("google", "Google Translate (Nhanh & Ổn định)");
         if (this.settings.geminiApiKey?.trim()) {
-          dropdown.addOption("gemini", "Gemini 2.0 Flash AI (Chuyên ngành & Ngữ cảnh)");
+          dropdown.addOption("gemini", "Gemini Flash AI (gemini-flash-latest)");
         } else {
           dropdown.addOption("gemini", "Gemini AI (Chưa cấu hình API Key)");
         }
