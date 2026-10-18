@@ -2,6 +2,7 @@ export type LookupType = "word" | "phrase" | "sentence";
 export type VocabFormat = "table" | "callout";
 export type TriggerMode = "icon" | "hotkey-only" | "auto-popup";
 export type PreferredAccent = "us" | "uk";
+export type ReadingEngine = "google" | "gemini";
 
 export interface DictDefinition {
   partOfSpeech: string;
@@ -38,6 +39,7 @@ export interface LookupResult {
 }
 
 export interface PluginSettings {
+  readingTranslationEngine: ReadingEngine;
   // Nhóm 1: Tương tác đọc
   autoTranslateOnSelection: boolean;
   triggerMode: TriggerMode;
@@ -115,6 +117,7 @@ export interface BilingualTranslationOptions {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
+  readingTranslationEngine: "google",
   autoTranslateOnSelection: false,
   triggerMode: "icon",
   sourceLanguage: "auto",

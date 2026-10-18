@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {},
+    "lib": ["DOM", "DOM.Iterable", "ES2018"],
+    "noEmit": true
+  },
+  "include": ["src/reading/**/*.ts"],
+  "exclude": ["node_modules", "tests", "__mocks__"]
+}
