@@ -2,6 +2,7 @@ import { setIcon } from "obsidian";
 import { LookupResult } from "../types";
 import { calculatePosition, RectLike } from "../utils/domHelper";
 import { getLanguageMeta } from "../utils/languageHelper";
+import { renderMarkdownToElement } from "../utils/markdownHelper";
 
 export interface PopoverCallbacks {
   onSave: (result: LookupResult) => Promise<void> | void;
@@ -52,7 +53,11 @@ export class FloatingPopover {
   show(
     rect: RectLike,
     result: LookupResult,
-    callbacks: PopoverCallbacks
+    callbacks: PopoverCallbacks,
+    options?: {
+      enableAiGrammar?: boolean;
+      enableAiTranslation?: boolean;
+    }
   ): void {
     const preservedPosition = this.customPosition;
     this.hide();
@@ -214,10 +219,23 @@ export class FloatingPopover {
     body.className = "popover-body";
 
     // Vietnamese Translation
-    if (result.vietnameseTranslation) {
+    const displayTranslation = result.aiTranslation || result.vietnameseTranslation;
+    if (displayTranslation) {
       const viMeaning = document.createElement("div");
       viMeaning.className = "vocab-meaning-vi";
-      viMeaning.textContent = result.vietnameseTranslation;
+      if (result.aiTranslation) {
+        const badge = document.createElement("span");
+        badge.className = "vocab-ai-badge-inline";
+        badge.textContent = "✨ AI";
+        viMeaning.appendChild(badge);
+
+        const textSpan = document.createElement("span");
+        textSpan.className = "vocab-translation-text";
+        textSpan.textContent = ` ${result.aiTranslation}`;
+        viMeaning.appendChild(textSpan);
+      } else {
+        viMeaning.textContent = displayTranslation;
+      }
       body.appendChild(viMeaning);
     }
 
@@ -257,38 +275,77 @@ export class FloatingPopover {
     }
 
     // AI Grammar Note
-    if (result.aiGrammarNote) {
-      const aiNote = document.createElement("div");
-      aiNote.className = "vocab-ai-note";
+    const isGrammarEnabled =
+      options?.enableAiGrammar !== undefined
+        ? options.enableAiGrammar
+        : Boolean(result.aiGrammarNote);
 
-      const aiBadge = document.createElement("div");
-      aiBadge.className = "vocab-ai-badge";
+    if (isGrammarEnabled) {
+      if (result.aiGrammarNote) {
+        const aiNote = document.createElement("div");
+        aiNote.className = "vocab-ai-note";
 
-      const aiIcon = document.createElement("span");
-      aiIcon.className = "vocab-ai-icon";
-      try {
-        setIcon(aiIcon, "sparkles");
-      } catch {
-        // fallback
+        const aiBadge = document.createElement("div");
+        aiBadge.className = "vocab-ai-badge";
+
+        const aiIcon = document.createElement("span");
+        aiIcon.className = "vocab-ai-icon";
+        try {
+          setIcon(aiIcon, "sparkles");
+        } catch {
+          // fallback
+        }
+        if (!aiIcon.innerHTML.trim()) {
+          aiIcon.textContent = "✨";
+        }
+        aiBadge.appendChild(aiIcon);
+
+        const aiTitle = document.createElement("span");
+        aiTitle.className = "vocab-ai-title";
+        aiTitle.textContent = "Phân tích ngữ pháp AI";
+        aiBadge.appendChild(aiTitle);
+
+        aiNote.appendChild(aiBadge);
+
+        const aiContent = document.createElement("div");
+        aiContent.className = "vocab-ai-content";
+        renderMarkdownToElement(result.aiGrammarNote, aiContent);
+        aiNote.appendChild(aiContent);
+
+        body.appendChild(aiNote);
+      } else if (result.aiLoading) {
+        const aiNote = document.createElement("div");
+        aiNote.className = "vocab-ai-note vocab-ai-loading";
+
+        const aiBadge = document.createElement("div");
+        aiBadge.className = "vocab-ai-badge";
+
+        const aiIcon = document.createElement("span");
+        aiIcon.className = "vocab-ai-icon";
+        try {
+          setIcon(aiIcon, "sparkles");
+        } catch {
+          // fallback
+        }
+        if (!aiIcon.innerHTML.trim()) {
+          aiIcon.textContent = "✨";
+        }
+        aiBadge.appendChild(aiIcon);
+
+        const aiTitle = document.createElement("span");
+        aiTitle.className = "vocab-ai-title";
+        aiTitle.textContent = "Phân tích ngữ pháp AI";
+        aiBadge.appendChild(aiTitle);
+
+        aiNote.appendChild(aiBadge);
+
+        const aiContent = document.createElement("div");
+        aiContent.className = "vocab-ai-content";
+        aiContent.innerHTML = `<span class="vocab-ai-spinner">⏳</span> Đang phân tích ngữ pháp...`;
+        aiNote.appendChild(aiContent);
+
+        body.appendChild(aiNote);
       }
-      if (!aiIcon.innerHTML.trim()) {
-        aiIcon.textContent = "✨";
-      }
-      aiBadge.appendChild(aiIcon);
-
-      const aiTitle = document.createElement("span");
-      aiTitle.className = "vocab-ai-title";
-      aiTitle.textContent = "Phân tích ngữ pháp AI";
-      aiBadge.appendChild(aiTitle);
-
-      aiNote.appendChild(aiBadge);
-
-      const aiContent = document.createElement("div");
-      aiContent.className = "vocab-ai-content";
-      aiContent.textContent = result.aiGrammarNote;
-      aiNote.appendChild(aiContent);
-
-      body.appendChild(aiNote);
     }
 
     popover.appendChild(body);
@@ -465,6 +522,109 @@ export class FloatingPopover {
     };
     if (typeof document !== "undefined") {
       document.addEventListener("keydown", this.keydownHandler);
+    }
+  }
+
+  /**
+   * Cập nhật kết quả AI (Dịch thuật ngữ cảnh hoặc Phân tích ngữ pháp)
+   * sau khi AI hoàn tất trong background (Progressive Loading).
+   */
+  updateAiContent(
+    updatedResult: LookupResult,
+    options?: {
+      enableAiGrammar?: boolean;
+      enableAiTranslation?: boolean;
+    }
+  ): void {
+    if (!this.element || this.currentQuery !== updatedResult.query) {
+      return;
+    }
+    this.currentResult = {
+      ...(this.currentResult || {}),
+      ...updatedResult,
+    } as LookupResult;
+
+    const body = this.element.querySelector(".popover-body");
+    if (!body) return;
+
+    // 1. Cập nhật AI Translation (nếu có)
+    if (updatedResult.aiTranslation) {
+      let viMeaning = body.querySelector(".vocab-meaning-vi") as HTMLElement;
+      if (!viMeaning) {
+        viMeaning = document.createElement("div");
+        viMeaning.className = "vocab-meaning-vi";
+        if (body.firstChild && typeof body.insertBefore === "function") {
+          body.insertBefore(viMeaning, body.firstChild);
+        } else {
+          body.appendChild(viMeaning);
+        }
+      }
+      viMeaning.innerHTML = "";
+      const badge = document.createElement("span");
+      badge.className = "vocab-ai-badge-inline vocab-fade-in";
+      badge.textContent = "✨ AI";
+      viMeaning.appendChild(badge);
+
+      const textSpan = document.createElement("span");
+      textSpan.className = "vocab-translation-text vocab-fade-in";
+      textSpan.textContent = ` ${updatedResult.aiTranslation}`;
+      viMeaning.appendChild(textSpan);
+    }
+
+    // 2. Cập nhật AI Grammar Note
+    const isGrammarEnabled =
+      options?.enableAiGrammar !== undefined
+        ? options.enableAiGrammar
+        : Boolean(updatedResult.aiGrammarNote);
+
+    let aiNote = body.querySelector(".vocab-ai-note") as HTMLElement;
+    if (!isGrammarEnabled) {
+      // Nếu user tắt ngữ pháp -> xoá bỏ box ngữ pháp hoàn toàn
+      if (aiNote) {
+        aiNote.remove();
+      }
+    } else {
+      if (updatedResult.aiGrammarNote) {
+        if (!aiNote) {
+          aiNote = document.createElement("div");
+          aiNote.className = "vocab-ai-note";
+
+          const aiBadge = document.createElement("div");
+          aiBadge.className = "vocab-ai-badge";
+
+          const aiIcon = document.createElement("span");
+          aiIcon.className = "vocab-ai-icon";
+          try {
+            setIcon(aiIcon, "sparkles");
+          } catch {}
+          if (!aiIcon.innerHTML.trim()) {
+            aiIcon.textContent = "✨";
+          }
+          aiBadge.appendChild(aiIcon);
+
+          const aiTitle = document.createElement("span");
+          aiTitle.className = "vocab-ai-title";
+          aiTitle.textContent = "Phân tích ngữ pháp AI";
+          aiBadge.appendChild(aiTitle);
+          aiNote.appendChild(aiBadge);
+
+          const aiContent = document.createElement("div");
+          aiContent.className = "vocab-ai-content";
+          aiNote.appendChild(aiContent);
+
+          body.appendChild(aiNote);
+        }
+
+        aiNote.classList.remove("vocab-ai-loading");
+        const aiContent = aiNote.querySelector(".vocab-ai-content");
+        if (aiContent) {
+          aiContent.classList.add("vocab-fade-in");
+          renderMarkdownToElement(updatedResult.aiGrammarNote, aiContent as HTMLElement);
+        }
+      } else if (!updatedResult.aiLoading && aiNote) {
+        // AI chạy xong nhưng không có note ngữ pháp -> xoá placeholder
+        aiNote.remove();
+      }
     }
   }
 

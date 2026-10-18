@@ -9,6 +9,13 @@ export interface DictDefinition {
   example?: string;
 }
 
+export interface DocumentContextMeta {
+  noteTitle?: string;
+  folderPath?: string;
+  heading?: string;
+  tags?: string[];
+}
+
 export interface LookupResult {
   query: string;
   type: LookupType;
@@ -19,6 +26,9 @@ export interface LookupResult {
   vietnameseTranslation: string;
   definitions?: DictDefinition[];
   aiGrammarNote?: string;
+  aiTranslation?: string;
+  aiLoading?: boolean;
+  docContext?: DocumentContextMeta;
   timestamp: number;
 
   // Multilingual properties
@@ -46,6 +56,7 @@ export interface PluginSettings {
   // Nhóm 3: Dịch thuật & AI
   translateEndpointUrl: string;
   geminiApiKey: string;
+  enableAiTranslation: boolean;
   enableAiGrammar: boolean;
 
   // Nhóm 4: Phát âm
@@ -65,6 +76,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   highlightWordInContext: true,
   translateEndpointUrl: "https://translate.googleapis.com",
   geminiApiKey: "",
+  enableAiTranslation: false,
   enableAiGrammar: false,
   preferredAccent: "us",
   autoPlayAudio: false,

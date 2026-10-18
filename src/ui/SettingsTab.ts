@@ -306,8 +306,24 @@ export class EnglishStudySettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Phân tích ngữ pháp AI")
-      .setDesc("Tự động phân tích ngữ pháp, ngữ cảnh và thành ngữ bằng Gemini.")
+      .setName("Dịch nghĩa với AI (Domain-Aware Translation)")
+      .setDesc(
+        "Tự động nhận diện chủ đề tài liệu (IT, Y học, Kinh tế...) để dịch nghĩa chính xác chuyên ngành với tốc độ phản hồi tức thì (Progressive Loading)."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(Boolean(this.pluginInstance.settings.enableAiTranslation))
+          .onChange(async (value: boolean) => {
+            this.pluginInstance.settings.enableAiTranslation = value;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Phân tích ngữ pháp AI (AI Grammar Analysis)")
+      .setDesc(
+        "Hiển thị khung phân tích ngữ pháp chuyên sâu riêng biệt bên dưới nghĩa của từ (có thể tắt để popup chỉ hiển thị bản dịch nghĩa)."
+      )
       .addToggle((toggle) =>
         toggle
           .setValue(this.pluginInstance.settings.enableAiGrammar)

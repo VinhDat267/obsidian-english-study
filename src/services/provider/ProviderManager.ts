@@ -4,6 +4,7 @@ import {
   LookupType,
   DictDefinition,
   DEFAULT_SETTINGS,
+  DocumentContextMeta,
 } from "../../types";
 import { LRUCache } from "../../utils/lruCache";
 import { cleanSelection } from "../../utils/textCleaner";
@@ -29,28 +30,45 @@ export class ProviderManager {
     this.geminiService = new GeminiService();
   }
 
+  /**
+   * Cập nhật runtime settings
+   */
+  updateSettings(settings: Partial<PluginSettings>): void {
+    this.settings = { ...this.settings, ...settings };
+    if (settings.preferredAccent) {
+      this.freeDict = new FreeDictService(settings.preferredAccent);
+    }
+  }
+
+  /**
+   * Lấy instance cache
+   */
   getCache(): LRUCache<LookupResult> {
     return this.cache;
   }
 
   /**
-   * Phân loại 3 mức thích ứng cả ký tự Latin và CJK:
-   * - CJK (tiếng Trung, Nhật không có khoảng trắng):
-   *   + <= 2 ký tự: 'word'
-   *   + 3-6 ký tự: 'phrase'
-   *   + > 6 ký tự hoặc có dấu câu (. ! ? 。 ！ ？ …): 'sentence'
-   * - Ngôn ngữ có khoảng trắng:
-   *   + 1 từ: 'word'
-   *   + <= 4 từ: 'phrase'
-   *   + > 4 từ hoặc có dấu kết thúc câu: 'sentence'
+   * Hủy bỏ request đang chờ (nếu có)
    */
-  classify(cleanText: string): LookupType {
-    const trimmed = cleanText ? cleanText.trim() : "";
+  cancelPending(): void {
+    if (this.activeController) {
+      this.activeController.abort();
+      this.activeController = null;
+    }
+  }
+
+  /**
+   * Phân loại văn bản:
+   * - Có dấu kết thúc câu (. ! ? 。 ！ ？ …) hoặc > 4 từ -> sentence
+   * - CJK: <= 2 ký tự -> word; 3-6 ký tự -> phrase; > 6 ký tự -> sentence
+   * - 1 từ -> word; 2-4 từ -> phrase
+   */
+  classify(text: string): LookupType {
+    const trimmed = text.trim();
     if (!trimmed) {
       return "word";
     }
 
-    // Dấu kết thúc câu Latin và CJK (. ! ? 。 ！ ？ …)
     const hasSentencePunctuation = /[.!?。！？…]/.test(trimmed);
 
     const script = detectScript(trimmed);
@@ -64,83 +82,64 @@ export class ProviderManager {
       return "phrase";
     }
 
-    // Đếm số từ theo khoảng trắng cho các ngôn ngữ có space
     const words = trimmed.split(/\s+/).filter(Boolean);
     const wordCount = words.length;
 
-    // cleanText > 4 từ hoặc có dấu kết thúc câu: 'sentence'
     if (wordCount > 4 || hasSentencePunctuation) {
       return "sentence";
     }
 
-    // cleanText có 1 từ: 'word'
     if (wordCount === 1) {
       return "word";
     }
 
-    // cleanText có <= 4 từ và không có dấu kết thúc câu: 'phrase'
     return "phrase";
   }
 
   /**
-   * Hủy bỏ request đang chạy (khi người dùng thao tác mới)
-   */
-  cancelPending(): void {
-    if (this.activeController) {
-      this.activeController.abort();
-      this.activeController = null;
-    }
-  }
-
-  /**
-   * Pipeline tra cứu trung tâm:
-   * 1. Hủy request đang chạy trước đó nếu có (activeController?.abort()).
-   * 2. Làm sạch text bằng cleanSelection(rawText).
-   * 3. Trích xuất câu ngữ cảnh bằng extractContextSentence(rawContext, cleanText, cursorOffset).
-   * 4. Kiểm tra Cache: cache.get(`${targetLang}:${cleanText.toLowerCase()}`).
-   *    - Nếu HIT: cập nhật timestamp và trả về ngay lập tức (0ms).
-   * 5. Điều phối 3 mức (3-Tier Execution):
-   *    - Mức 'word' / 'phrase':
-   *      + Nếu là tiếng Anh: tra cứu FreeDict (phát âm, nghĩa Anh-Anh).
-   *      + Nếu là CJK hoặc ngôn ngữ khác: bỏ qua FreeDict, tra cứu Google Translate có lấy metadata (Pinyin/Romaji).
-   *      + Nếu bật enableAiGrammar và có geminiApiKey: gọi thêm geminiService.analyzeContext kèm sourceLang & targetLang.
-   *    - Mức 'sentence':
-   *      + Nếu có geminiApiKey và enableAiGrammar: dịch và phân tích ngữ cảnh qua Gemini.
-   *      + Ngược lại: dịch qua GoogleTranslate.
-   * 6. Tổng hợp dữ liệu thành LookupResult chuẩn hóa (sourceLang, targetLang, transliteration).
-   * 7. Lưu vào cache và trả về.
+   * Phương thức điều phối tra cứu chính:
+   * Hỗ trợ Progressive Loading khi có onAiUpdate:
+   * - Giai đoạn 1 (tức thì ~200ms): Trả về kết quả từ điển / Google Translate ngay lập tức.
+   * - Giai đoạn 2 (chạy ngầm): Gọi Gemini AI dịch chuyên ngành và phân tích ngữ pháp, gọi onAiUpdate khi xong.
    */
   async lookup(
-    rawText: string,
+    text: string,
     rawContext: string,
-    cursorOffset?: number,
-    settingsOverride?: PluginSettings
+    cursorOffset: number = 0,
+    settings?: Partial<PluginSettings>,
+    docContext?: DocumentContextMeta,
+    onAiUpdate?: (result: LookupResult) => void
   ): Promise<LookupResult> {
-    // 1. Hủy request đang chạy trước đó
     this.cancelPending();
+
     const controller = new AbortController();
     this.activeController = controller;
 
-    const effectiveSettings: PluginSettings = { ...this.settings, ...settingsOverride };
-    const targetLang = effectiveSettings.targetLanguage || "vi";
-    const sourceLang = effectiveSettings.sourceLanguage || "auto";
+    const effectiveSettings: PluginSettings = {
+      ...this.settings,
+      ...settings,
+    };
 
-    // 2. Làm sạch text
-    const cleanText = cleanSelection(rawText);
+    const sourceLang = effectiveSettings.sourceLanguage || "auto";
+    const targetLang = effectiveSettings.targetLanguage || "vi";
+
+    // 1. Làm sạch văn bản
+    const cleanText = cleanSelection(text);
     if (!cleanText) {
       return {
-        query: rawText || "",
+        query: "",
         type: "word",
-        contextSentence: rawContext || "",
-        contextSentenceClean: rawContext || "",
+        contextSentence: "",
+        contextSentenceClean: "",
         vietnameseTranslation: "",
-        sourceLang: sourceLang !== "auto" ? sourceLang : "en",
-        targetLang,
         timestamp: Date.now(),
+        sourceLang,
+        targetLang,
+        docContext,
       };
     }
 
-    // 3. Trích xuất câu ngữ cảnh
+    // 2. Trích xuất câu ngữ cảnh
     const { cleanContext, rawContext: contextSentence } = extractContextSentence(
       rawContext,
       cleanText,
@@ -148,7 +147,7 @@ export class ProviderManager {
     );
     const contextSentenceClean = cleanContext;
 
-    // 4. Kiểm tra Cache (cách ly theo targetLang)
+    // 3. Kiểm tra Cache
     const cacheKey = `${targetLang}:${cleanText.toLowerCase()}`;
     const cached = this.cache.get(cacheKey);
     if (cached) {
@@ -160,7 +159,7 @@ export class ProviderManager {
       return cached;
     }
 
-    // 5. Điều phối 3 mức
+    // 4. Phân loại và nhận diện ngôn ngữ
     const type = this.classify(cleanText);
     const script = detectScript(cleanText);
     const isEnglish = (script === "latin" || script === "other") && (sourceLang === "auto" || sourceLang === "en");
@@ -170,15 +169,17 @@ export class ProviderManager {
     let definitions: DictDefinition[] | undefined;
     let vietnameseTranslation = "";
     let aiGrammarNote: string | undefined;
+    let aiTranslation: string | undefined;
     let detectedSourceLang: string | undefined = sourceLang !== "auto" ? sourceLang : (isEnglish ? "en" : undefined);
     let transliteration: string | undefined;
 
+    const hasAiApiKey = Boolean(effectiveSettings.geminiApiKey && effectiveSettings.geminiApiKey.trim());
+    const needsAiTranslation = Boolean(effectiveSettings.enableAiTranslation && hasAiApiKey);
+    const needsAiGrammar = Boolean(effectiveSettings.enableAiGrammar && hasAiApiKey);
+    const hasAnyAi = needsAiTranslation || needsAiGrammar;
+
     if (type === "word" || type === "phrase") {
-      const promises: [
-        Promise<FreeDictResult | null>,
-        Promise<GoogleTranslationMeta | null>,
-        Promise<string | null>
-      ] = [
+      const [dictSettled, gtSettled] = await Promise.allSettled([
         isEnglish
           ? this.freeDict.lookup(cleanText, effectiveSettings.preferredAccent)
           : Promise.resolve(null),
@@ -188,18 +189,7 @@ export class ProviderManager {
           targetLang,
           effectiveSettings.translateEndpointUrl
         ),
-        effectiveSettings.enableAiGrammar && effectiveSettings.geminiApiKey
-          ? this.geminiService.analyzeContext(
-              cleanText,
-              contextSentenceClean,
-              effectiveSettings.geminiApiKey,
-              detectedSourceLang || "auto",
-              targetLang
-            )
-          : Promise.resolve(null),
-      ];
-
-      const [dictSettled, gtSettled, geminiSettled] = await Promise.allSettled(promises);
+      ]);
 
       if (controller.signal.aborted) {
         throw new DOMException("The lookup operation was aborted", "AbortError");
@@ -222,13 +212,10 @@ export class ProviderManager {
           transliteration = gtSettled.value.transliteration;
         }
       }
-
-      if (geminiSettled.status === "fulfilled" && geminiSettled.value) {
-        aiGrammarNote = geminiSettled.value;
-      }
     } else {
       // type === "sentence"
-      if (effectiveSettings.enableAiGrammar && effectiveSettings.geminiApiKey) {
+      if (!onAiUpdate && needsAiGrammar && !needsAiTranslation) {
+        // Classic / legacy sentence mode: call analyzeContext directly (1 request)
         const geminiRes = await this.geminiService.analyzeContext(
           cleanText,
           contextSentenceClean,
@@ -246,24 +233,16 @@ export class ProviderManager {
             detectedSourceLang = script !== "latin" && script !== "other" ? script : "en";
           }
         } else {
-          // Fallback sang Google Translate nếu Gemini thất bại
           const gtMeta = await this.googleTranslate.translateWithMeta(
             cleanText,
             sourceLang,
             targetLang,
             effectiveSettings.translateEndpointUrl
           );
-          if (controller.signal.aborted) {
-            throw new DOMException("The lookup operation was aborted", "AbortError");
-          }
           if (gtMeta) {
             vietnameseTranslation = gtMeta.translation;
-            if (gtMeta.detectedLang) {
-              detectedSourceLang = gtMeta.detectedLang;
-            }
-            if (gtMeta.transliteration) {
-              transliteration = gtMeta.transliteration;
-            }
+            if (gtMeta.detectedLang) detectedSourceLang = gtMeta.detectedLang;
+            if (gtMeta.transliteration) transliteration = gtMeta.transliteration;
           }
         }
       } else {
@@ -288,11 +267,6 @@ export class ProviderManager {
       }
     }
 
-    if (controller.signal.aborted) {
-      throw new DOMException("The lookup operation was aborted", "AbortError");
-    }
-
-    // 6. Tổng hợp dữ liệu thành LookupResult chuẩn hóa
     const result: LookupResult = {
       query: cleanText,
       type,
@@ -307,9 +281,79 @@ export class ProviderManager {
       targetLang,
       ...(transliteration ? { transliteration } : {}),
       timestamp: Date.now(),
+      docContext,
+      aiLoading: hasAnyAi,
     };
 
-    // 7. Lưu vào cache và trả về
+    // Hàm thực thi AI (Dịch nghĩa chuyên ngành & Ngữ pháp)
+    const executeAi = async (): Promise<void> => {
+      try {
+        if (needsAiTranslation) {
+          const aiTrans = await this.geminiService.translateContext(
+            cleanText,
+            contextSentenceClean,
+            effectiveSettings.geminiApiKey,
+            docContext,
+            detectedSourceLang || sourceLang,
+            targetLang
+          );
+          if (controller.signal.aborted) return;
+          if (aiTrans) {
+            result.aiTranslation = aiTrans;
+            result.vietnameseTranslation = aiTrans;
+          }
+        }
+
+        if (needsAiGrammar) {
+          if (!onAiUpdate && !needsAiTranslation && type === "sentence" && result.aiGrammarNote) {
+            // Already populated above in legacy sentence branch
+            return;
+          }
+
+          const aiGrammar = await this.geminiService.analyzeGrammar(
+            cleanText,
+            contextSentenceClean,
+            effectiveSettings.geminiApiKey,
+            docContext,
+            detectedSourceLang || sourceLang,
+            targetLang
+          );
+          if (controller.signal.aborted) return;
+          if (aiGrammar) {
+            result.aiGrammarNote = aiGrammar;
+          } else if (!needsAiTranslation) {
+            // fallback nếu analyzeGrammar null
+            const legacyRes = await this.geminiService.analyzeContext(
+              cleanText,
+              contextSentenceClean,
+              effectiveSettings.geminiApiKey,
+              detectedSourceLang || "auto",
+              targetLang
+            );
+            if (legacyRes) result.aiGrammarNote = legacyRes;
+          }
+        }
+      } finally {
+        result.aiLoading = false;
+        this.cache.set(cacheKey, result);
+        if (onAiUpdate) {
+          onAiUpdate(result);
+        }
+      }
+    };
+
+    if (hasAnyAi) {
+      if (onAiUpdate) {
+        // Chế độ Progressive: trả về base result ngay lập tức, chạy AI ngầm
+        executeAi();
+        return result;
+      } else {
+        // Chế độ cổ điển/test: chờ AI hoàn thành trước khi trả về
+        await executeAi();
+        return result;
+      }
+    }
+
     this.cache.set(cacheKey, result);
     return result;
   }

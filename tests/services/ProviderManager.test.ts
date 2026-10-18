@@ -572,5 +572,83 @@ describe("ProviderManager", () => {
       expect(resEn.vietnameseTranslation).toBe("hello");
       expect(gtSpy).toHaveBeenCalledTimes(2);
     });
+
+    it("should support Progressive Loading with onAiUpdate callback", async () => {
+      const freeDictSpy = vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValueOnce({
+        word: "qualifies",
+        phonetic: "/kwɑːlɪfaɪz/",
+        definitions: [{ partOfSpeech: "verb", meaningEn: "be entitled to" }],
+      });
+      const gtSpy = vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValueOnce({
+        translation: "đủ điều kiện",
+        detectedLang: "en",
+      });
+      const aiTransSpy = vi.spyOn((manager as any).geminiService, "translateContext").mockResolvedValueOnce(
+        "Đủ tiêu chuẩn cấu thành một dự án."
+      );
+      const aiGrammarSpy = vi.spyOn((manager as any).geminiService, "analyzeGrammar").mockResolvedValueOnce(
+        "• **Cấu trúc:** `qualify as + Noun`"
+      );
+
+      const onAiUpdate = vi.fn();
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        geminiApiKey: "valid-key",
+        enableAiTranslation: true,
+        enableAiGrammar: true,
+      };
+
+      const res = await manager.lookup(
+        "qualifies",
+        "It qualifies as a project rather than routine operations.",
+        0,
+        settings,
+        { noteTitle: "IT Software Project Management" },
+        onAiUpdate
+      );
+
+      // Immediately returned base result
+      expect(res.aiLoading).toBe(true);
+      expect(res.vietnameseTranslation).toBe("đủ điều kiện");
+      expect(res.phonetic).toBe("/kwɑːlɪfaɪz/");
+
+      // Allow background microtask to finish
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(onAiUpdate).toHaveBeenCalledTimes(1);
+      const updatedResult = onAiUpdate.mock.calls[0][0];
+      expect(updatedResult.aiLoading).toBe(false);
+      expect(updatedResult.aiTranslation).toBe("Đủ tiêu chuẩn cấu thành một dự án.");
+      expect(updatedResult.vietnameseTranslation).toBe("Đủ tiêu chuẩn cấu thành một dự án.");
+      expect(updatedResult.aiGrammarNote).toBe("• **Cấu trúc:** `qualify as + Noun`");
+    });
+
+    it("should only call translateContext when enableAiTranslation is true and enableAiGrammar is false", async () => {
+      vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValueOnce(null);
+      vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValueOnce({
+        translation: "đủ điều kiện",
+      });
+      const aiTransSpy = vi.spyOn((manager as any).geminiService, "translateContext").mockResolvedValueOnce(
+        "Bản dịch chuyên ngành chuẩn."
+      );
+      const aiGrammarSpy = vi.spyOn((manager as any).geminiService, "analyzeGrammar").mockResolvedValueOnce(
+        "Ngữ pháp"
+      );
+
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        geminiApiKey: "valid-key",
+        enableAiTranslation: true,
+        enableAiGrammar: false,
+      };
+
+      const res = await manager.lookup("word", "context sentence", 0, settings);
+
+      expect(aiTransSpy).toHaveBeenCalled();
+      expect(aiGrammarSpy).not.toHaveBeenCalled();
+      expect(res.aiTranslation).toBe("Bản dịch chuyên ngành chuẩn.");
+      expect(res.vietnameseTranslation).toBe("Bản dịch chuyên ngành chuẩn.");
+      expect(res.aiGrammarNote).toBeUndefined();
+    });
   });
 });

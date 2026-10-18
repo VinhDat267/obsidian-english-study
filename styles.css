@@ -437,6 +437,51 @@
   margin-top: 2px;
 }
 
+.english-study-popover .vocab-ai-note.vocab-ai-loading {
+  opacity: 0.8;
+  border-left-style: dashed;
+}
+
+.vocab-ai-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-right: 6px;
+  border-radius: var(--english-study-radius-xs, 4px);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
+.vocab-fade-in {
+  animation: vocabFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes vocabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vocab-ai-spinner {
+  display: inline-block;
+  animation: vocabSpin 1s linear infinite;
+  margin-right: 4px;
+}
+
+@keyframes vocabSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .english-study-popover .vocab-ai-badge {
   font-size: 11px;
   font-weight: 600;
@@ -452,10 +497,61 @@
   height: 12px;
 }
 
-.english-study-popover .vocab-ai-content {
+.english-study-popover .vocab-ai-content,
+.english-study-sidebar-view .vocab-ai-content {
   font-size: var(--font-ui-smaller, 11.5px);
   color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.vocab-ai-content .vocab-markdown-bullet {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 4px;
   line-height: 1.45;
+}
+
+.vocab-ai-content .vocab-markdown-bullet:last-child {
+  margin-bottom: 0;
+}
+
+.vocab-ai-content .bullet-dot {
+  color: var(--text-accent);
+  font-weight: bold;
+  user-select: none;
+}
+
+.vocab-ai-content .bullet-text {
+  flex: 1;
+}
+
+.vocab-ai-content .vocab-markdown-paragraph {
+  margin-bottom: 4px;
+  line-height: 1.45;
+}
+
+.vocab-ai-content .vocab-markdown-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.vocab-ai-content strong {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+.vocab-ai-content em {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.vocab-ai-content code {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border-radius: var(--english-study-radius-xs, 3px);
+  background-color: var(--background-modifier-form-field);
+  color: var(--text-accent);
 }
 
 /* --------------------------------------------------------------------------

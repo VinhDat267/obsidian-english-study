@@ -321,6 +321,23 @@ describe("EnglishStudySettingTab", () => {
       expect(pluginMock.settings.enableAiGrammar).toBe(true);
       expect(pluginMock.saveSettings).toHaveBeenCalled();
     });
+
+    it("should update enableAiTranslation and call saveSettings", async () => {
+      settingsTab.display();
+
+      const transSetting = Setting.instances.find(
+        (s) => s.name.includes("Dịch nghĩa với AI")
+      );
+      expect(transSetting).toBeDefined();
+
+      const toggle = transSetting!.toggleComponents[0];
+      expect(toggle).toBeDefined();
+
+      await toggle._onChange(true);
+
+      expect(pluginMock.settings.enableAiTranslation).toBe(true);
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
   });
 
   describe("Group 4: Audio", () => {

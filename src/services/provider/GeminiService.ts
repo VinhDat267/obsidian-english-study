@@ -1,4 +1,5 @@
 import { BaseProvider } from "./BaseProvider";
+import { DocumentContextMeta } from "../../types";
 
 export interface GeminiTestResult {
   ok: boolean;
@@ -7,61 +8,99 @@ export interface GeminiTestResult {
 
 export class GeminiService extends BaseProvider {
   /**
-   * Phân tích từ/câu theo ngữ cảnh bằng Gemini API:
-   * Endpoint: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
-   * Model mặc định: 'gemini-flash-latest' (tự động cập nhật bản Flash mới nhất của Google)
-   *
-   * Hỗ trợ tự động map model gemini-2.0-flash / gemini-2.5-flash sang gemini-flash-latest để tránh 404 Not Found.
+   * Helper build context hint từ DocumentContextMeta
    */
-  async analyzeContext(
+  private buildContextHint(docContext?: DocumentContextMeta): string {
+    if (!docContext) return "";
+    const parts: string[] = [];
+    if (docContext.noteTitle) {
+      parts.push(`Chủ đề tài liệu: "${docContext.noteTitle}".`);
+    }
+    if (docContext.heading) {
+      parts.push(`Mục/tiêu đề: "${docContext.heading}".`);
+    }
+    if (docContext.tags && docContext.tags.length > 0) {
+      parts.push(`Lĩnh vực/Tags: ${docContext.tags.join(", ")}.`);
+    }
+    return parts.join(" ");
+  }
+
+  /**
+   * 1. DỊCH NGHĨA CHUYÊN NGÀNH THEO NGỮ CẢNH (AI Contextual Translation):
+   * Chỉ dịch nghĩa câu/từ chuẩn xác theo chuyên môn của tài liệu, trả về DUY NHẤT 1 câu dịch nghĩa.
+   * Tuyệt đối không phân tích ngữ pháp.
+   */
+  async translateContext(
     targetText: string,
     contextSentence: string,
     apiKey: string,
-    sourceLangOrModel?: string,
-    targetLang: string = "vi",
-    customModel?: string
+    docContext?: DocumentContextMeta,
+    sourceLang?: string,
+    targetLang: string = "vi"
   ): Promise<string | null> {
     const cleanKey = apiKey ? apiKey.trim() : "";
-    if (!cleanKey) {
-      return null;
-    }
+    if (!cleanKey) return null;
 
     const cleanTarget = targetText ? targetText.trim() : "";
-    if (!cleanTarget) {
-      return null;
-    }
+    if (!cleanTarget) return null;
 
     const cleanContext = contextSentence ? contextSentence.trim() : "";
+    const contextHint = this.buildContextHint(docContext);
+    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
 
-    // Phân giải linh hoạt sourceLang và model
-    let sourceLang: string | undefined = sourceLangOrModel;
-    let selectedModel = customModel || "gemini-flash-latest";
+    const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là một dịch giả chuyên gia am hiểu sâu sắc lĩnh vực trên. Hãy dịch nghĩa chính xác của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}".
+Yêu cầu:
+- Sử dụng đúng thuật ngữ chuyên môn của tài liệu (nếu có).
+- Trả về DUY NHẤT một câu dịch nghĩa bằng ${langTargetName} súc tích, tự nhiên.
+- Tuyệt đối không giải thích ngữ pháp, không thêm lời chào hay từ ngữ rườm rà.`;
 
-    if (
-      sourceLangOrModel &&
-      (sourceLangOrModel.startsWith("gemini-") ||
-        sourceLangOrModel.includes("/") ||
-        sourceLangOrModel.includes("pro"))
-    ) {
-      selectedModel = sourceLangOrModel;
-      sourceLang = undefined;
-    }
+    return this.callGeminiApi(prompt, cleanKey);
+  }
 
-    // Auto-upgrade deprecated models to prevent 404
+  /**
+   * 2. PHÂN TÍCH NGỮ PHÁP AI (AI Grammar Analysis):
+   * Chỉ phân tích cấu trúc ngữ pháp, từ loại, thành ngữ.
+   * Tối đa 2 gạch đầu dòng, dưới 40 từ. Tuyệt đối không lặp lại giải thích nghĩa.
+   */
+  async analyzeGrammar(
+    targetText: string,
+    contextSentence: string,
+    apiKey: string,
+    docContext?: DocumentContextMeta,
+    sourceLang?: string,
+    targetLang: string = "vi"
+  ): Promise<string | null> {
+    const cleanKey = apiKey ? apiKey.trim() : "";
+    if (!cleanKey) return null;
+
+    const cleanTarget = targetText ? targetText.trim() : "";
+    if (!cleanTarget) return null;
+
+    const cleanContext = contextSentence ? contextSentence.trim() : "";
+    const contextHint = this.buildContextHint(docContext);
+    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+
+    const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là chuyên gia ngôn ngữ học. Hãy phân tích cấu trúc ngữ pháp và từ loại của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}".
+Yêu cầu:
+- Tối đa 2 gạch đầu dòng (bắt đầu bằng dấu •).
+- Tổng độ dài dưới 40 từ bằng ${langTargetName}.
+- Chỉ chỉ ra cấu trúc ngữ pháp hoặc thành ngữ cốt lõi, từ loại, giới từ đi kèm.
+- Tuyệt đối KHÔNG lặp lại giải thích nghĩa của từ, không thêm lời chào kết bài.`;
+
+    return this.callGeminiApi(prompt, cleanKey);
+  }
+
+  /**
+   * Gọi API Gemini với prompt và key
+   */
+  private async callGeminiApi(
+    prompt: string,
+    cleanKey: string,
+    model: string = "gemini-flash-latest"
+  ): Promise<string | null> {
+    let selectedModel = model;
     if (selectedModel === "gemini-2.0-flash" || selectedModel === "gemini-2.5-flash") {
       selectedModel = "gemini-flash-latest";
-    }
-
-    let prompt: string;
-    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
-    if (sourceLang === "ja") {
-      prompt = `Bạn là chuyên gia tiếng Nhật. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Furigana/Romaji, Hán tự Kanji (nếu có) và ngữ pháp liên quan bằng ${langTargetName}.`;
-    } else if (sourceLang === "zh") {
-      prompt = `Bạn là chuyên gia tiếng Trung. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra phiên âm Pinyin, từ loại và ngữ pháp liên quan bằng ${langTargetName}.`;
-    } else if (sourceLang === "ko") {
-      prompt = `Bạn là chuyên gia tiếng Hàn. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Romaja, kính ngữ hoặc ngữ pháp liên quan bằng ${langTargetName}.`;
-    } else {
-      prompt = `Bạn là một chuyên gia ngôn ngữ học. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cấu trúc ngữ pháp đặc biệt hoặc thành ngữ liên quan (nếu có) bằng ${langTargetName}.`;
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent?key=${encodeURIComponent(cleanKey)}`;
@@ -112,7 +151,54 @@ export class GeminiService extends BaseProvider {
   }
 
   /**
-   * Kiểm tra kết nối chi tiết với Gemini API và trả về mã/thông báo lỗi cụ thể nếu thất bại.
+   * Phân tích từ/câu theo ngữ cảnh bằng Gemini API (tương thích ngược)
+   */
+  async analyzeContext(
+    targetText: string,
+    contextSentence: string,
+    apiKey: string,
+    sourceLangOrModel?: string,
+    targetLang: string = "vi",
+    customModel?: string
+  ): Promise<string | null> {
+    const cleanKey = apiKey ? apiKey.trim() : "";
+    if (!cleanKey) return null;
+
+    const cleanTarget = targetText ? targetText.trim() : "";
+    if (!cleanTarget) return null;
+
+    const cleanContext = contextSentence ? contextSentence.trim() : "";
+
+    let sourceLang: string | undefined = sourceLangOrModel;
+    let selectedModel = customModel || "gemini-flash-latest";
+
+    if (
+      sourceLangOrModel &&
+      (sourceLangOrModel.startsWith("gemini-") ||
+        sourceLangOrModel.includes("/") ||
+        sourceLangOrModel.includes("pro"))
+    ) {
+      selectedModel = sourceLangOrModel;
+      sourceLang = undefined;
+    }
+
+    let prompt: string;
+    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+    if (sourceLang === "ja") {
+      prompt = `Bạn là chuyên gia tiếng Nhật. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Furigana/Romaji, Hán tự Kanji (nếu có) và ngữ pháp liên quan bằng ${langTargetName}.`;
+    } else if (sourceLang === "zh") {
+      prompt = `Bạn là chuyên gia tiếng Trung. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra phiên âm Pinyin, từ loại và ngữ pháp liên quan bằng ${langTargetName}.`;
+    } else if (sourceLang === "ko") {
+      prompt = `Bạn là chuyên gia tiếng Hàn. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Romaja, kính ngữ hoặc ngữ pháp liên quan bằng ${langTargetName}.`;
+    } else {
+      prompt = `Bạn là một chuyên gia ngôn ngữ học. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cấu trúc ngữ pháp đặc biệt hoặc thành ngữ liên quan (nếu có) bằng ${langTargetName}.`;
+    }
+
+    return this.callGeminiApi(prompt, cleanKey, selectedModel);
+  }
+
+  /**
+   * Kiểm tra kết nối chi tiết với Gemini API
    */
   async testConnectionDetailed(apiKey: string): Promise<GeminiTestResult> {
     const cleanKey = apiKey ? apiKey.trim() : "";
@@ -165,8 +251,7 @@ export class GeminiService extends BaseProvider {
   }
 
   /**
-   * Kiểm tra kết nối API Key hợp lệ:
-   * Gửi 1 prompt ngắn 'Hi' để xác nhận HTTP 200.
+   * Kiểm tra kết nối API Key hợp lệ (boolean)
    */
   async testConnection(apiKey: string): Promise<boolean> {
     const res = await this.testConnectionDetailed(apiKey);

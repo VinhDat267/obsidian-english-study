@@ -235,4 +235,84 @@ describe("GeminiService", () => {
       expect(res.error).toContain("API key not valid");
     });
   });
+
+  describe("translateContext", () => {
+    it("should return null if apiKey or targetText is empty", async () => {
+      expect(await service.translateContext("", "sentence", "key")).toBeNull();
+      expect(await service.translateContext("word", "sentence", "")).toBeNull();
+    });
+
+    it("should inject domain context metadata (noteTitle, heading, tags) into prompt and return 1-sentence translation", async () => {
+      const mockResponse = {
+        candidates: [{ content: { parts: [{ text: "Đủ tiêu chuẩn cấu thành một dự án." }] } }],
+      };
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockResponse,
+        text: JSON.stringify(mockResponse),
+      });
+
+      const res = await service.translateContext(
+        "qualifies",
+        "It qualifies as a project rather than routine operations.",
+        "valid-key",
+        {
+          noteTitle: "IT Software Project Management",
+          heading: "Project Qualification",
+          tags: ["it", "project-management"],
+        }
+      );
+
+      expect(res).toBe("Đủ tiêu chuẩn cấu thành một dự án.");
+      const callArgs = vi.mocked(requestUrl).mock.calls[0][0] as any;
+      const body = JSON.parse(callArgs.body);
+      const prompt = body.contents[0].parts[0].text;
+      expect(prompt).toContain("IT Software Project Management");
+      expect(prompt).toContain("Project Qualification");
+      expect(prompt).toContain("project-management");
+      expect(prompt).toContain("qualifies");
+    });
+  });
+
+  describe("analyzeGrammar", () => {
+    it("should return null if apiKey or targetText is empty", async () => {
+      expect(await service.analyzeGrammar("", "sentence", "key")).toBeNull();
+      expect(await service.analyzeGrammar("word", "sentence", "")).toBeNull();
+    });
+
+    it("should request max 2 bullet points and return structured grammar markdown", async () => {
+      const mockResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "• **Cấu trúc:** `qualify as + Noun`\n• **Lưu ý:** Nội động từ." }],
+            },
+          },
+        ],
+      };
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockResponse,
+        text: JSON.stringify(mockResponse),
+      });
+
+      const res = await service.analyzeGrammar(
+        "qualifies",
+        "It qualifies as a project rather than routine operations.",
+        "valid-key",
+        { noteTitle: "IT Software Project Management" }
+      );
+
+      expect(res).toBe("• **Cấu trúc:** `qualify as + Noun`\n• **Lưu ý:** Nội động từ.");
+      const callArgs = vi.mocked(requestUrl).mock.calls[0][0] as any;
+      const body = JSON.parse(callArgs.body);
+      const prompt = body.contents[0].parts[0].text;
+      expect(prompt).toContain("IT Software Project Management");
+      expect(prompt).toContain("ngữ pháp");
+    });
+  });
 });

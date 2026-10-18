@@ -11,11 +11,15 @@ function createMockElement(tag: string = "div"): any {
   const children: any[] = [];
   let textContent = "";
   let classNameVal = "";
+  let innerHtmlVal = "";
 
   const el = {
     tagName: tag.toUpperCase(),
     style: {} as Record<string, string>,
     get textContent() {
+      if (children.length > 0) {
+        return children.map((c) => c.textContent || "").join("");
+      }
       return textContent;
     },
     set textContent(val: string) {
@@ -32,7 +36,16 @@ function createMockElement(tag: string = "div"): any {
         .filter(Boolean)
         .forEach((c) => classListSet.add(c));
     },
-    innerHTML: "",
+    get innerHTML() {
+      return innerHtmlVal;
+    },
+    set innerHTML(val: string) {
+      innerHtmlVal = val;
+      textContent = val.replace(/<[^>]*>/g, "");
+    },
+    get firstChild() {
+      return children[0] || null;
+    },
     parentElement: null as any,
     classList: {
       add: (cls: string) => classListSet.add(cls),
@@ -56,6 +69,16 @@ function createMockElement(tag: string = "div"): any {
       child.parentElement = el;
       children.push(child);
       return child;
+    },
+    insertBefore: (newChild: any, refChild: any) => {
+      newChild.parentElement = el;
+      const idx = children.indexOf(refChild);
+      if (idx !== -1) {
+        children.splice(idx, 0, newChild);
+      } else {
+        children.push(newChild);
+      }
+      return newChild;
     },
     removeChild: (child: any) => {
       const idx = children.indexOf(child);
@@ -787,6 +810,136 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(speakMock).toHaveBeenCalled();
       const utterance = speakMock.mock.calls[0][0];
       expect(utterance.lang).toBe("ja-JP");
+      popover.hide();
+    });
+
+    it("should NOT render .vocab-ai-note when enableAiGrammar is false even if aiGrammarNote exists", () => {
+      const popover = new FloatingPopover();
+      const mockResult: LookupResult = {
+        query: "scrum",
+        type: "word",
+        contextSentence: "We use Scrum in Agile.",
+        contextSentenceClean: "We use Scrum in Agile.",
+        vietnameseTranslation: "phương pháp scrum",
+        aiGrammarNote: "Danh từ riêng chỉ khung làm việc linh hoạt.",
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { enableAiGrammar: false, enableAiTranslation: true }
+      );
+
+      const el = popover.getElement()!;
+      const aiNote = el.querySelector(".vocab-ai-note");
+      expect(aiNote).toBeNull();
+
+      popover.hide();
+    });
+
+    it("should render [✨ AI] badge when aiTranslation is present", () => {
+      const popover = new FloatingPopover();
+      const mockResult: LookupResult = {
+        query: "deployment",
+        type: "word",
+        contextSentence: "Production deployment started.",
+        contextSentenceClean: "Production deployment started.",
+        vietnameseTranslation: "triển khai",
+        aiTranslation: "triển khai phần mềm",
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { enableAiGrammar: false, enableAiTranslation: true }
+      );
+
+      const el = popover.getElement()!;
+      const viMeaning = el.querySelector(".vocab-meaning-vi");
+      expect(viMeaning).not.toBeNull();
+      const aiBadge = viMeaning?.querySelector(".vocab-ai-badge-inline");
+      expect(aiBadge).not.toBeNull();
+      expect(aiBadge?.textContent).toBe("✨ AI");
+      expect(viMeaning?.textContent).toContain("triển khai phần mềm");
+
+      popover.hide();
+    });
+
+    it("should render grammar loading skeleton when enableAiGrammar is true and aiLoading is true", () => {
+      const popover = new FloatingPopover();
+      const mockResult: LookupResult = {
+        query: "architecture",
+        type: "word",
+        contextSentence: "System architecture is robust.",
+        contextSentenceClean: "System architecture is robust.",
+        vietnameseTranslation: "kiến trúc",
+        aiLoading: true,
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { enableAiGrammar: true, enableAiTranslation: true }
+      );
+
+      const el = popover.getElement()!;
+      const aiNote = el.querySelector(".vocab-ai-note");
+      expect(aiNote).not.toBeNull();
+      expect(aiNote?.classList.contains("vocab-ai-loading")).toBe(true);
+
+      popover.hide();
+    });
+
+    it("should update translation and grammar progressively via updateAiContent", () => {
+      const popover = new FloatingPopover();
+      const initialResult: LookupResult = {
+        query: "pipeline",
+        type: "word",
+        contextSentence: "The CI/CD pipeline succeeded.",
+        contextSentenceClean: "The CI/CD pipeline succeeded.",
+        vietnameseTranslation: "đường ống",
+        aiLoading: true,
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        initialResult,
+        { onSave: vi.fn() },
+        { enableAiGrammar: true, enableAiTranslation: true }
+      );
+
+      const el = popover.getElement()!;
+      const viMeaningInitial = el.querySelector(".vocab-meaning-vi");
+      expect(viMeaningInitial?.textContent).toBe("đường ống");
+
+      // Progressive update from AI background call
+      popover.updateAiContent(
+        {
+          ...initialResult,
+          aiTranslation: "quy trình tự động hóa CI/CD",
+          aiGrammarNote: "**Pipeline** là danh từ kỹ thuật trong phần mềm.",
+          aiLoading: false,
+        },
+        { enableAiGrammar: true, enableAiTranslation: true }
+      );
+
+      const viMeaningUpdated = el.querySelector(".vocab-meaning-vi");
+      expect(viMeaningUpdated?.textContent).toContain("quy trình tự động hóa CI/CD");
+      const aiBadge = viMeaningUpdated?.querySelector(".vocab-ai-badge-inline");
+      expect(aiBadge).not.toBeNull();
+
+      const aiNote = el.querySelector(".vocab-ai-note");
+      expect(aiNote).not.toBeNull();
+      expect(aiNote?.classList.contains("vocab-ai-loading")).toBe(false);
+      expect(aiNote?.textContent).toContain("Pipeline");
+
       popover.hide();
     });
   });

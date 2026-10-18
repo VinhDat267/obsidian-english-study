@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { App, Editor, MarkdownView, WorkspaceLeaf, createMockObsidianElement } from "obsidian";
+import { App, Editor, MarkdownView, WorkspaceLeaf, Notice, createMockObsidianElement } from "obsidian";
 import EnglishStudyPlugin from "../main.ts";
 import { DEFAULT_SETTINGS, LookupResult } from "../src/types";
 import { VIEW_TYPE_ENGLISH_STUDY } from "../src/ui/SidebarView";
@@ -92,12 +92,15 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.ribbonIcons[0].icon).toBe("book-open");
       expect(plugin.ribbonIcons[0].title).toBe("Mở Polyglot Study Panel");
 
-      // Commands (3 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view)
-      expect(plugin.commands.length).toBe(3);
+      // Commands (6 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view, toggle-ai-grammar, toggle-ai-translation, toggle-auto-translate)
+      expect(plugin.commands.length).toBe(6);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");
       expect(commandIds).toContain("open-sidebar-view");
+      expect(commandIds).toContain("toggle-ai-grammar");
+      expect(commandIds).toContain("toggle-ai-translation");
+      expect(commandIds).toContain("toggle-auto-translate");
 
       // DOM events (mouseup, keyup, scroll)
       expect(plugin.domEvents.length).toBe(3);
@@ -240,7 +243,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         "intelligence",
         expect.stringContaining("Artificial intelligence is transforming software engineering."),
         expect.any(Number),
-        plugin.settings
+        plugin.settings,
+        expect.any(Object)
       );
       expect(result).toEqual(mockResult);
       expect((plugin as any).lastLookupResult).toEqual(mockResult);
@@ -250,7 +254,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         expect.objectContaining({
           onSave: expect.any(Function),
           onPinToSidebar: expect.any(Function),
-        })
+        }),
+        expect.any(Object)
       );
     });
 
@@ -443,6 +448,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(showSpy).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({ query: "breakthrough" }),
+        expect.any(Object),
         expect.any(Object)
       );
     });
@@ -642,7 +648,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         "serendipity",
         "Finding this book was sheer serendipity.",
         28,
-        plugin.settings
+        plugin.settings,
+        expect.any(Object)
       );
       expect(popoverSpy).toHaveBeenCalled();
     });
@@ -777,6 +784,142 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const saveRes = await plugin.vocabService.saveVocab(plugin["lastLookupResult"]!, plugin.settings);
       expect(saveRes.success).toBe(true);
       expect(saveRes.filePath).toBe("Vocabulary_ja.md");
+    });
+  });
+
+  describe("Domain-Aware Context & Hotkey Toggles", () => {
+    beforeEach(async () => {
+      await plugin.onload();
+    });
+
+    it("should extract document context correctly from active file, headings, and tags", () => {
+      const mockFile: any = {
+        basename: "IT Software Project Management",
+        name: "IT Software Project Management.md",
+        parent: { path: "Projects/IT" },
+      };
+      (plugin.app.workspace as any).getActiveFile = () => mockFile;
+      (plugin.app as any).metadataCache = {
+        getFileCache: () => ({
+          frontmatter: {
+            tags: ["it", "project-management"],
+          },
+        }),
+      };
+
+      const mockEditor: any = {
+        getCursor: () => ({ line: 5, ch: 0 }),
+        getLine: (line: number) => {
+          if (line === 3) return "## Agile Methodologies & Scrum";
+          return "Some body paragraph text.";
+        },
+      };
+
+      const context = plugin.extractDocumentContext(mockEditor);
+      expect(context.fileTitle).toBe("IT Software Project Management");
+      expect(context.folderPath).toBe("Projects/IT");
+      expect(context.headingContext).toBe("Agile Methodologies & Scrum");
+      expect(context.tags).toEqual(["it", "project-management"]);
+    });
+
+    it("should toggle enableAiGrammar and show Notice when toggle-ai-grammar command is executed", async () => {
+      const cmd = plugin.commands.find((c) => c.id === "toggle-ai-grammar");
+      expect(cmd).toBeDefined();
+
+      plugin.settings.enableAiGrammar = false;
+      await cmd!.callback!();
+      expect(plugin.settings.enableAiGrammar).toBe(true);
+      expect(Notice.instances[Notice.instances.length - 1].message).toContain("Phân tích ngữ pháp AI: BẬT");
+
+      await cmd!.callback!();
+      expect(plugin.settings.enableAiGrammar).toBe(false);
+      expect(Notice.instances[Notice.instances.length - 1].message).toContain("Phân tích ngữ pháp AI: TẮT");
+    });
+
+    it("should toggle enableAiTranslation and show Notice when toggle-ai-translation command is executed", async () => {
+      const cmd = plugin.commands.find((c) => c.id === "toggle-ai-translation");
+      expect(cmd).toBeDefined();
+
+      plugin.settings.enableAiTranslation = false;
+      await cmd!.callback!();
+      expect(plugin.settings.enableAiTranslation).toBe(true);
+      expect(Notice.instances[Notice.instances.length - 1].message).toContain("Dịch nghĩa với AI: BẬT");
+
+      await cmd!.callback!();
+      expect(plugin.settings.enableAiTranslation).toBe(false);
+      expect(Notice.instances[Notice.instances.length - 1].message).toContain("Dịch nghĩa với AI: TẮT");
+    });
+
+    it("should toggle autoTranslateOnSelection and show Notice when toggle-auto-translate command is executed", async () => {
+      const cmd = plugin.commands.find((c) => c.id === "toggle-auto-translate");
+      expect(cmd).toBeDefined();
+
+      plugin.settings.autoTranslateOnSelection = false;
+      await cmd!.callback!();
+      expect(plugin.settings.autoTranslateOnSelection).toBe(true);
+      expect(Notice.instances[Notice.instances.length - 1].message).toContain("Tự động dịch khi bôi đen: BẬT");
+
+      await cmd!.callback!();
+      expect(plugin.settings.autoTranslateOnSelection).toBe(false);
+      expect(Notice.instances[Notice.instances.length - 1].message).toContain("Tự động dịch khi bôi đen: TẮT");
+    });
+
+    it("should dispatch onAiUpdate to update popover and sidebar when background AI finishes", async () => {
+      let registeredOnAiUpdate: ((result: LookupResult) => void) | undefined;
+      vi.spyOn(plugin.providerManager, "lookup").mockImplementation(
+        async (_q, _p, _o, _s, options) => {
+          registeredOnAiUpdate = options?.onAiUpdate;
+          return {
+            query: "sprint",
+            type: "word",
+            contextSentence: "Sprint planning meeting.",
+            contextSentenceClean: "Sprint planning meeting.",
+            vietnameseTranslation: "chạy nước rút",
+            aiLoading: true,
+            timestamp: Date.now(),
+          };
+        }
+      );
+
+      const updateAiSpy = vi.spyOn(plugin.floatingPopover, "updateAiContent");
+      plugin.sidebarView = {
+        setResult: vi.fn(),
+      } as any;
+
+      const mockEditor: any = {
+        getSelection: () => "sprint",
+        getCursor: () => ({ line: 0, ch: 0 }),
+        getLine: () => "Sprint planning meeting.",
+      };
+
+      await plugin.performLookup(mockEditor);
+
+      expect(registeredOnAiUpdate).toBeDefined();
+
+      // Simulate AI response finishing in background
+      const aiUpdatedResult: LookupResult = {
+        query: "sprint",
+        type: "word",
+        contextSentence: "Sprint planning meeting.",
+        contextSentenceClean: "Sprint planning meeting.",
+        vietnameseTranslation: "chạy nước rút",
+        aiTranslation: "giai đoạn nước rút trong Agile",
+        aiGrammarNote: "Danh từ kỹ thuật.",
+        aiLoading: false,
+        timestamp: Date.now(),
+      };
+
+      registeredOnAiUpdate!(aiUpdatedResult);
+
+      expect(updateAiSpy).toHaveBeenCalledWith(
+        aiUpdatedResult,
+        expect.objectContaining({
+          enableAiGrammar: plugin.settings.enableAiGrammar,
+          enableAiTranslation: plugin.settings.enableAiTranslation,
+        })
+      );
+      expect(plugin.sidebarView!.setResult).toHaveBeenCalledWith(aiUpdatedResult);
+      expect((plugin as any).lastLookupResult).toEqual(aiUpdatedResult);
     });
   });
 });

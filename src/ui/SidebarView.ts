@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { LookupResult } from "../types";
 import { LRUCache } from "../utils/lruCache";
 import { getLanguageMeta } from "../utils/languageHelper";
+import { renderMarkdownToElement } from "../utils/markdownHelper";
 
 export const VIEW_TYPE_ENGLISH_STUDY = "english-study-sidebar";
 
@@ -194,9 +195,15 @@ export class EnglishStudySidebar extends ItemView {
     });
 
     // Body: Vietnamese meaning
-    if (result.vietnameseTranslation) {
+    const displayTranslation = result.aiTranslation || result.vietnameseTranslation;
+    if (displayTranslation) {
       const viMeaning = deepDiveContainer.createDiv({ cls: "vocab-meaning-vi" });
-      viMeaning.setText(result.vietnameseTranslation);
+      if (result.aiTranslation) {
+        viMeaning.createSpan({ cls: "vocab-ai-badge-inline", text: "✨ AI" });
+        viMeaning.createSpan({ cls: "vocab-translation-text", text: ` ${result.aiTranslation}` });
+      } else {
+        viMeaning.setText(displayTranslation);
+      }
     }
 
     // Body: English definitions
@@ -247,10 +254,10 @@ export class EnglishStudySidebar extends ItemView {
         text: "Phân tích ngữ pháp AI",
       });
 
-      aiNote.createDiv({
+      const aiContent = aiNote.createDiv({
         cls: "vocab-ai-content",
-        text: result.aiGrammarNote,
       });
+      renderMarkdownToElement(result.aiGrammarNote, aiContent);
     }
 
     // Context sentence

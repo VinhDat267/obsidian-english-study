@@ -165,6 +165,7 @@ export function createMockObsidianElement(tag: string = "div"): any {
   let textContent = "";
   let classNameVal = "";
 
+  let innerHtmlVal = "";
   const el: any = {
     tagName: tag.toUpperCase(),
     style: {} as Record<string, string>,
@@ -188,7 +189,13 @@ export function createMockObsidianElement(tag: string = "div"): any {
         .filter(Boolean)
         .forEach((c) => classListSet.add(c));
     },
-    innerHTML: "",
+    get innerHTML() {
+      return innerHtmlVal;
+    },
+    set innerHTML(val: string) {
+      innerHtmlVal = val;
+      textContent = val.replace(/<[^>]*>/g, "");
+    },
     parentElement: null as any,
     classList: {
       add: (...classes: string[]) => {

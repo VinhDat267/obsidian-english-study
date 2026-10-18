@@ -1,5 +1,5 @@
 import { Plugin, Editor, MarkdownView, WorkspaceLeaf, Notice } from "obsidian";
-import { PluginSettings, DEFAULT_SETTINGS, LookupResult } from "./src/types";
+import { PluginSettings, DEFAULT_SETTINGS, LookupResult, DocumentContextMeta } from "./src/types";
 import { ProviderManager } from "./src/services/provider/ProviderManager";
 import { VocabService } from "./src/services/storage/VocabService";
 import { FloatingTrigger } from "./src/ui/FloatingTrigger";
@@ -104,6 +104,39 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       name: "Mở thanh bên Polyglot Study",
       callback: () => {
         this.activateSidebarView();
+      },
+    });
+
+    // 3.4. Bật/tắt phân tích ngữ pháp AI
+    this.addCommand({
+      id: "toggle-ai-grammar",
+      name: "Bật/tắt phân tích ngữ pháp AI",
+      callback: async () => {
+        this.settings.enableAiGrammar = !this.settings.enableAiGrammar;
+        await this.saveSettings();
+        new Notice(`Phân tích ngữ pháp AI: ${this.settings.enableAiGrammar ? "BẬT" : "TẮT"}`);
+      },
+    });
+
+    // 3.5. Bật/tắt dịch nghĩa với AI (Domain-Aware Translation)
+    this.addCommand({
+      id: "toggle-ai-translation",
+      name: "Bật/tắt dịch nghĩa với AI",
+      callback: async () => {
+        this.settings.enableAiTranslation = !this.settings.enableAiTranslation;
+        await this.saveSettings();
+        new Notice(`Dịch nghĩa với AI: ${this.settings.enableAiTranslation ? "BẬT" : "TẮT"}`);
+      },
+    });
+
+    // 3.6. Bật/tắt tự động dịch khi bôi đen (Auto-translate on selection)
+    this.addCommand({
+      id: "toggle-auto-translate",
+      name: "Bật/tắt tự động dịch khi bôi đen",
+      callback: async () => {
+        this.settings.autoTranslateOnSelection = !this.settings.autoTranslateOnSelection;
+        await this.saveSettings();
+        new Notice(`Tự động dịch khi bôi đen: ${this.settings.autoTranslateOnSelection ? "BẬT" : "TẮT"}`);
       },
     });
 
@@ -246,7 +279,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       paragraph = selectedText;
     }
 
-    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset);
+    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset, editor);
   }
 
   /**
@@ -268,12 +301,58 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   /**
+   * Trích xuất thông tin ngữ cảnh tài liệu (Domain-Aware Context)
+   * phục vụ AI nhận diện đúng chuyên ngành (IT, Y khoa, Luật...)
+   */
+  extractDocumentContext(editor?: Editor): DocumentContextMeta {
+    const meta: DocumentContextMeta = {};
+
+    try {
+      const activeFile = this.app.workspace.getActiveFile();
+      if (activeFile) {
+        meta.fileTitle = activeFile.basename || activeFile.name;
+        if (activeFile.parent && activeFile.parent.path && activeFile.parent.path !== "/") {
+          meta.folderPath = activeFile.parent.path;
+        }
+
+        // Lấy tags từ frontmatter nếu metadataCache có sẵn
+        const fileCache = this.app.metadataCache?.getFileCache(activeFile);
+        if (fileCache?.frontmatter?.tags) {
+          const rawTags = fileCache.frontmatter.tags;
+          if (Array.isArray(rawTags)) {
+            meta.tags = rawTags.map((t) => String(t));
+          } else if (typeof rawTags === "string") {
+            meta.tags = rawTags.split(",").map((t) => t.trim());
+          }
+        }
+      }
+
+      // Trích xuất heading gần nhất phía trên vị trí con trỏ nếu ở Edit Mode
+      if (editor && typeof editor.getCursor === "function" && typeof editor.getLine === "function") {
+        const cursor = editor.getCursor();
+        for (let line = cursor.line; line >= 0; line--) {
+          const lineText = editor.getLine(line);
+          if (lineText && /^#{1,6}\s+/.test(lineText.trim())) {
+            meta.headingContext = lineText.trim().replace(/^#{1,6}\s+/, "");
+            break;
+          }
+        }
+      }
+    } catch {
+      // Fallback an toàn nếu môi trường test hoặc lỗi API metadata
+    }
+
+    return meta;
+  }
+
+  /**
    * Core logic thực hiện gọi ProviderManager và hiển thị kết quả lên UI nổi + Sidebar
    */
   private async executeLookupAndShow(
     selectedText: string,
     paragraph: string,
-    cursorOffset: number
+    cursorOffset: number,
+    editor?: Editor
   ): Promise<LookupResult | null> {
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
@@ -288,13 +367,28 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
+    const docContext = this.extractDocumentContext(editor);
+
     let result: LookupResult;
     try {
       result = await this.providerManager.lookup(
         selectedText,
         paragraph,
         cursorOffset,
-        this.settings
+        this.settings,
+        {
+          docContext,
+          onAiUpdate: (updatedResult: LookupResult) => {
+            this.lastLookupResult = updatedResult;
+            this.floatingPopover.updateAiContent(updatedResult, {
+              enableAiGrammar: this.settings.enableAiGrammar,
+              enableAiTranslation: this.settings.enableAiTranslation,
+            });
+            if (this.sidebarView) {
+              this.sidebarView.setResult(updatedResult);
+            }
+          },
+        }
       );
     } catch (err: any) {
       this.floatingPopover.hide();
@@ -306,22 +400,30 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     this.lastLookupResult = result;
 
-    this.floatingPopover.show(rect, result, {
-      onSave: async (res: LookupResult) => {
-        await this.vocabService.saveVocab(res, this.settings);
+    this.floatingPopover.show(
+      rect,
+      result,
+      {
+        onSave: async (res: LookupResult) => {
+          await this.vocabService.saveVocab(res, this.settings);
+        },
+        onPinToSidebar: (res: LookupResult) => {
+          this.dismissFloatingUi();
+          this.activateSidebarView().then(() => {
+            if (this.sidebarView) {
+              this.sidebarView.setResult(res);
+            }
+          });
+        },
+        onClose: () => {
+          // Popover closed
+        },
       },
-      onPinToSidebar: (res: LookupResult) => {
-        this.dismissFloatingUi();
-        this.activateSidebarView().then(() => {
-          if (this.sidebarView) {
-            this.sidebarView.setResult(res);
-          }
-        });
-      },
-      onClose: () => {
-        // Popover closed
-      },
-    });
+      {
+        enableAiGrammar: this.settings.enableAiGrammar,
+        enableAiTranslation: this.settings.enableAiTranslation,
+      }
+    );
 
     if (this.sidebarView) {
       this.sidebarView.setResult(result);
