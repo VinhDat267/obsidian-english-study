@@ -1226,3 +1226,37 @@
   justify-content: flex-end;
 }
 
+/* Ephemeral bilingual reading: the source note remains untouched. */
+.polyglot-reading-translation {
+  box-sizing: border-box;
+  display: block;
+  margin-block: 8px 16px;
+  padding: 12px;
+  border-inline-start: 4px solid var(--interactive-accent);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  background: color-mix(in srgb, var(--interactive-accent) 20%, var(--background-primary));
+  color: var(--text-normal);
+  font-size: inherit;
+  font-weight: 600;
+  font-style: normal;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.polyglot-reading-translation[data-state="loading"],
+.polyglot-reading-translation[data-state="error"] {
+  font-weight: 400;
+}
+
+.polyglot-reading-translation button {
+  margin-inline-start: 8px;
+  white-space: normal;
+}
+
+.polyglot-reading-translation button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 3px;
+}
+

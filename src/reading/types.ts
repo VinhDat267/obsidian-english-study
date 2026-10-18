@@ -34,3 +34,9 @@ export interface ReadingTranslationSession {
   enqueue(job: ReadingTranslationJob): Promise<ReadingTranslationResult>;
   cancel(): void;
 }
+export interface ReadingTranslationView {
+  element: HTMLElement;
+  loading(): void;
+  show(result: ReadingTranslationResult): void;
+  dispose(): void;
+}
