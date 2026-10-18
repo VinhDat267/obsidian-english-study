@@ -4,7 +4,7 @@ Ngày: 2026-10-18
 
 Snapshot khảo sát: `main@515e7b0`
 
-Trạng thái: Đã chốt nhu cầu và kiểu nhấn trong hội thoại; bản đặc tả chờ người dùng duyệt. Chưa triển khai.
+Trạng thái: Người dùng đã duyệt bản đặc tả ngày 2026-10-18. Đang lập kế hoạch; chưa triển khai.
 
 ## 1. Mục tiêu và quyết định đã xác nhận
 
