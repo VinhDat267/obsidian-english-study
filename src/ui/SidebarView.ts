@@ -201,6 +201,11 @@ export class EnglishStudySidebar extends ItemView {
       if (result.aiTranslation) {
         viMeaning.createSpan({ cls: "vocab-ai-badge-inline", text: "✨ AI" });
         viMeaning.createSpan({ cls: "vocab-translation-text", text: ` ${result.aiTranslation}` });
+      } else if (result.aiLoading) {
+        const loadingChip = viMeaning.createSpan({ cls: "vocab-ai-badge-inline vocab-ai-loading-chip" });
+        loadingChip.createSpan({ cls: "vocab-ai-spinner", text: "✨" });
+        loadingChip.createSpan({ text: " AI..." });
+        viMeaning.createSpan({ cls: "vocab-translation-text", text: ` ${displayTranslation}` });
       } else {
         viMeaning.setText(displayTranslation);
       }

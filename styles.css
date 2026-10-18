@@ -462,6 +462,25 @@
   vertical-align: middle;
 }
 
+.vocab-ai-badge-inline.vocab-ai-loading-chip {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  font-weight: 600;
+  border: 1px dashed var(--text-faint);
+  animation: vocabAiPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes vocabAiPulse {
+  0%, 100% {
+    opacity: 0.65;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .vocab-fade-in {
   animation: vocabFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

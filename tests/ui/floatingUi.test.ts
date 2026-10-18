@@ -42,6 +42,9 @@ function createMockElement(tag: string = "div"): any {
     set innerHTML(val: string) {
       innerHtmlVal = val;
       textContent = val.replace(/<[^>]*>/g, "");
+      if (val === "") {
+        children.length = 0;
+      }
     },
     get firstChild() {
       return children[0] || null;
@@ -941,7 +944,9 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       const el = popover.getElement()!;
       const viMeaningInitial = el.querySelector(".vocab-meaning-vi");
-      expect(viMeaningInitial?.textContent).toBe("đường ống");
+      expect(viMeaningInitial?.textContent).toContain("đường ống");
+      const loadingChipInitial = viMeaningInitial?.querySelector(".vocab-ai-loading-chip");
+      expect(loadingChipInitial).not.toBeNull();
 
       // Progressive update from AI background call
       popover.updateAiContent(
@@ -958,11 +963,89 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(viMeaningUpdated?.textContent).toContain("quy trình tự động hóa CI/CD");
       const aiBadge = viMeaningUpdated?.querySelector(".vocab-ai-badge-inline");
       expect(aiBadge).not.toBeNull();
+      expect(viMeaningUpdated?.querySelector(".vocab-ai-loading-chip")).toBeNull();
 
       const aiNote = el.querySelector(".vocab-ai-note");
       expect(aiNote).not.toBeNull();
       expect(aiNote?.classList.contains("vocab-ai-loading")).toBe(false);
       expect(aiNote?.textContent).toContain("Pipeline");
+
+      popover.hide();
+    });
+
+    it("should gracefully remove loading chip if AI fails or returns undefined", () => {
+      const popover = new FloatingPopover();
+      const initialResult: LookupResult = {
+        query: "eligible",
+        type: "word",
+        contextSentence: "He is eligible for the scholarship.",
+        contextSentenceClean: "He is eligible for the scholarship.",
+        vietnameseTranslation: "đủ điều kiện",
+        aiLoading: true,
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        initialResult,
+        { onSave: vi.fn() },
+        { enableAiGrammar: false, enableAiTranslation: true }
+      );
+
+      const el = popover.getElement()!;
+      const viMeaning = el.querySelector(".vocab-meaning-vi");
+      expect(viMeaning?.querySelector(".vocab-ai-loading-chip")).not.toBeNull();
+
+      // AI call finishes with failure / undefined translation
+      popover.updateAiContent(
+        {
+          ...initialResult,
+          aiLoading: false,
+          aiTranslation: undefined,
+        },
+        { enableAiGrammar: false, enableAiTranslation: true }
+      );
+
+      // Loading chip should be removed cleanly, base translation remains intact
+      expect(viMeaning?.querySelector(".vocab-ai-loading-chip")).toBeNull();
+      expect(viMeaning?.textContent).toContain("đủ điều kiện");
+
+      popover.hide();
+    });
+
+    it("should match query in updateAiContent even with whitespace padding", () => {
+      const popover = new FloatingPopover();
+      const initialResult: LookupResult = {
+        query: "architecture",
+        type: "word",
+        contextSentence: "System architecture.",
+        contextSentenceClean: "System architecture.",
+        vietnameseTranslation: "kiến trúc",
+        aiLoading: true,
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        initialResult,
+        { onSave: vi.fn() },
+        { enableAiGrammar: false, enableAiTranslation: true }
+      );
+
+      // Callback arrives with clean query
+      popover.updateAiContent(
+        {
+          ...initialResult,
+          query: "  architecture  ",
+          aiTranslation: "kiến trúc hệ thống",
+          aiLoading: false,
+        },
+        { enableAiGrammar: false, enableAiTranslation: true }
+      );
+
+      const el = popover.getElement()!;
+      const viMeaning = el.querySelector(".vocab-meaning-vi");
+      expect(viMeaning?.textContent).toContain("kiến trúc hệ thống");
 
       popover.hide();
     });

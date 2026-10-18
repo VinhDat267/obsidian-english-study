@@ -223,4 +223,32 @@ describe("EnglishStudySidebar", () => {
     expect(translit).not.toBeNull();
     expect(translit?.textContent).toContain("Benkyō");
   });
+
+  it("should display loading chip when aiLoading is true and update to ✨ AI when aiTranslation is set", () => {
+    const loadingResult: LookupResult = {
+      query: "paradigm",
+      type: "word",
+      vietnameseTranslation: "mô hình",
+      aiLoading: true,
+      timestamp: Date.now(),
+    };
+    sidebar.setResult(loadingResult);
+
+    const viEl = sidebar.contentEl.querySelector(".vocab-meaning-vi");
+    expect(viEl).not.toBeNull();
+    expect(viEl.querySelector(".vocab-ai-loading-chip")).not.toBeNull();
+    expect(viEl.textContent).toContain("mô hình");
+
+    // AI completes
+    sidebar.setResult({
+      ...loadingResult,
+      aiLoading: false,
+      aiTranslation: "mô thức tư duy",
+    });
+
+    const updatedViEl = sidebar.contentEl.querySelector(".vocab-meaning-vi");
+    expect(updatedViEl.querySelector(".vocab-ai-loading-chip")).toBeNull();
+    expect(updatedViEl.querySelector(".vocab-ai-badge-inline")).not.toBeNull();
+    expect(updatedViEl.textContent).toContain("mô thức tư duy");
+  });
 });

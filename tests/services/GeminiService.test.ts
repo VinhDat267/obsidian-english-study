@@ -347,6 +347,88 @@ describe("GeminiService", () => {
       expect(prompt).toContain("ngữ pháp");
     });
   });
+
+  describe("429 Quota Exhaustion & Model Fallback", () => {
+    it("should automatically retry with gemini-flash-lite-latest when primary model gets 429 Quota Exceeded", async () => {
+      // First call (gemini-flash-latest) returns 429 Resource Exhausted
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 429,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: { error: { code: 429, message: "Resource exhausted" } },
+        text: JSON.stringify({ error: { code: 429, message: "Resource exhausted" } }),
+      });
+
+      // Second call (fallback to gemini-flash-lite-latest) returns 200 OK
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "Dịch thuật từ model fallback lite" }],
+              },
+            },
+          ],
+        },
+        text: "{}",
+      });
+
+      const res = await service.translateContext(
+        "eligible",
+        "He is eligible for the grant.",
+        "valid-api-key"
+      );
+
+      expect(res).toBe("Dịch thuật từ model fallback lite");
+      expect(requestUrl).toHaveBeenCalledTimes(2);
+
+      const firstCall = vi.mocked(requestUrl).mock.calls[0][0] as any;
+      expect(firstCall.url).toContain("gemini-flash-latest");
+
+      const secondCall = vi.mocked(requestUrl).mock.calls[1][0] as any;
+      expect(secondCall.url).toContain("gemini-flash-lite-latest");
+    });
+
+    it("should bypass exhausted model on subsequent requests once 429 is flagged", async () => {
+      // Simulate service already knowing flash is exhausted
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 429,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: { error: { code: 429, message: "Quota exceeded" } },
+        text: "",
+      });
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: { candidates: [{ content: { parts: [{ text: "res 1" }] } }] },
+        text: "",
+      });
+
+      await service.translateContext("word1", "sentence", "key");
+      expect(requestUrl).toHaveBeenCalledTimes(2);
+
+      // Now call again - should directly call gemini-flash-lite-latest without calling flash-latest
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: { candidates: [{ content: { parts: [{ text: "res 2" }] } }] },
+        text: "",
+      });
+
+      const res2 = await service.translateContext("word2", "sentence", "key");
+      expect(res2).toBe("res 2");
+      expect(requestUrl).toHaveBeenCalledTimes(3);
+
+      const thirdCall = vi.mocked(requestUrl).mock.calls[2][0] as any;
+      expect(thirdCall.url).toContain("gemini-flash-lite-latest");
+    });
+  });
 });
 describe("reading batch language and token contract", () => {
   beforeEach(() => { vi.clearAllMocks(); });

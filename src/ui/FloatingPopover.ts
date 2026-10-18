@@ -233,6 +233,22 @@ export class FloatingPopover {
         textSpan.className = "vocab-translation-text";
         textSpan.textContent = ` ${result.aiTranslation}`;
         viMeaning.appendChild(textSpan);
+      } else if (options?.enableAiTranslation && result.aiLoading) {
+        const loadingChip = document.createElement("span");
+        loadingChip.className = "vocab-ai-badge-inline vocab-ai-loading-chip";
+        const spinner = document.createElement("span");
+        spinner.className = "vocab-ai-spinner";
+        spinner.textContent = "✨";
+        loadingChip.appendChild(spinner);
+        const chipText = document.createElement("span");
+        chipText.textContent = " AI...";
+        loadingChip.appendChild(chipText);
+        viMeaning.appendChild(loadingChip);
+
+        const textSpan = document.createElement("span");
+        textSpan.className = "vocab-translation-text";
+        textSpan.textContent = ` ${displayTranslation}`;
+        viMeaning.appendChild(textSpan);
       } else {
         viMeaning.textContent = displayTranslation;
       }
@@ -553,7 +569,12 @@ export class FloatingPopover {
       enableAiTranslation?: boolean;
     }
   ): void {
-    if (!this.element || this.currentQuery !== updatedResult.query) {
+    if (!this.element) {
+      return;
+    }
+    const currentQ = (this.currentQuery || "").trim();
+    const updatedQ = (updatedResult.query || "").trim();
+    if (currentQ !== updatedQ) {
       return;
     }
     this.currentResult = {
@@ -564,9 +585,9 @@ export class FloatingPopover {
     const body = this.element.querySelector(".popover-body");
     if (!body) return;
 
-    // 1. Cập nhật AI Translation (nếu có)
+    // 1. Cập nhật AI Translation
+    let viMeaning = body.querySelector(".vocab-meaning-vi") as HTMLElement;
     if (updatedResult.aiTranslation) {
-      let viMeaning = body.querySelector(".vocab-meaning-vi") as HTMLElement;
       if (!viMeaning) {
         viMeaning = document.createElement("div");
         viMeaning.className = "vocab-meaning-vi";
@@ -577,6 +598,9 @@ export class FloatingPopover {
         }
       }
       viMeaning.innerHTML = "";
+      while (viMeaning.firstChild) {
+        viMeaning.removeChild(viMeaning.firstChild);
+      }
       const badge = document.createElement("span");
       badge.className = "vocab-ai-badge-inline vocab-fade-in";
       badge.textContent = "✨ AI";
@@ -586,6 +610,12 @@ export class FloatingPopover {
       textSpan.className = "vocab-translation-text vocab-fade-in";
       textSpan.textContent = ` ${updatedResult.aiTranslation}`;
       viMeaning.appendChild(textSpan);
+    } else if (!updatedResult.aiLoading && viMeaning) {
+      // AI chạy xong nhưng không có bản dịch AI (hoặc lỗi), dọn dẹp loading chip nếu còn
+      const loadingChip = viMeaning.querySelector(".vocab-ai-loading-chip");
+      if (loadingChip) {
+        loadingChip.remove();
+      }
     }
 
     // 2. Cập nhật AI Grammar Note

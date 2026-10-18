@@ -7,6 +7,8 @@ export interface GeminiTestResult {
 }
 
 export class GeminiService extends BaseProvider {
+  private isFlashExhausted: boolean = false;
+
   /**
    * Helper build context hint từ DocumentContextMeta
    */
@@ -171,51 +173,72 @@ Yêu cầu BẮT BUỘC:
       selectedModel = "gemini-flash-latest";
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-
-    try {
-      const res = await this.executeRequest(
-        url,
-        {
-          method: "POST",
-          contentType: "application/json",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text: prompt }],
-              },
-            ],
-          }),
-        },
-        10000
-      );
-
-      if (!res || res.status !== 200) {
-        return null;
-      }
-
-      let data = res.json;
-      if (!data && res.text) {
-        try {
-          data = JSON.parse(res.text);
-        } catch {
-          return null;
-        }
-      }
-
-      const parts = data?.candidates?.[0]?.content?.parts;
-      if (Array.isArray(parts) && parts.length > 0) {
-        const text = parts.map((p: any) => p?.text || "").join("").trim();
-        return text || null;
-      }
-
-      return null;
-    } catch {
-      return null;
+    if (this.isFlashExhausted && selectedModel === "gemini-flash-latest") {
+      selectedModel = "gemini-flash-lite-latest";
     }
+
+    const tryRequest = async (modelName: string): Promise<{ text: string | null; status?: number }> => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+      try {
+        const res = await this.executeRequest(
+          url,
+          {
+            method: "POST",
+            contentType: "application/json",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [{ text: prompt }],
+                },
+              ],
+            }),
+          },
+          10000
+        );
+
+        if (!res || res.status !== 200) {
+          return { text: null, status: res?.status };
+        }
+
+        let data = res.json;
+        if (!data && res.text) {
+          try {
+            data = JSON.parse(res.text);
+          } catch {
+            return { text: null, status: 200 };
+          }
+        }
+
+        const parts = data?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts) && parts.length > 0) {
+          const text = parts.map((p: any) => p?.text || "").join("").trim();
+          return { text: text || null, status: 200 };
+        }
+
+        return { text: null, status: 200 };
+      } catch {
+        return { text: null };
+      }
+    };
+
+    const firstAttempt = await tryRequest(selectedModel);
+    if (firstAttempt.status === 200 && firstAttempt.text) {
+      return firstAttempt.text;
+    }
+
+    // Nếu gặp mã lỗi 429 (Resource Exhausted / Quota Limit) trên gemini-flash-latest, thử fallback sang gemini-flash-lite-latest
+    if (firstAttempt.status === 429 && selectedModel !== "gemini-flash-lite-latest") {
+      this.isFlashExhausted = true;
+      const fallbackAttempt = await tryRequest("gemini-flash-lite-latest");
+      if (fallbackAttempt.status === 200 && fallbackAttempt.text) {
+        return fallbackAttempt.text;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -302,6 +325,29 @@ Yêu cầu BẮT BUỘC:
 
       if (res.status === 200) {
         return { ok: true };
+      }
+
+      if (res.status === 429) {
+        // Thử fallback sang gemini-flash-lite-latest
+        const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        const fallbackRes = await this.executeRequest(
+          fallbackUrl,
+          {
+            method: "POST",
+            contentType: "application/json",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: "Hi" }] }],
+            }),
+          },
+          10000
+        );
+        if (fallbackRes?.status === 200) {
+          this.isFlashExhausted = true;
+          return { ok: true };
+        }
       }
 
       let errorMsg = `Mã lỗi HTTP ${res.status}`;
