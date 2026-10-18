@@ -41,7 +41,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     });
 
     // 2. Thêm Ribbon Icon mở thanh bên
-    this.addRibbonIcon("book-open", "Mở English Study Panel", () => {
+    this.addRibbonIcon("book-open", "Mở Polyglot Study Panel", () => {
       this.activateSidebarView();
     });
 
@@ -49,7 +49,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     // 3.1. Tra cứu văn bản bôi đen trong Editor
     this.addCommand({
       id: "lookup-selected-text",
-      name: "Tra từ điển / Dịch câu bôi đen",
+      name: "Tra từ điển / Dịch câu bôi đen (Đa ngôn ngữ)",
       checkCallback: (checking: boolean) => {
         if (typeof window === "undefined" || !window.getSelection) {
           return false;
@@ -98,10 +98,10 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
-    // 3.3. Mở thanh bên English Study
+    // 3.3. Mở thanh bên Polyglot Study
     this.addCommand({
       id: "open-sidebar-view",
-      name: "Mở thanh bên English Study",
+      name: "Mở thanh bên Polyglot Study",
       callback: () => {
         this.activateSidebarView();
       },

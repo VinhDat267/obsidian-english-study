@@ -22,7 +22,7 @@ export class EnglishStudySidebar extends ItemView {
   }
 
   getDisplayText(): string {
-    return "English Study";
+    return "Polyglot Study";
   }
 
   getIcon(): string {

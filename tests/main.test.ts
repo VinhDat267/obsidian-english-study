@@ -90,7 +90,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       // Ribbon icon
       expect(plugin.ribbonIcons.length).toBe(1);
       expect(plugin.ribbonIcons[0].icon).toBe("book-open");
-      expect(plugin.ribbonIcons[0].title).toBe("Mở English Study Panel");
+      expect(plugin.ribbonIcons[0].title).toBe("Mở Polyglot Study Panel");
 
       // Commands (3 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view)
       expect(plugin.commands.length).toBe(3);

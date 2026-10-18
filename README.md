@@ -1,86 +1,137 @@
-# Obsidian English Study Assistant 📖
+# Obsidian Polyglot Study Assistant 🌐📖
 
-> **A non-intrusive, smart language learning companion for [Obsidian](https://obsidian.md). Look up English words, translate highlighted sentences, listen to native pronunciation, and automatically accumulate vocabulary with real context directly into your Markdown notebook.**
+> **A seamless, non-intrusive multilingual language learning companion for [Obsidian](https://obsidian.md). Effortlessly study English, Japanese, Chinese, Korean, French, German, Spanish, Russian, and more with instant lookups, native Romaji/Pinyin transliteration, CJK-aware routing, AI grammar insights with Gemini 2.0 Flash, authentic TTS pronunciation, and contextual vocabulary accumulation directly in your Markdown Vault.**
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vitest](https://img.shields.io/badge/Tests-224%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
+[![Vitest](https://img.shields.io/badge/Tests-273%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 🌟 Why This Exists
+## 🌟 Why Polyglot Study Exists
 
-Reading papers, technical docs, and foreign literature in Obsidian is wonderful — until you hit an unfamiliar word or complex sentence:
-- Switching out to browser tabs breaks your reading flow.
-- Standard translation extensions don't know about Obsidian's Markdown format and can't save words to your Vault.
-- Even if you look up a word, you forget it tomorrow because you didn't save the **surrounding sentence context** where it appeared.
+Reading foreign literature, scientific papers, manga, or technical documentation in Obsidian is wonderful — until you hit an unfamiliar word, complex grammar structure, or non-Latin script:
+- Switching out to browser tabs or standalone translator apps breaks your cognitive reading flow.
+- Standard translation tools don't understand Obsidian's Markdown format, cannot parse CJK text without spaces, and cannot save words to your Vault.
+- When you do look up a word, you quickly forget it because you didn't preserve the **original sentence context** where it appeared.
 
-**Obsidian English Study** solves this completely inside your editor. Highlight text, view instant definitions or Vietnamese translations without losing your place, and save the word with its original context sentence into your vocabulary notebook in 1 click.
-
----
-
-## ✨ Features
-
-### ⚡ 3-Tier Smart Routing Engine
-The plugin automatically inspects your highlighted text and routes it to the optimal provider:
-1. **Single Word**: Queries Free Dictionary API for phonetic IPA (`/haɪˈpɑː.θə.sɪs/`), parts of speech (*n., v., adj.*), English definitions with examples, and streams US/UK audio. Concurrently queries Google Translate to display instant Vietnamese meanings.
-2. **Inflection & Stemming Fallback**: Never get blocked by `404 Not Found` on conjugated verbs or plurals (*running*, *validated*, *hypotheses*). The plugin automatically strips inflections (`-ing`, `-ed`, `-es`, `-s`, etc.) to resolve base lemma entries before falling back.
-3. **Phrasal Verbs & Idioms ($\le 4$ words)**: Detects phrasal verbs (*look after*, *give up*) and short idioms (*piece of cake*), prioritizing idiom definitions before sentence translation.
-4. **Sentences & Paragraphs ($> 4$ words)**: Delivers smooth Vietnamese translation. If Gemini AI is enabled, the AI acts as your personal tutor — explaining nuanced grammar structures and idiomatic expressions within the specific context of your note.
-
-### 🎯 Non-Intrusive Dual-View UI
-- **Floating Action Trigger `[📖]`**: Appears discreetly 150ms after you highlight text. It never steals editor focus, preserving normal typing and selection.
-- **Collision-Aware Popover**: Intelligently anchors to your selection. If text is near the bottom of your screen, it automatically flips upward; if near the edges, it adjusts inward to stay within view.
-- **Audio Pronunciation**: Direct MP3 streaming with automatic, robust fallback to native Web Speech Synthesis (`window.speechSynthesis`).
-- **Auto-Dismissal**: Disappears cleanly when you scroll the editor, switch note tabs, press `Escape`, or click outside.
-- **Dedicated Sidebar Panel (`ItemView`)**:
-  - **Deep Dive Tab**: Complete definitions, synonyms, antonyms, AI context analysis, and audio player.
-  - **Session History Tab**: Keeps track of every word queried during your current study session using an in-RAM LRU Cache (200 items, $0\text{ms}$ instant recall).
-
-### 📓 Safe Vault Vocabulary Notebook
-- **1-Click Atomic Storage**: Saves words into `Vocabulary.md` (or your Daily Note) using Obsidian's synchronous `app.vault.process()` API, ensuring zero race conditions even while editing.
-- **Two Flexible Formats**:
-  - **Markdown Table**: Automatically escapes pipe characters (`\|`), bolds the keyword in context, and stamps `YYYY-MM-DD`.
-  - **Flashcard Callout (`> [!vocab]`)**: Compatible with Spaced Repetition and Anki plugins.
-- **Smart Duplicate Merging**: If a word is already in your notebook, it appends the new example sentence (`<br>• `) instead of creating duplicate clutter.
-
-### 🎨 100% Native Theming
-Strictly utilizes Obsidian CSS custom properties (`--background-floating`, `--text-normal`, `--text-accent`, `--interactive-accent`, `--shadow-l`). Adapts seamlessly to Light, Dark, and all Community Themes.
+**Obsidian Polyglot Study Assistant** completely solves this inside your editor:
+Highlight any text in **Edit Mode** or **Reading Mode** $\to$ view instant definitions, Vietnamese translations, and Romaji/Pinyin $\to$ listen to authentic native pronunciation $\to$ save the word with its original context sentence into your vocabulary notebook in **1 click**.
 
 ---
 
-## 📸 Architecture & Interaction Flow
+## ✨ Key Features & Capabilities
 
-```
-   [ Reading Note in Obsidian ]
-                │
-                ▼
-      Highlight Word / Sentence
-                │
-         (150ms Debounce)
-                │
-                ▼
-         [ 📖 ] Trigger Icon  (or Hotkey / Context Command)
-                │
-     ┌──────────┴──────────────────────────┐
-     │                                     │
-     ▼                                     ▼
-Single Word / Idiom                   Sentence / Paragraph
-  • Free Dictionary API (IPA + Audio)   • Google Translate (Fast Web)
-  • Google Translate (Vietnamese)       • Gemini 2.0 Flash AI (Optional)
-     │                                     │
-     └──────────┬──────────────────────────┘
-                │
-                ▼
-      [ Floating Popover Card ]
-        ├─ 🔊 Pronounce (MP3 / TTS)
-        ├─ 💡 Vietnamese translation
-        ├─ 🇬🇧 English definitions & examples
-        ├─ 🤖 AI Grammar & Context Notes
-        ├─ 📝 "...highlighted **word** in context..."
-        ├─ [ 💾 Save to Vocab ] ───► Atomic Vault Write (Table/Callout)
-        └─ [ 📌 Pin to Sidebar ] ──► English Study Sidebar Panel
+### 🌍 1. Multilingual Study Expansion (Đa Ngôn Ngữ Toàn Diện)
+- **Automatic Script & Language Detection**:
+  - Automatically identifies Unicode scripts:
+    - 🇯🇵 **Japanese**: Hiragana, Katakana, and Kanji (`ja`)
+    - 🇨🇳 **Chinese**: Simplified & Traditional Hanzi (`zh`)
+    - 🇰🇷 **Korean**: Hangul syllables & Jamo (`ko`)
+    - 🇷🇺 **Russian**: Cyrillic script (`ru`)
+    - 🇬🇧 🇫🇷 🇩🇪 🇪🇸 🇻🇳 **Latin**: English, French, German, Spanish, Vietnamese, etc.
+- **CJK-Aware 3-Tier Routing Engine**:
+  - Solves the segmentation challenge of Chinese and Japanese (which do not use whitespace between words):
+    - **$\le 2$ CJK characters**: Classified as `word` (Từ đơn).
+    - **$3 - 6$ CJK characters**: Classified as `phrase` (Cụm từ / Thành ngữ).
+    - **$> 6$ CJK characters** or ending with CJK punctuation (`。 ！ ？ …`): Classified as `sentence` (Câu).
+  - Automatically bypasses FreeDict for non-English scripts to eliminate redundant network requests and 404 errors.
+- **Native Romaji & Pinyin Transliteration**:
+  - Leverages Google Translate GTX API with `dt=t&dt=rm` parameters to extract authentic Romanization:
+    - Romaji for Japanese (*e.g.* `[Konnichiwa]`, `[Benkyō]`)
+    - Pinyin for Chinese (*e.g.* `[Nǐ hǎo]`, `[Rén gōng zhì néng]`)
+    - Romaja for Korean.
+- **Authentic Native Web Speech TTS**:
+  - Automatically matches target speech locale (*e.g.* `ja-JP`, `zh-CN`, `ko-KR`, `fr-FR`, `de-DE`, `es-ES`, `ru-RU`, `en-US`).
+  - Scans `window.speechSynthesis.getVoices()` to prioritize native dialect voices for the most natural pronunciation.
+
+---
+
+### ⚡ 2. 3-Tier Execution & AI Grammar Insights
+- **Tier 1: Single Word**:
+  - **English**: Queries Free Dictionary API for phonetic IPA (`/haɪˈpɑː.θə.sɪs/`), parts of speech (*n., v., adj.*), definitions, and example sentences.
+  - **All Languages**: Concurrently queries Google Translate for primary meaning and native transliteration.
+  - **Inflection & Stemming Fallback**: Automatically strips suffixes (`-ing`, `-ed`, `-es`, `-s`) to resolve base lemmas.
+- **Tier 2: Phrasal Verbs & Idioms**:
+  - Prioritizes idiom dictionary entries before falling back to phrase translation.
+- **Tier 3: Sentences & Deep Context Analysis**:
+  - Smooth translation into Vietnamese (or your chosen target language).
+  - **Gemini 2.0 Flash AI Integration**: When enabled, acts as your private language tutor — providing nuanced grammatical breakdown, Kanji breakdown, honorific explanations (Keigo/Jondaemal), and contextual usage notes.
+
+---
+
+### 🖱️ 3. Draggable Popover Card & Auto-Translate
+- **Draggable Header with Visual Grip Handle**:
+  - Features an Obsidian Lucide `grip-horizontal` handle.
+  - Automatic `cursor: grab` and `cursor: grabbing` feedback.
+  - Complete event isolation: Clicking internal buttons (Audio, Pin, Close) never triggers accidental drag.
+- **8px Viewport Safety Clamping**:
+  - Guarantees the popover stays within screen boundaries, preventing clipping on small displays or split panes.
+- **Auto-Translate on Selection (Tự động dịch khi bôi đen)**:
+  - Configure the plugin to immediately look up text upon releasing selection without needing to click an icon or press hotkeys.
+  - **Immediate Rect Capture**: Pins coordinates instantly before network requests start.
+  - **Instant Loading Spinner Card**: Shows a sleek spinner (`loader-2`) and transitions smoothly to the result card upon arrival.
+  - **Safe Abort**: Pressing `Escape` or clicking Close immediately cancels in-flight network requests (`cancelPending()`).
+
+---
+
+### 📓 4. Flexible Vocabulary Vault Storage
+- **1-Click Atomic Storage**:
+  - Uses Obsidian's synchronous `app.vault.process()` API to prevent race conditions or data corruption.
+- **Standard Markdown Table & Callout Flashcards**:
+  - **Table format**: Escapes pipes (`\|`), bolds keywords in context, adds transliteration column, and stamps `YYYY-MM-DD`.
+  - **Callout format (`> [!vocab]`)**: Formatted for Spaced Repetition and Anki exports.
+- **Multi-File & Tagging Options**:
+  - **Unified Vault with Tags**: Adds automated Dataview tags (*e.g.* `#vocab/japanese`, `#vocab/chinese`, `#vocab/english`).
+  - **Separate Files per Language**: Toggle `separateVocabFileByLanguage` in Settings to automatically route vocabulary into `Vocabulary_ja.md`, `Vocabulary_zh.md`, etc.
+- **Smart Duplicate Merging**:
+  - Appends new context sentences (`<br>• `) to existing entries instead of duplicating rows.
+
+---
+
+### 📌 5. Sidebar Panel & In-Memory LRU Cache
+- **Right Sidebar View (`ItemView`)**:
+  - **Deep Dive Tab**: Displays comprehensive definitions, grammar notes, phonetic IPA, Romaji/Pinyin, and audio player.
+  - **Session History Tab**: Logs every lookup during your active session.
+- **0ms Instant LRU Cache**:
+  - In-RAM LRU Cache stores up to 200 items isolated by target language (`${targetLang}:${query}`) for immediate, zero-latency recall.
+
+---
+
+## 📸 Architecture Diagram
+
+```text
+               [ Reading Note in Obsidian ]
+                            │
+                            ▼
+               Highlight Word / Sentence
+                            │
+                     (150ms Debounce)
+                            │
+                            ▼
+          [ Trigger Icon / Auto-Translate / Hotkey ]
+                            │
+        ┌───────────────────┴───────────────────┐
+        │                                       │
+        ▼                                       ▼
+  Single Word / Phrase                     Full Sentence
+    • Script Detection (CJK vs Latin)        • Neural Translation
+    • FreeDict (English IPA & definitions)   • Gemini 2.0 Flash AI
+    • Google Translate (dt=t&dt=rm)            (Deep grammar breakdown)
+    • Romaji / Pinyin Transliteration
+        │                                       │
+        └───────────────────┬───────────────────┘
+                            │
+                            ▼
+               [ Draggable Popover Card ]
+                 ├─ 🏷️ Language Badge ([🇯🇵 JA], [🇨🇳 ZH], [🇬🇧 EN])
+                 ├─ 🔊 Native Web Speech TTS Audio
+                 ├─ 💡 Translation & Romaji/Pinyin
+                 ├─ 🤖 AI Grammar & Contextual Notes
+                 ├─ 📝 Original Context Sentence
+                 ├─ [ 💾 Lưu vào sổ ] ───► Atomic Vault (Table/Callout)
+                 └─ [ 📌 Ghim Sidebar ] ─► Polyglot Study Sidebar
 ```
 
 ---
@@ -96,7 +147,7 @@ Single Word / Idiom                   Sentence / Paragraph
    ```text
    <Your-Vault>/.obsidian/plugins/
    ```
-   *(On Windows/macOS, enable "Show Hidden Files" if `.obsidian` is invisible).*
+   *(Enable "Show Hidden Files" in your OS if `.obsidian` is not visible).*
 3. Create a folder named `obsidian-english-study` and paste the 3 files inside:
    ```text
    <Your-Vault>/.obsidian/plugins/obsidian-english-study/
@@ -104,7 +155,9 @@ Single Word / Idiom                   Sentence / Paragraph
    ├── manifest.json
    └── styles.css
    ```
-4. In Obsidian: Go to **Settings > Community plugins** $\to$ Click **Reload plugins** $\to$ Turn on **English Study Assistant**.
+4. In Obsidian: Go to **Settings > Community plugins** $\to$ Click **Reload plugins** $\to$ Enable **Polyglot Study Assistant**.
+
+---
 
 ### Option 2: Build From Source
 ```bash
@@ -115,70 +168,72 @@ cd obsidian-english-study
 # 2. Install dependencies
 npm install
 
-# 3. Run test suite
+# 3. Run full test suite (273 tests)
 npm test
 
 # 4. Build production bundle
 npm run build
 ```
-Copy `main.js`, `manifest.json`, and `styles.css` into your vault's `.obsidian/plugins/obsidian-english-study/` directory.
+Copy `main.js`, `manifest.json`, and `styles.css` into your vault's plugin directory.
 
 ---
 
 ## ⌨️ Hotkeys & Commands
 
-Obsidian English Study adheres strictly to Obsidian's official guidelines by not hijacking default hotkeys. You can configure your favorite keybindings:
-
-1. Open Obsidian **Settings > Hotkeys**.
-2. Search for:
-   - `Tra từ điển / Dịch câu bôi đen`: Lookup highlighted text directly (e.g., `Alt + T` or `Ctrl + Shift + D`).
-   - `Lưu từ vựng vào sổ`: Save current active lookup result to your vocabulary notebook (e.g., `Alt + S`).
-   - `Mở thanh bên English Study`: Open and focus the right sidebar view.
+| Command | Suggested Hotkey | Description |
+| :--- | :--- | :--- |
+| **Tra từ điển / Dịch câu bôi đen (Đa ngôn ngữ)** | `Alt + T` or `Ctrl + Shift + D` | Look up highlighted text in Edit or Reading mode. |
+| **Lưu từ vựng vào sổ** | `Alt + S` | Save active lookup result into your vocabulary notebook. |
+| **Mở thanh bên Polyglot Study** | `Alt + P` | Open and focus the right sidebar study panel. |
 
 ---
 
 ## ⚙️ Settings Overview
 
-Open **Settings > English Study Assistant** to customize your experience:
+Open **Settings > Polyglot Study Assistant** to customize your environment:
 
 | Group | Setting | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **Reading Interaction** | `Trigger Mode` | `Icon on selection` | Choose between: Floating Icon `[📖]`, Hotkey Only, or Auto-Popup. |
-| **Vocabulary Vault** | `Use Daily Note` | `false` | When enabled, appends words to today's Daily Note (`YYYY-MM-DD.md`). |
-| | `Vocab File Path` | `Vocabulary.md` | Path to store accumulated vocabulary notes. |
-| | `Storage Format` | `Markdown Table` | Select between Markdown Table or Callout (`> [!vocab]`). |
-| | `Highlight in Context` | `true` | Automatically bolds `**word**` in the extracted context sentence. |
-| **Translation & AI** | `Translate Mirror URL`| *(Official Web)* | Custom proxy/mirror (e.g. Lingva) if Google Translate is throttled. |
-| | `Gemini API Key` | `""` | Optional Google Gemini API key for deep grammatical analysis. |
-| | `Enable AI Analysis` | `true` | Toggles AI grammar & idiom explanations. |
-| **Audio** | `Preferred Accent` | `US (English - US)` | Prioritizes US (`-us.mp3`) or UK (`-uk.mp3`) audio recordings. |
-| | `Auto-play Audio` | `false` | Automatically speaks pronunciation when looking up single words. |
+| **Trigger & Display** | `Tự động dịch khi bôi đen` | `false` | Automatically look up and display popover when text is highlighted. |
+| | `Chế độ kích hoạt` | `Icon nổi (icon)` | Choose between Floating Icon `[📖]` or Hotkey Only (when auto-translate is off). |
+| **Multilingual Settings** | `Ngôn ngữ nguồn (Học tập)` | `Tự động nhận diện` | Choose source language (`auto`, `en`, `ja`, `zh`, `ko`, `fr`, `de`, `es`, `ru`). |
+| | `Ngôn ngữ đích (Dịch nghĩa)` | `Tiếng Việt (vi)` | Target translation language (`vi`, `en`, `zh`, `ja`). |
+| | `Tách riêng file từ vựng` | `false` | Automatically saves into `Vocabulary_<lang>.md` instead of shared file. |
+| **Vocabulary Vault** | `Lưu vào Daily Note` | `false` | Appends new vocabulary to today's Daily Note (`YYYY-MM-DD.md`). |
+| | `Đường dẫn file từ vựng` | `Vocabulary.md` | Path to store vocabulary notes. |
+| | `Định dạng lưu từ vựng` | `Bảng Markdown` | Select between Markdown Table or Callout Flashcards (`> [!vocab]`). |
+| | `In đậm từ trong ngữ cảnh` | `true` | Automatically bolds target word in the extracted sentence. |
+| **AI & Engines** | `Gemini API Key` | `""` | Optional Google Gemini API key for advanced grammar tutoring. |
+| | `Phân tích ngữ pháp AI` | `true` | Enables AI grammar and context explanations. |
+| **Audio** | `Giọng phát âm ưu tiên` | `US (Mỹ)` | Prioritizes US or UK recordings for English words. |
+| | `Tự động phát âm` | `false` | Automatically speaks pronunciation when looking up single words. |
 
 > [!WARNING]
-> **Security Note on Git Sync**:
-> Plugin settings are stored in `.obsidian/plugins/obsidian-english-study/data.json`. If you sync your vault to a public GitHub repository using **Obsidian Git**, ensure you add `data.json` to your `.gitignore` to protect your personal Gemini API key.
+> **Git Security Tip**:
+> Plugin configurations are stored in `.obsidian/plugins/obsidian-english-study/data.json`. If you sync your vault to a public repository using **Obsidian Git**, add `data.json` to `.gitignore` to prevent exposing your personal Gemini API key.
 
 ---
 
 ## 🧪 Testing & Verification
 
-The codebase is engineered with strict **Test-Driven Development (TDD)** and pure logic separation:
+The project is built on strict **Test-Driven Development (TDD)** principles:
 
 ```bash
-# Run 224 unit & integration tests across 16 suites
+# Run 273 tests across 17 test suites
 npm test
 
 # Run tests with coverage
 npx vitest run --coverage
 ```
 
-Test coverage includes:
-- `textCleaner`: Regex sanitizer, nested Markdown strips, quote & punctuation trims.
-- `textParser`: Sentence boundary detection across multiline paragraphs, honorifics (`Dr.`, `Mr.`), Latin abbreviations (`e.g.`, `i.e.`), and decimals (`3.14`).
-- `lruCache`: LRU eviction order and capacity boundaries.
-- `vocabFormatter`: Table pipe escaping (`\|`), header detection, and duplicate context merging.
-- `ProviderManager`: 3-tier classification, LRU RAM cache hit/miss, and `AbortController` cancellation.
-- `VocabService`: Synchronous `vault.process()` safety, parent folder auto-creation, and duplicate checks.
+### Test Suite Breakdown:
+- `languageHelper`: Script detection across CJK, Cyrillic, and Latin, language metadata, speech locales, Dataview tags.
+- `GoogleTranslate`: Parsing multi-chunk translations, `dt=rm` Romaji/Pinyin extraction, fallback mirror handling.
+- `ProviderManager`: CJK-aware 3-tier classification, FreeDict bypass, language-aware cache key isolation, `AbortController` cancellation.
+- `VocabService`: Separate language files (`Vocabulary_<lang>.md`), language tag stamping, synchronous `vault.process()` safety.
+- `FloatingPopover` & `SidebarView`: Language badge rendering (`[🇯🇵 JA]`), transliteration display, Web Speech TTS locale assignment, drag-and-drop viewport clamping.
+- `SettingsTab`: All 5 setting groups verification, dropdown change handlers, toggle synchronization.
+- `main`: Full plugin lifecycle, ribbon icons, commands, Edit and Reading mode lookups.
 
 ---
 
@@ -187,11 +242,11 @@ Test coverage includes:
 - **Language**: [TypeScript 5.4](https://www.typescriptlang.org) (Strict mode)
 - **Runtime**: [Obsidian Plugin API](https://github.com/obsidianmd/obsidian-api)
 - **Bundler**: [esbuild](https://esbuild.github.io) (CommonJS target ES2018)
-- **Test Runner**: [Vitest 1.6](https://vitest.dev) (with comprehensive Obsidian API mocks)
-- **Styling**: Scoped CSS with Obsidian Theme Tokens
+- **Test Runner**: [Vitest 1.6](https://vitest.dev)
+- **Styling**: Scoped CSS adhering 100% to Obsidian Theme Tokens (`taste-skill` verified)
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE). Feel free to use, customize, and extend it for your own language learning journey!
+This project is licensed under the [MIT License](LICENSE). Feel free to customize and extend it for your language learning workflow!

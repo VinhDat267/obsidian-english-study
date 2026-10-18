@@ -1,9 +1,9 @@
 {
   "id": "obsidian-english-study",
-  "name": "English Study Assistant",
-  "version": "1.0.0",
+  "name": "Polyglot Study Assistant",
+  "version": "1.1.0",
   "minAppVersion": "0.15.0",
-  "description": "Personal English learning assistant: dictionary, translation, and vocabulary note manager.",
+  "description": "Trợ lý học tập đa ngôn ngữ (Anh, Nhật, Trung, Hàn, Pháp, Đức,...) với tra từ tự động, phiên âm Romaji/Pinyin, AI Gemini 2.0 Flash, phát âm bản xứ và sổ từ vựng Vault thông minh.",
   "author": "Personal",
   "isDesktopOnly": false
 }

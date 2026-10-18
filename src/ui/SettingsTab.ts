@@ -28,7 +28,9 @@ export class EnglishStudySettingTab extends PluginSettingTab {
     if (!containerEl) return;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Cài đặt Tiện ích English Study" });
+    containerEl.createEl("h2", {
+      text: "Cài đặt Tiện ích Học tập Đa ngôn ngữ (Polyglot Study)",
+    });
 
     // =========================================================================
     // Nhóm 1: TƯƠNG TÁC ĐỌC (TRIGGER & DISPLAY)

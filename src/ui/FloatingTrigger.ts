@@ -14,8 +14,8 @@ export class FloatingTrigger {
 
     const trigger = document.createElement("button");
     trigger.className = "english-study-trigger";
-    trigger.setAttribute("aria-label", "Tra từ (English Study)");
-    trigger.setAttribute("title", "Tra từ (English Study)");
+    trigger.setAttribute("aria-label", "Tra từ (Polyglot Study)");
+    trigger.setAttribute("title", "Tra từ (Polyglot Study)");
     trigger.setAttribute("tabindex", "0");
 
     const iconSpan = document.createElement("span");

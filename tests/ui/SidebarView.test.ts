@@ -56,7 +56,7 @@ describe("EnglishStudySidebar", () => {
   it("should have correct view type, display text, and icon", () => {
     expect(VIEW_TYPE_ENGLISH_STUDY).toBe("english-study-sidebar");
     expect(sidebar.getViewType()).toBe(VIEW_TYPE_ENGLISH_STUDY);
-    expect(sidebar.getDisplayText()).toBe("English Study");
+    expect(sidebar.getDisplayText()).toBe("Polyglot Study");
     expect(sidebar.getIcon()).toBe("book-open");
   });
 
