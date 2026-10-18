@@ -7,7 +7,7 @@ import {
   DocumentContextMeta,
 } from "../../types";
 import { LRUCache } from "../../utils/lruCache";
-import { cleanSelection } from "../../utils/textCleaner";
+import { cleanSelection, formatMultipleChoiceText } from "../../utils/textCleaner";
 import { extractContextSentence } from "../../utils/textParser";
 import { FreeDictService, FreeDictResult } from "./FreeDictService";
 import { detectScript } from "../../utils/languageHelper";
@@ -204,7 +204,7 @@ export class ProviderManager {
       }
 
       if (gtSettled.status === "fulfilled" && gtSettled.value) {
-        vietnameseTranslation = gtSettled.value.translation;
+        vietnameseTranslation = formatMultipleChoiceText(gtSettled.value.translation);
         if (gtSettled.value.detectedLang) {
           detectedSourceLang = gtSettled.value.detectedLang;
         }
@@ -227,7 +227,7 @@ export class ProviderManager {
           throw new DOMException("The lookup operation was aborted", "AbortError");
         }
         if (geminiRes) {
-          vietnameseTranslation = geminiRes;
+          vietnameseTranslation = formatMultipleChoiceText(geminiRes);
           aiGrammarNote = geminiRes;
           if (!detectedSourceLang) {
             detectedSourceLang = script !== "latin" && script !== "other" ? script : "en";
@@ -240,7 +240,7 @@ export class ProviderManager {
             effectiveSettings.translateEndpointUrl
           );
           if (gtMeta) {
-            vietnameseTranslation = gtMeta.translation;
+            vietnameseTranslation = formatMultipleChoiceText(gtMeta.translation);
             if (gtMeta.detectedLang) detectedSourceLang = gtMeta.detectedLang;
             if (gtMeta.transliteration) transliteration = gtMeta.transliteration;
           }
@@ -256,7 +256,7 @@ export class ProviderManager {
           throw new DOMException("The lookup operation was aborted", "AbortError");
         }
         if (gtMeta) {
-          vietnameseTranslation = gtMeta.translation;
+          vietnameseTranslation = formatMultipleChoiceText(gtMeta.translation);
           if (gtMeta.detectedLang) {
             detectedSourceLang = gtMeta.detectedLang;
           }
@@ -299,8 +299,9 @@ export class ProviderManager {
           );
           if (controller.signal.aborted) return;
           if (aiTrans) {
-            result.aiTranslation = aiTrans;
-            result.vietnameseTranslation = aiTrans;
+            const formattedAiTrans = formatMultipleChoiceText(aiTrans);
+            result.aiTranslation = formattedAiTrans;
+            result.vietnameseTranslation = formattedAiTrans;
           }
         }
 

@@ -122,10 +122,94 @@ export function cleanSelection(raw: string): string {
       ) {
         break;
       }
+      // Nếu là văn bản nhiều dòng và ký tự cuối là dấu kết thúc câu (. ! ? ;), giữ lại để bảo toàn ngữ nghĩa
+      if (
+        str.includes("\n") &&
+        (str.endsWith(".") || str.endsWith("!") || str.endsWith("?") || str.endsWith(";"))
+      ) {
+        break;
+      }
       str = str.slice(0, -1).trim();
     }
   }
 
-  // Chuẩn hóa khoảng trắng bên trong
-  return str.replace(/\s+/g, " ");
+  // Chuẩn hóa khoảng trắng: nếu có xuống dòng, bảo toàn từng dòng và chuẩn hóa khoảng trắng ngang
+  if (str.includes("\n")) {
+    const normalized = str
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/[ \t]+/g, " "))
+      .filter((line, idx, arr) => {
+        // Giữ tối đa 1 dòng trống liên tiếp
+        if (!line && idx > 0 && !arr[idx - 1]) return false;
+        return true;
+      })
+      .join("\n")
+      .trim();
+    return formatMultipleChoiceText(normalized);
+  }
+
+  // Chuỗi 1 dòng: chuẩn hóa khoảng trắng bên trong và tự động tách đáp án A B C D nếu có
+  const singleLine = str.replace(/[ \t]+/g, " ");
+  return formatMultipleChoiceText(singleLine);
+}
+
+/**
+ * Tự động định dạng văn bản câu hỏi trắc nghiệm:
+ * Tách các lựa chọn đáp án (A, B, C, D... hoặc 1, 2, 3... hoặc a, b, c...) xuống từng dòng riêng biệt
+ * nếu chúng đang bị dính liền trên cùng một dòng.
+ */
+export function formatMultipleChoiceText(text: string): string {
+  if (!text || typeof text !== "string") return "";
+
+  let result = text;
+
+  // 1. Kiểm tra trắc nghiệm chữ hoa: A., B., C., D... hoặc A), B)... hoặc (A), (B)... hoặc [A], [B]...
+  const hasUpperA = /(?:^|[\s\n])(?:\(A\)|\[A\]|A[.)])(?:\s+|$)/.test(result);
+  const hasUpperB = /(?:^|[\s\n])(?:\(B\)|\[B\]|B[.)])(?:\s+|$)/.test(result);
+
+  if (hasUpperA && hasUpperB) {
+    // Tách dòng trước các lựa chọn A, B, C, D, E, F, G, H
+    // Chỉ chèn \n nếu ký tự trước đó không phải là \n
+    result = result.replace(
+      /([^\n])\s+((?:\([A-H]\)|\[[A-H]\]|[A-H][.)])\s+)/g,
+      "$1\n$2"
+    );
+  }
+
+  // 2. Kiểm tra trắc nghiệm chữ thường: a., b., c., d... hoặc a), b)... hoặc (a), (b)...
+  const hasLowerA = /(?:^|[\s\n])(?:\(a\)|\[a\]|a[.)])(?:\s+|$)/.test(result);
+  const hasLowerB = /(?:^|[\s\n])(?:\(b\)|\[b\]|b[.)])(?:\s+|$)/.test(result);
+
+  if (hasLowerA && hasLowerB) {
+    result = result.replace(
+      /([^\n])\s+((?:\([a-h]\)|\[[a-h]\]|[a-h][.)])\s+)/g,
+      "$1\n$2"
+    );
+  }
+
+  // 3. Kiểm tra trắc nghiệm đánh số: 1., 2., 3... hoặc 1), 2)... hoặc (1), (2)...
+  const hasNum1 = /(?:^|[\s\n])(?:\(1\)|\[1\]|1[.)])(?:\s+|$)/.test(result);
+  const hasNum2 = /(?:^|[\s\n])(?:\(2\)|\[2\]|2[.)])(?:\s+|$)/.test(result);
+
+  if (hasNum1 && hasNum2) {
+    result = result.replace(
+      /([^\n])\s+((?:\([1-9]\)|\[[1-9]\]|[1-9][.)]|\(1[0-9]\)|\[1[0-9]\]|1[0-9][.)])\s+)/g,
+      "$1\n$2"
+    );
+  }
+
+  // Chuẩn hóa khoảng trắng thừa trên từng dòng nếu có dòng mới
+  if (result.includes("\n")) {
+    return result
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/[ \t]+/g, " "))
+      .filter((line, idx, arr) => {
+        // Giữ tối đa 1 dòng trống liên tiếp
+        if (!line && idx > 0 && !arr[idx - 1]) return false;
+        return true;
+      })
+      .join("\n");
+  }
+
+  return result.trim().replace(/[ \t]+/g, " ");
 }

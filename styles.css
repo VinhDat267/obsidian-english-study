@@ -216,9 +216,9 @@
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--text-normal);
-  white-space: normal;
+  white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.25;
+  line-height: 1.4;
 }
 
 .english-study-popover .vocab-phonetic {
@@ -357,8 +357,13 @@
   font-size: var(--font-ui-medium, 14.5px);
   font-weight: 600;
   color: var(--text-accent);
-  line-height: 1.45;
+  line-height: 1.5;
+  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.english-study-popover .vocab-translation-text {
+  white-space: pre-wrap;
 }
 
 .english-study-popover .vocab-definitions {
@@ -813,8 +818,9 @@
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--text-normal);
+  white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.25;
+  line-height: 1.4;
 }
 
 .english-study-sidebar-view .vocab-phonetic {
@@ -866,8 +872,13 @@
   font-size: var(--font-ui-medium, 15px);
   font-weight: 600;
   color: var(--text-accent);
-  line-height: 1.45;
+  line-height: 1.5;
+  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.english-study-sidebar-view .vocab-translation-text {
+  white-space: pre-wrap;
 }
 
 .english-study-sidebar-view .vocab-definitions {

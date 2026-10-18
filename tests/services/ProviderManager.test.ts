@@ -650,5 +650,36 @@ describe("ProviderManager", () => {
       expect(res.vietnameseTranslation).toBe("Bản dịch chuyên ngành chuẩn.");
       expect(res.aiGrammarNote).toBeUndefined();
     });
+
+    it("should format multiple choice options onto separate lines in vietnameseTranslation and aiTranslation", async () => {
+      vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValueOnce(null);
+      vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValueOnce({
+        translation: "Câu hỏi? A. Đáp án 1 B. Đáp án 2 C. Đáp án 3 D. Đáp án 4",
+      });
+      vi.spyOn((manager as any).geminiService, "translateContext").mockResolvedValueOnce(
+        "Câu hỏi chuyên ngành? A. Lựa chọn 1 B. Lựa chọn 2 C. Lựa chọn 3 D. Lựa chọn 4"
+      );
+
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        geminiApiKey: "valid-key",
+        enableAiTranslation: true,
+      };
+
+      const res = await manager.lookup(
+        "Question? A. Choice 1 B. Choice 2",
+        "Full context",
+        0,
+        settings
+      );
+
+      expect(res.vietnameseTranslation).toBe(
+        "Câu hỏi chuyên ngành?\nA. Lựa chọn 1\nB. Lựa chọn 2\nC. Lựa chọn 3\nD. Lựa chọn 4"
+      );
+      expect(res.aiTranslation).toBe(
+        "Câu hỏi chuyên ngành?\nA. Lựa chọn 1\nB. Lựa chọn 2\nC. Lựa chọn 3\nD. Lựa chọn 4"
+      );
+    });
   });
 });
+

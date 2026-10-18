@@ -48,10 +48,18 @@ export class GeminiService extends BaseProvider {
     const contextHint = this.buildContextHint(docContext);
     const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
 
+    const isMultilineOrChoice =
+      cleanTarget.includes("\n") ||
+      /(?:^|[\s\n])(?:\([A-Da-d]\)|\[[A-Da-d]\]|[A-Da-d][.)])\s+/.test(cleanTarget);
+
+    const formatRequirement = isMultilineOrChoice
+      ? `- Giữ nguyên cấu trúc các dòng và các lựa chọn đáp án (A, B, C, D... hoặc 1, 2, 3...) tương ứng như văn bản gốc, mỗi lựa chọn trên một dòng riêng biệt, không gộp chung vào một đoạn.`
+      : `- Trả về DUY NHẤT một câu dịch nghĩa bằng ${langTargetName} súc tích, tự nhiên.`;
+
     const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là một dịch giả chuyên gia am hiểu sâu sắc lĩnh vực trên. Hãy dịch nghĩa chính xác của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}".
 Yêu cầu:
 - Sử dụng đúng thuật ngữ chuyên môn của tài liệu (nếu có).
-- Trả về DUY NHẤT một câu dịch nghĩa bằng ${langTargetName} súc tích, tự nhiên.
+${formatRequirement}
 - Tuyệt đối không giải thích ngữ pháp, không thêm lời chào hay từ ngữ rườm rà.`;
 
     return this.callGeminiApi(prompt, cleanKey);
