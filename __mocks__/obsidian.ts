@@ -137,11 +137,13 @@ export class WorkspaceLeaf {
 }
 
 export class Workspace {
+  public leaves: WorkspaceLeaf[] = [];
   public activeLeaf: WorkspaceLeaf | null = null;
   public on = vi.fn((name: string, callback: (...args: any[]) => any) => {
     return { name, callback };
   });
-  public getLeavesOfType = vi.fn((type: string) => []);
+  public getLeavesOfType = vi.fn((type: string): WorkspaceLeaf[] => this.leaves.filter(leaf => leaf.view?.getViewType?.() === type));
+  public onLayoutReady = vi.fn((callback: () => void) => callback());
   public getRightLeaf = vi.fn((split: boolean) => new WorkspaceLeaf());
   public revealLeaf = vi.fn();
   public getActiveViewOfType = vi.fn((type: any) => {
@@ -157,6 +159,7 @@ export class Workspace {
 export class App {
   public vault: Vault = new Vault();
   public workspace: Workspace = new Workspace();
+  public metadataCache = { getFileCache: vi.fn((_file: any): any => null) };
 }
 
 export function createMockObsidianElement(tag: string = "div"): any {
@@ -563,6 +566,50 @@ export class Modal {
   onClose(): void {}
 }
 
+export class Component {
+  private loaded = false;
+  private children: Component[] = [];
+  private cleanups: (() => void)[] = [];
+  public events: EventRef[] = [];
+  load(): void {
+    if (this.loaded) return;
+    this.loaded = true;
+    this.onload();
+    this.children.forEach(child => child.load());
+  }
+  unload(): void {
+    if (!this.loaded) return;
+    this.loaded = false;
+    this.onunload();
+    this.children.splice(0).reverse().forEach(child => child.unload());
+    this.cleanups.splice(0).reverse().forEach(cleanup => cleanup());
+  }
+  addChild<T extends Component>(child: T): T {
+    this.children.push(child);
+    if (this.loaded) child.load();
+    return child;
+  }
+  removeChild<T extends Component>(child: T): T {
+    this.children = this.children.filter(item => item !== child);
+    child.unload(); return child;
+  }
+  register(callback: () => void): void { this.cleanups.push(callback); }
+  registerEvent(event: EventRef): void { this.events.push(event); }
+  onload(): void {}
+  onunload(): void {}
+}
+
+export class MarkdownRenderChild extends Component {
+  constructor(public containerEl: HTMLElement) { super(); }
+}
+export interface MarkdownPostProcessorContext {
+  docId: string;
+  sourcePath: string;
+  frontmatter: any;
+  addChild(child: MarkdownRenderChild): void;
+  getSectionInfo(el: HTMLElement): any;
+}
+
 export class View {
   public app: App;
   public leaf: WorkspaceLeaf;
@@ -572,6 +619,14 @@ export class View {
     this.leaf = leaf;
     this.app = new App();
     this.containerEl = createMockObsidianElement("div");
+  }
+  addAction(icon: string, title: string, callback: (event: MouseEvent) => any): HTMLElement {
+    const button = this.containerEl.ownerDocument?.createElement("button") || createMockObsidianElement("button");
+    button.setAttribute("aria-label", title);
+    button.setAttribute("data-icon", icon);
+    button.addEventListener("click", callback);
+    if (this.containerEl.prepend) this.containerEl.prepend(button);
+    return button;
   }
 }
 
@@ -677,6 +732,16 @@ export class Editor {
 
 export class MarkdownView extends View {
   public editor: Editor;
+  public file: TFile | null = null;
+  public contentEl: any;
+  public mode: "source" | "preview" = "source";
+  public getMode = vi.fn(() => this.mode);
+  public previewMode = {
+    containerEl: createMockObsidianElement("div"),
+    rerender: vi.fn((_full?: boolean) => {}),
+    getScroll: vi.fn(() => 0),
+    applyScroll: vi.fn((_scroll: number) => {}),
+  };
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -688,7 +753,7 @@ export class MarkdownView extends View {
   }
 }
 
-export class Plugin {
+export class Plugin extends Component {
   public app: App;
   public manifest: any;
   private _data: any = {};
@@ -698,10 +763,16 @@ export class Plugin {
   public ribbonIcons: { icon: string; title: string; callback: (evt: MouseEvent) => any }[] = [];
   public domEvents: { el: any; type: string; callback: any; options?: any }[] = [];
   public events: EventRef[] = [];
+  public markdownPostProcessors: ((el: HTMLElement, ctx: MarkdownPostProcessorContext) => any)[] = [];
 
   constructor(app: App, manifest: any) {
+    super();
     this.app = app;
     this.manifest = manifest;
+  }
+  registerMarkdownPostProcessor(callback: (el: HTMLElement, ctx: MarkdownPostProcessorContext) => any) {
+    this.markdownPostProcessors.push(callback);
+    return callback;
   }
 
   addCommand(command: Command): Command {
