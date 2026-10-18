@@ -9,17 +9,22 @@ import type { ReadingBlock, ReadingTranslationConfig, ReadingTranslationSession,
 interface BlockEntry { block: ReadingBlock; started: boolean; pending: boolean; view?: ReadingTranslationView }
 interface Section {
   el: HTMLElement; active: boolean; entries: BlockEntry[];
-  child: MarkdownRenderChild; transport: ReadingTranslationSession; cleanup: () => void;
+  child: MarkdownRenderChild; transport: ReadingTranslationSession; cleanup: () => void; checkViewport?: () => void;
 }
 interface PaneSession {
   view: MarkdownView; path: string; root: HTMLElement; active: boolean;
   config: ReadingTranslationConfig; sections: Map<HTMLElement, Section>;
 }
 interface TrackedView { action: HTMLElement; observer?: MutationObserver; disposeAction: () => void }
+interface PendingSection {
+  el: HTMLElement; child: MarkdownRenderChild; active: boolean; candidates: Set<PaneSession>;
+  pane?: PaneSession; section?: Section;
+}
 
 export class ReadingTranslationController extends Component {
   private panes = new Map<MarkdownView, PaneSession>();
   private tracked = new Map<MarkdownView, TrackedView>();
+  private pendingSections = new Map<HTMLElement, PendingSection>();
   private renderer = new ReadingTranslationRenderer();
   private settingsSnapshot: ReadingTranslationConfig;
   private running = false;
@@ -75,21 +80,45 @@ export class ReadingTranslationController extends Component {
 
   processSection(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
     if (!this.running || el.closest(".internal-embed,.markdown-embed,.polyglot-reading-translation")) return;
-    const pane = Array.from(this.panes.values()).find(item =>
-      this.valid(item) && item.path === ctx.sourcePath && item.root.contains(el));
+    const candidates = new Set(Array.from(this.panes.values()).filter(item =>
+      this.valid(item) && item.path === ctx.sourcePath));
+    if (!candidates.size) return;
+    const old = this.pendingSections.get(el);
+    if (old) this.discardPending(old);
+    const pending: PendingSection = { el, child: new MarkdownRenderChild(el), active: true, candidates };
+    this.pendingSections.set(el, pending);
+    pending.child.register(() => {
+      this.discardPending(pending);
+      if (pending.pane && pending.section) this.destroySection(pending.pane, pending.section);
+    });
+    // Obsidian may post-process before attaching a section. The host owns its
+    // lifetime immediately; pane ownership is established only by containment.
+    ctx.addChild(pending.child);
+    this.claimPending(pending);
+  }
+
+  private discardPending(pending: PendingSection): void {
+    pending.active = false; pending.candidates.clear();
+    if (this.pendingSections.get(pending.el) === pending) this.pendingSections.delete(pending.el);
+  }
+
+  private claimPending(pending: PendingSection): void {
+    if (!pending.active) return;
+    const el = pending.el;
+    if (el.closest(".internal-embed,.markdown-embed,.polyglot-reading-translation")) { this.discardPending(pending); return; }
+    const pane = Array.from(pending.candidates).find(item => this.valid(item) && item.root.contains(el));
     if (!pane) return;
     const previous = pane.sections.get(el);
     if (previous) this.destroySection(pane, previous);
     const blocks = extractReadingBlocks(el);
+    this.discardPending(pending);
     if (!blocks.length) return;
-    const child = new MarkdownRenderChild(el);
     const section: Section = {
       el, active: true, entries: blocks.map(block => ({ block, started: false, pending: false })),
-      child, transport: this.service.createSession(pane.config), cleanup: () => {},
+      child: pending.child, transport: this.service.createSession(pane.config), cleanup: () => {},
     };
+    pending.pane = pane; pending.section = section;
     pane.sections.set(el, section);
-    child.register(() => this.destroySection(pane, section));
-    ctx.addChild(child);
     if (!section.active || !this.valid(pane)) return;
     this.observeSection(pane, section);
   }
@@ -144,12 +173,13 @@ export class ReadingTranslationController extends Component {
       const pane = this.panes.get(view);
       if (pane && !this.valid(pane)) this.stop(view);
       else if (pane) {
-        for (const section of Array.from(pane.sections.values())) {
-          if (!pane.root.contains(section.el) || !section.el.isConnected) this.destroySection(pane, section);
-        }
+        // Viewport virtualization retains section DOM and render children.
+        // Only the host child's unload or an explicit pane invalidation disposes it.
+        for (const section of pane.sections.values()) section.checkViewport?.();
       }
       this.updateAction(view);
     }
+    for (const pending of this.pendingSections.values()) this.claimPending(pending);
   }
 
   private config(): ReadingTranslationConfig {
@@ -168,17 +198,21 @@ export class ReadingTranslationController extends Component {
       pane.view.previewMode.containerEl === pane.root && pane.root.isConnected;
   }
 
-  private blockValid(pane: PaneSession, section: Section, block: ReadingBlock): boolean {
+  private blockValid(pane: PaneSession, section: Section, block: ReadingBlock, attached = true): boolean {
     return this.valid(pane) && section.active && pane.sections.get(section.el) === section &&
-      pane.root.contains(block.anchor.parent) &&
+      (!attached || pane.root.contains(block.anchor.parent)) &&
       (!block.anchor.before || block.anchor.before.parentNode === block.anchor.parent) &&
-      block.sourceNodes.every(node => node.isConnected && section.el.contains(node));
+      block.sourceNodes.every(node => (!attached || node.isConnected) && section.el.contains(node));
   }
 
   private stop(view: MarkdownView): void {
     const pane = this.panes.get(view);
     if (!pane) return;
     pane.active = false;
+    for (const pending of this.pendingSections.values()) {
+      pending.candidates.delete(pane);
+      if (!pending.candidates.size) this.discardPending(pending);
+    }
     for (const section of Array.from(pane.sections.values())) { this.destroySection(pane, section); section.child.unload(); }
     this.panes.delete(view);
   }
@@ -226,7 +260,9 @@ export class ReadingTranslationController extends Component {
       context: this.buildContext(pane.view, entry.block),
     }).then(result => {
       entry.pending = false;
-      if (this.blockValid(pane, section, entry.block)) entry.view?.show(result);
+      // A retained section may be off-DOM when its response arrives. Updating
+      // its existing translation preserves the result for the next attachment.
+      if (this.blockValid(pane, section, entry.block, false)) entry.view?.show(result);
     });
   }
 
@@ -243,8 +279,9 @@ export class ReadingTranslationController extends Component {
       const observer = new Observer(entries => {
         for (const event of entries) {
           if (!event.isIntersecting) continue;
-          for (const entry of targets.get(event.target) || []) if (!entry.started) this.run(pane, section, entry);
-          observer.unobserve(event.target);
+          const targetEntries = targets.get(event.target) || [];
+          for (const entry of targetEntries) if (!entry.started) this.run(pane, section, entry);
+          if (targetEntries.every(entry => entry.started)) observer.unobserve(event.target);
         }
       }, { root: pane.root, rootMargin: "300px" });
       section.cleanup = () => observer.disconnect();
@@ -260,6 +297,7 @@ export class ReadingTranslationController extends Component {
         });
       };
       pane.root.addEventListener("scroll", check, true); owner?.addEventListener("resize", check);
+      section.checkViewport = check;
       section.cleanup = () => { pane.root.removeEventListener("scroll", check, true); owner?.removeEventListener("resize", check); };
       check();
     }

@@ -33,6 +33,76 @@ function attach(view: MarkdownView) {
 async function visible() { TestIntersectionObserver.instances.forEach(observer => observer.emitVisible()); await flushPromises(); }
 
 describe("pane scoped reading translation", () => {
+  it("claims_preprocessed_detached_sections_only_after_owning_pane_attachment", async () => {
+    const left = makeReadingView(app, "", "Same.md"), right = makeReadingView(app, "", "Same.md");
+    const google = setup(); controller.toggle(left); controller.toggle(right);
+    const section = document.createElement("section"); section.innerHTML = "<p>Deferred</p>";
+    const context = makeReadingContext(right);
+    controller.processSection(section, context.ctx);
+    await visible(); expect(google.translateWithMeta).not.toHaveBeenCalled();
+    right.previewMode.containerEl.append(section); await flushPromises(); await visible();
+    expect(right.previewMode.containerEl.querySelector(".polyglot-reading-translation")?.textContent).toBe("Dịch Deferred");
+    expect(left.previewMode.containerEl.querySelector(".polyglot-reading-translation")).toBeNull();
+    context.unload();
+    expect(section.querySelector(".polyglot-reading-translation")).toBeNull();
+  });
+
+  it.each(["unload", "toggle"])("discards_pending_detached_sections_after_%s", async reason => {
+    const view = makeReadingView(app, "", "Note.md"), google = setup(); controller.toggle(view);
+    const section = document.createElement("section"); section.innerHTML = "<p>Discarded</p>";
+    const context = makeReadingContext(view); controller.processSection(section, context.ctx);
+    if (reason === "unload") context.unload();
+    else { controller.toggle(view); controller.toggle(view); }
+    view.previewMode.containerEl.append(section); await flushPromises(); await visible();
+    expect(google.translateWithMeta).not.toHaveBeenCalled();
+    expect(section.querySelector(".polyglot-reading-translation")).toBeNull();
+  });
+
+  it("preserves_completed_translations_across_viewport_virtualization", async () => {
+    const view = makeReadingView(app, "<section><p>Kept</p></section>", "Note.md"), google = setup();
+    const section = view.previewMode.containerEl.firstElementChild as HTMLElement;
+    view.previewMode.rerender.mockImplementation(() => controller.processSection(section, makeReadingContext(view).ctx));
+    controller.toggle(view); await visible();
+    const translated = section.querySelector(".polyglot-reading-translation");
+    section.remove(); await flushPromises();
+    view.previewMode.containerEl.append(section); await flushPromises(); await visible();
+    expect(section.querySelector(".polyglot-reading-translation")).toBe(translated);
+    expect(translated?.textContent).toBe("Dịch Kept");
+    expect(google.translateWithMeta).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains_inflight_results_while_the_host_virtualizes_the_section", async () => {
+    const view = makeReadingView(app, "<section><p>Pending</p></section>", "Note.md"), gate = deferred<any>();
+    const google = setup({ translateWithMeta: vi.fn(() => gate.promise) });
+    const section = view.previewMode.containerEl.firstElementChild as HTMLElement;
+    view.previewMode.rerender.mockImplementation(() => controller.processSection(section, makeReadingContext(view).ctx));
+    controller.toggle(view); await visible(); section.remove(); await flushPromises();
+    gate.resolve({ translation: "Đã xong", detectedLang: "en" }); await flushPromises();
+    view.previewMode.containerEl.append(section); await flushPromises(); await visible();
+    expect(section.querySelector('[data-state="success"]')?.textContent).toBe("Đã xong");
+    expect(google.translateWithMeta).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps_unstarted_observation_after_a_detached_visibility_notification", async () => {
+    const view = makeReadingView(app, "<section><p>Later</p></section>", "Note.md"), google = setup();
+    const section = view.previewMode.containerEl.firstElementChild as HTMLElement;
+    view.previewMode.rerender.mockImplementation(() => controller.processSection(section, makeReadingContext(view).ctx));
+    controller.toggle(view); section.remove(); await flushPromises(); await visible();
+    expect(google.translateWithMeta).not.toHaveBeenCalled();
+    view.previewMode.containerEl.append(section); await flushPromises(); await visible();
+    expect(section.querySelector(".polyglot-reading-translation")?.textContent).toBe("Dịch Later");
+  });
+
+  it("claims_detached_sections_with_the_viewport_fallback", async () => {
+    window.IntersectionObserver = undefined as any;
+    const view = makeReadingView(app, "", "Note.md"), google = setup(); controller.toggle(view);
+    const section = document.createElement("section"); section.innerHTML = "<p>Fallback</p>";
+    controller.processSection(section, makeReadingContext(view).ctx);
+    await flushPromises(); expect(google.translateWithMeta).not.toHaveBeenCalled();
+    view.previewMode.containerEl.append(section); await flushPromises();
+    expect(section.querySelector(".polyglot-reading-translation")?.textContent).toBe("Dịch Fallback");
+  });
+
   it("isolates_same_path_in_two_panes_and_waits_for_viewport", async () => {
     const left = makeReadingView(app, "<p>Hello</p>", "Same.md");
     const right = makeReadingView(app, "<p>Hello</p>", "Same.md");

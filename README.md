@@ -4,7 +4,7 @@
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vitest](https://img.shields.io/badge/Tests-386%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
+[![Vitest](https://img.shields.io/badge/Tests-393%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -181,7 +181,7 @@ cd obsidian-polyglot-study
 # 2. Install dependencies
 npm install
 
-# 3. Run full test suite (386 tests)
+# 3. Run full test suite (393 tests)
 npm test
 
 # 4. Build production bundle
@@ -233,7 +233,7 @@ Open **Settings > Polyglot Study Assistant** to customize your environment:
 The project is built on strict **Test-Driven Development (TDD)** principles:
 
 ```bash
-# Run 386 tests across 26 test suites
+# Run 393 tests across 26 test suites
 npm test
 
 # Check the reading feature against the real Obsidian API types
@@ -244,7 +244,7 @@ npx vitest run --coverage
 ```
 
 ### Test Suite Breakdown:
-- `tests/reading/`: Real DOM fixtures for extraction, protected code/math, safe rendering, per-pane lifecycle, cancellation, lazy scheduling, cache isolation, and the complete plugin flow with HTTP mocked. Tests assert that reading mode does not write notes.
+- `tests/reading/`: Real DOM fixtures for extraction, protected code/math, safe rendering, per-pane lifecycle, pre-attachment postprocessing, viewport virtualization, cancellation, lazy scheduling, cache isolation, and the complete plugin flow with HTTP mocked. Tests assert that reading mode does not write notes.
 - `languageHelper`: Script detection across CJK, Cyrillic, and Latin, language metadata, speech locales, Dataview tags.
 - `GoogleTranslate`: Parsing multi-chunk translations, `dt=rm` Romaji/Pinyin extraction, fallback mirror handling.
 - `ProviderManager`: CJK-aware 3-tier classification, FreeDict bypass, language-aware cache key isolation, `AbortController` cancellation.

@@ -10,7 +10,7 @@
 
 **Spec:** [2026-10-18-immersive-reading-translation-design.md](../specs/2026-10-18-immersive-reading-translation-design.md), được người dùng duyệt ngày 2026-10-18.
 
-**Status:** Người dùng đã duyệt và chọn Native. Đã triển khai, kiểm thử cục bộ; đang chờ review toàn nhánh.
+**Status:** Người dùng đã duyệt và chọn Native. Đã triển khai, review toàn nhánh, sửa hai lỗi Important bằng test hồi quy và kiểm thử cục bộ. Chờ quyết định tích hợp nhánh.
 
 ## Global Constraints
 
@@ -249,12 +249,31 @@ Người dùng đã chọn **Native** ngày 2026-10-18: thực hiện lần lư�
 ## Verification Record
 
 - Tự rà soát kế hoạch so với đặc tả: đã đối chiếu phạm vi, 12 tiêu chí nghiệm thu, 5 Review Focus và các chữ ký giữa task; bổ sung kiểm tra trắc nghiệm chung paragraph, vòng đời mock theo API thật và cache của inline content.
-- Test: **386/386**, 26 file. Build và `typecheck:reading` với type API Obsidian thật: **PASS**.
+- Test: **393/393**, 26 file. Build và `typecheck:reading` với type API Obsidian thật: **PASS**.
 - Typecheck toàn repository: **FAIL**, 49 lỗi so với 55 tại baseline; đối chiếu diagnostic theo file/mã/nội dung cho thấy **không có lỗi mới**. Không mô tả scoped check là toàn repository pass.
 - Browser fixture dùng renderer/CSS thật: **PASS** với 9 khối dịch, chữ 600, viền 4px; tương phản sáng 11.75:1 và tối 8.52:1. Pane 360px tại CSS zoom 200% và pane 1024px không tràn phần dịch. Đây là theme đại diện, không phải theme/vault Obsidian đang cài của người dùng.
 - Detector UI đã chạy một lần; cảnh báo viền dọc được giữ theo đặc tả đã duyệt. Các cảnh báo CSS cũ ngoài tính năng không được sửa như tác dụng phụ.
 - Obsidian/provider thật: `NOT_RUN`; không dùng credential hoặc Vault cá nhân.
 - Điều chỉnh khi thực hiện: service session thuộc từng section để hủy đúng công việc section mà không hủy pane khác; scheduler vẫn có giới hạn chung. Vitest ưu tiên `.ts` để test không đọc nhầm `main.js` sau build.
+
+## Native Final Review Record
+
+Reviewer độc lập đã rà soát `7ef7cbc..0b31843`: không có Critical, có hai Important. Kiểm tra tĩnh renderer của Obsidian 1.14.4 và tái hiện offline xác nhận postprocessor có thể chạy trước khi section gắn vào DOM, và virtualization giữ lại section/child khi tạm tháo DOM. Đây không phải bằng chứng chạy Obsidian thật.
+
+- **Đã sửa: section xử lý trước khi gắn DOM bị bỏ sót.** Đăng ký render child ngay, giữ các pane session đủ điều kiện tại thời điểm xử lý, chỉ xác định pane sở hữu khi containment và source path khớp. MutationObserver của view nhận section được gắn vào; không dùng thuộc tính context ngoài public API. Test `claims_preprocessed_detached_sections_only_after_owning_pane_attachment` và `claims_detached_sections_with_the_viewport_fallback` đã RED→GREEN; có kiểm tra hủy trước khi gắn vào.
+- **Đã sửa: mất bản dịch khi cuộn ra/vào vùng virtualization.** Dựa vào host-managed child unload để dọn section vĩnh viễn; giữ DOM/kết quả của section tạm tháo, chỉ bắt đầu request mới khi block được gắn vào pane. Test `preserves_completed_translations_across_viewport_virtualization`, `retains_inflight_results_while_the_host_virtualizes_the_section` và `keeps_unstarted_observation_after_a_detached_visibility_notification` đã RED→GREEN.
+- Fix pass thêm 7 ca kiểm thử: 5 ca tái hiện đã fail trước sửa; 2 ca bảo vệ hủy đang pass trước và sau sửa. Sau sửa: **393/393** test pass, typecheck phần đọc và build pass; full typecheck đối chiếu lại baseline **55→49**, không thêm diagnostic theo file/mã/nội dung.
+- Theo Native workflow, tác giả thực hiện một lượt sửa và xác minh bằng test; không có lượt reviewer thứ hai. Không còn finding Important/Critical chưa xử lý; không có Minor được hoãn.
+
+Các quyết định được lưu lại từ execution ledger (theo thứ tự):
+
+1. **Session dịch theo section:** hủy một section không hủy section khác; chi phí: batch Gemini có thể nhỏ hơn giữa các section, giới hạn đồng thời vẫn dùng chung.
+2. **Vitest ưu tiên `.ts` trước `.js`:** tránh đọc bundle sau build; chi phí: thứ tự resolve trong test thay đổi, runtime bundle không thay đổi.
+3. **Obsidian/provider thật giữ `NOT_RUN`:** test offline và kiểm tra tĩnh không thay được chạy thật; chi phí: chưa chứng minh tương thích runtime/provider.
+4. **Visual chỉ xác nhận theme đại diện:** reviewer không kiểm tra lại theme đang cài; chi phí: theme tùy biến có thể cần hiệu chỉnh tương phản.
+5. **Giữ nền accent 20%, chữ 600 và viền 4px:** đúng thiết kế đã duyệt; chi phí: mức nhấn có thể khác theo theme.
+6. **Giữ hai quyết định session/Vitest sau review:** không có lỗi mới từ reviewer cho hai lựa chọn này; chi phí vẫn là batch nhỏ hơn và resolve test khác.
+7. **Không sửa lỗi typecheck baseline ngoài phạm vi:** không thêm diagnostic mới; chi phí: toàn repository vẫn chưa typecheck sạch.
 
 ## References
 
