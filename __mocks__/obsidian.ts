@@ -131,6 +131,9 @@ export class Vault {
 export class WorkspaceLeaf {
   public view: any;
   public openFile = vi.fn();
+  public setViewState = vi.fn(async (state: any) => {
+    return;
+  });
 }
 
 export class Workspace {
@@ -141,6 +144,12 @@ export class Workspace {
   public getLeavesOfType = vi.fn((type: string) => []);
   public getRightLeaf = vi.fn((split: boolean) => new WorkspaceLeaf());
   public revealLeaf = vi.fn();
+  public getActiveViewOfType = vi.fn((type: any) => {
+    if (this.activeLeaf?.view instanceof type) {
+      return this.activeLeaf.view;
+    }
+    return null;
+  });
 }
 
 export class App {
@@ -567,10 +576,86 @@ export interface EventRef {
   [key: string]: any;
 }
 
+export class Editor {
+  private content: string = "";
+  private selection: string = "";
+  private cursor: { line: number; ch: number } = { line: 0, ch: 0 };
+  private lines: string[] = [""];
+
+  constructor(content: string = "") {
+    this.setValue(content);
+  }
+
+  getValue(): string {
+    return this.content;
+  }
+
+  setValue(content: string): void {
+    this.content = content;
+    this.lines = content.split("\n");
+  }
+
+  getLine(line: number): string {
+    return this.lines[line] ?? "";
+  }
+
+  setLine(line: number, text: string): void {
+    this.lines[line] = text;
+    this.content = this.lines.join("\n");
+  }
+
+  lineCount(): number {
+    return this.lines.length;
+  }
+
+  getSelection(): string {
+    return this.selection;
+  }
+
+  setSelection(anchor: any, head?: any): void {
+    // mock
+  }
+
+  setSelectionText(text: string): void {
+    this.selection = text;
+  }
+
+  getCursor(side?: "from" | "to" | "head" | "anchor"): { line: number; ch: number } {
+    return this.cursor;
+  }
+
+  setCursor(pos: { line: number; ch: number } | number, ch?: number): void {
+    if (typeof pos === "number") {
+      this.cursor = { line: pos, ch: ch ?? 0 };
+    } else {
+      this.cursor = { ...pos };
+    }
+  }
+}
+
+export class MarkdownView extends View {
+  public editor: Editor;
+
+  constructor(leaf: WorkspaceLeaf) {
+    super(leaf);
+    this.editor = new Editor();
+  }
+
+  getViewType(): string {
+    return "markdown";
+  }
+}
+
 export class Plugin {
   public app: App;
   public manifest: any;
   private _data: any = {};
+  public commands: Command[] = [];
+  public views: Map<string, (leaf: WorkspaceLeaf) => View> = new Map();
+  public settingTabs: PluginSettingTab[] = [];
+  public ribbonIcons: { icon: string; title: string; callback: (evt: MouseEvent) => any }[] = [];
+  public domEvents: { el: any; type: string; callback: any; options?: any }[] = [];
+  public events: EventRef[] = [];
 
   constructor(app: App, manifest: any) {
     this.app = app;
@@ -578,6 +663,7 @@ export class Plugin {
   }
 
   addCommand(command: Command): Command {
+    this.commands.push(command);
     return command;
   }
 
@@ -586,23 +672,32 @@ export class Plugin {
     type: K,
     callback: (this: HTMLElement, ev: WindowEventMap[K]) => any,
     options?: boolean | AddEventListenerOptions
-  ): void {}
+  ): void {
+    this.domEvents.push({ el, type, callback, options });
+  }
 
-  registerEvent(eventRef: EventRef): void {}
+  registerEvent(eventRef: EventRef): void {
+    this.events.push(eventRef);
+  }
 
   registerView(
     type: string,
     viewCreator: (leaf: WorkspaceLeaf) => View
-  ): void {}
+  ): void {
+    this.views.set(type, viewCreator);
+  }
 
-  addSettingTab(settingTab: PluginSettingTab): void {}
+  addSettingTab(settingTab: PluginSettingTab): void {
+    this.settingTabs.push(settingTab);
+  }
 
   addRibbonIcon(
     icon: string,
     title: string,
     callback: (evt: MouseEvent) => any
   ): HTMLElement {
-    return {} as HTMLElement;
+    this.ribbonIcons.push({ icon, title, callback });
+    return createMockObsidianElement("div");
   }
 
   async loadData(): Promise<any> {
