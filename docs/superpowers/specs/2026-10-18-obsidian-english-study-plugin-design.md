@@ -66,6 +66,7 @@ obsidian-english-study/
 │       ├── domHelper.ts            # Tính toán tọa độ Popover (chống tràn viền)
 │       ├── textParser.ts           # Trích xuất câu ngữ cảnh đa dòng, xử lý Markdown
 │       ├── textCleaner.ts          # Làm sạch dấu câu & ký tự Markdown bao quanh
+│       ├── vocabFormatter.ts       # Định dạng dòng bảng/callout, escape ký tự đặc biệt
 │       └── lruCache.ts             # Bộ nhớ đệm LRU trong RAM cho phiên làm việc
 └── __mocks__/
     └── obsidian.ts                 # Mock requestUrl, Notice, Vault cho Unit Test
@@ -219,8 +220,15 @@ Khi Free Dictionary API trả về 404 cho từ chia thì (`went`, `running`, `h
 
 ### 4.5 Cơ chế Debounce & Rate-limit
 
-- **Debounce 250ms**: Sau khi bôi đen, chờ 250ms để cố định vùng chọn rồi mới gửi request
-- **Chống spam 429**: Nếu Google Translate trả về 429 Too Many Requests, tự động chuyển sang mirror endpoint dự phòng
+Plugin sử dụng **2 cơ chế debounce riêng biệt** cho 2 mục đích khác nhau:
+
+1. **Selection Debounce (150ms)** — trong `main.ts`: Sau khi `mouseup`/`keyup`, chờ 150ms rồi mới kiểm tra `editor.getSelection()` và hiện Floating Trigger Icon. Mục đích: tránh xử lý khi người dùng đang kéo chuột liên tục.
+
+2. **API Request Debounce (250ms)** — trong `ProviderManager.ts`: Sau khi Floating Trigger Icon được click (hoặc hotkey được bấm), chờ 250ms rồi mới gửi request lên API. Mục đích: nếu người dùng bôi đen sửa lại vùng chọn ngay sau khi click, hủy request cũ và gửi request mới.
+
+- **Chống spam 429**: Nếu Google Translate trả về 429 Too Many Requests, tự động chuyển sang URL dịch dự phòng (cấu hình được trong Settings, mặc định: Lingva Translate public instance)
+- **In-flight Dedup**: Nếu request đang bay cho cùng một text → bỏ qua request mới
+- **`AbortController`**: Hủy request cũ khi người dùng kích hoạt tra từ mới
 
 ### 4.6 Cấu trúc dữ liệu chuẩn hóa (Data Contract)
 
@@ -453,9 +461,9 @@ async saveVocab(result: LookupResult): Promise<void> {
 | **Audio không tải được** | URL MP3 lỗi 404/timeout | Fallback `window.speechSynthesis` (Web Speech API) |
 | **Rate-limit 429** | Google Translate trả 429 | Chuyển sang mirror endpoint dự phòng |
 
-### 7.2 Debounce & Request Dedup
+### 7.2 Request Dedup & Cancellation
 
-- Debounce 250ms sau khi bôi đen để cố định vùng chọn
+- Debounce chi tiết: xem Mục 4.5
 - Nếu request đang bay (`in-flight`) cho cùng một text → bỏ qua request mới
 - `AbortController` để hủy request cũ khi người dùng bôi đen text mới
 
@@ -473,9 +481,11 @@ export interface PluginSettings {
   // Nhóm 2: Sổ từ vựng
   vocabFilePath: string;          // Mặc định: "Vocabulary.md"
   vocabFormat: 'table' | 'callout';
+  useDailyNote: boolean;          // Nếu bật: chèn vào Daily Note thay vì vocabFilePath
   highlightWordInContext: boolean; // Tự động bôi đậm từ trong câu ngữ cảnh
 
   // Nhóm 3: Dịch thuật & AI
+  translateEndpointUrl: string;   // Mặc định: "translate.googleapis.com" (cấu hình được)
   geminiApiKey: string;
   enableAiGrammar: boolean;       // Phân tích ngữ pháp AI
 
@@ -484,6 +494,11 @@ export interface PluginSettings {
   autoPlayAudio: boolean;         // Tự phát âm khi tra từ đơn
 }
 ```
+
+> [!NOTE]
+> **Tích hợp Daily Note**: Khi `useDailyNote = true`, plugin đọc cấu hình đường dẫn
+> từ Daily Notes core plugin (nếu đang bật) để xác định file hôm nay.
+> Nếu Daily Notes core plugin không bật, tùy chọn này bị vô hiệu hóa và dùng `vocabFilePath`.
 
 ### 8.2 Bảo mật API Key
 
@@ -531,8 +546,8 @@ export abstract class BaseProvider {
 | Provider | Endpoint | Dữ liệu trả về |
 | :--- | :--- | :--- |
 | `FreeDictService` | `api.dictionaryapi.dev/api/v2/entries/en/{word}` | IPA, từ loại, định nghĩa Anh-Anh, audio URL |
-| `GoogleTranslate` | Google Translate web endpoint | Bản dịch tiếng Việt |
-| `GeminiService` | `generativelanguage.googleapis.com` | Phân tích ngữ cảnh, ngữ pháp, thành ngữ |
+| `GoogleTranslate` | `translate.googleapis.com` (không chính thức, có thể bị chặn — URL cấu hình được trong Settings, fallback: Lingva Translate) | Bản dịch tiếng Việt |
+| `GeminiService` | `generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash` | Phân tích ngữ cảnh, ngữ pháp, thành ngữ |
 
 ---
 
