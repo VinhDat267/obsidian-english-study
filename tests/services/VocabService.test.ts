@@ -77,6 +77,30 @@ describe("VocabService", () => {
       expect(service.getResolvedFilePath()).toBe("Study/Words.md");
     });
 
+    it("should append language code to filename when separateVocabFileByLanguage is true", () => {
+      service.updateSettings({
+        ...defaultSettings,
+        separateVocabFileByLanguage: true,
+      });
+
+      const pathJa = service.getResolvedFilePath(undefined, "ja");
+      expect(pathJa).toBe("Vocabulary_ja.md");
+
+      const pathZh = service.getResolvedFilePath(undefined, "zh");
+      expect(pathZh).toBe("Vocabulary_zh.md");
+    });
+
+    it("should handle nested paths when separateVocabFileByLanguage is true", () => {
+      service.updateSettings({
+        ...defaultSettings,
+        vocabFilePath: "Notes/Languages/Vocab.md",
+        separateVocabFileByLanguage: true,
+      });
+
+      const pathKo = service.getResolvedFilePath(undefined, "ko");
+      expect(pathKo).toBe("Notes/Languages/Vocab_ko.md");
+    });
+
     it("should generate today date path when useDailyNote is true", () => {
       service.updateSettings({
         ...defaultSettings,
@@ -259,6 +283,35 @@ describe("VocabService", () => {
       const result = callback(getDefaultTemplate());
       expect(typeof result).toBe("string");
       expect(result instanceof Promise).toBe(false);
+    });
+
+    it("should save to separate language file when separateVocabFileByLanguage is enabled", async () => {
+      service.updateSettings({
+        ...defaultSettings,
+        separateVocabFileByLanguage: true,
+      });
+
+      const jaResult: LookupResult = {
+        query: "猫",
+        type: "word",
+        contextSentence: "これは猫です。",
+        contextSentenceClean: "これは猫です。",
+        transliteration: "Neko",
+        sourceLang: "ja",
+        vietnameseTranslation: "con mèo",
+        timestamp: Date.now(),
+      };
+
+      const result = await service.saveVocab(jaResult);
+
+      expect(result.success).toBe(true);
+      expect(result.filePath).toBe("Vocabulary_ja.md");
+
+      const file = app.vault.getAbstractFileByPath("Vocabulary_ja.md") as TFile;
+      expect(file).toBeDefined();
+      const content = await app.vault.read(file);
+      expect(content).toContain("**猫**");
+      expect(content).toContain("[Neko]");
     });
   });
 

@@ -748,5 +748,35 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       lookupCmd!.checkCallback!(false);
       expect(performSpy).toHaveBeenCalled();
     });
+
+    it("should handle multilingual lookup and save to separate file when configured", async () => {
+      plugin.settings.separateVocabFileByLanguage = true;
+      plugin.settings.targetLanguage = "vi";
+      plugin.vocabService.updateSettings(plugin.settings);
+
+      const gtSpy = vi.spyOn((plugin.providerManager as any).googleTranslate, "translateWithMeta").mockResolvedValue({
+        translation: "học tập",
+        detectedLang: "ja",
+        transliteration: "Benkyō",
+      });
+
+      const mockEditor: any = {
+        getSelection: () => "勉強",
+        getCursor: () => ({ line: 0, ch: 0 }),
+        getLine: () => "日本語を勉強します",
+      };
+
+      await plugin.performLookup(mockEditor);
+
+      expect(gtSpy).toHaveBeenCalledWith("勉強", "auto", "vi", expect.any(String));
+      expect(plugin["lastLookupResult"]).toBeDefined();
+      expect(plugin["lastLookupResult"]?.sourceLang).toBe("ja");
+      expect(plugin["lastLookupResult"]?.transliteration).toBe("Benkyō");
+
+      // Save via vocabService
+      const saveRes = await plugin.vocabService.saveVocab(plugin["lastLookupResult"]!, plugin.settings);
+      expect(saveRes.success).toBe(true);
+      expect(saveRes.filePath).toBe("Vocabulary_ja.md");
+    });
   });
 });

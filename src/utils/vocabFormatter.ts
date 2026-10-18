@@ -1,11 +1,16 @@
 import { LookupResult } from "../types";
+import { getLanguageMeta } from "./languageHelper";
 
 /**
  * Returns default initialization template for Vocabulary.md if note doesn't exist yet.
  */
-export function getDefaultTemplate(): string {
+export function getDefaultTemplate(sourceLang?: string): string {
+  const langName =
+    sourceLang && sourceLang !== "en" && sourceLang !== "auto"
+      ? ` ${getLanguageMeta(sourceLang).nameVi}`
+      : " tiếng Anh";
   return [
-    "## Sổ từ vựng tiếng Anh",
+    `## Sổ từ vựng${langName}`,
     "",
     "| Từ / Cụm từ | Loại từ & Phiên âm | Nghĩa tiếng Việt | Câu ngữ cảnh | Ngày |",
     "| :--- | :--- | :--- | :--- | :--- |",
@@ -65,26 +70,37 @@ function formatDate(timestamp?: number): string {
 
 /**
  * Formats LookupResult as a row in a Markdown Table:
- * | **query** | *pos* `/phonetic/` | vietnameseTranslation | contextSentence | YYYY-MM-DD |
+ * | **query** | *pos* `/phonetic/` `[transliteration]` | vietnameseTranslation | contextSentence | YYYY-MM-DD |
  */
 export function formatTableRow(result: LookupResult, highlightWord: boolean = true): string {
   const query = escapePipes(result.query.trim());
 
-  // Format pos and phonetic
+  // Format pos, phonetic and transliteration
   const pos = result.definitions?.[0]?.partOfSpeech?.trim();
   let phonetic = result.phonetic?.trim();
   if (phonetic) {
     if (!phonetic.startsWith("/")) phonetic = `/${phonetic}`;
     if (!phonetic.endsWith("/")) phonetic = `${phonetic}/`;
   }
+  const transliteration = result.transliteration?.trim();
 
   let typePhonetic = "-";
   if (pos && phonetic) {
     typePhonetic = `*${escapePipes(pos)}* \`${escapePipes(phonetic)}\``;
+    if (transliteration) {
+      typePhonetic += ` \`[${escapePipes(transliteration)}]\``;
+    }
+  } else if (pos && transliteration) {
+    typePhonetic = `*${escapePipes(pos)}* \`[${escapePipes(transliteration)}]\``;
   } else if (pos) {
     typePhonetic = `*${escapePipes(pos)}*`;
   } else if (phonetic) {
     typePhonetic = `\`${escapePipes(phonetic)}\``;
+    if (transliteration) {
+      typePhonetic += ` \`[${escapePipes(transliteration)}]\``;
+    }
+  } else if (transliteration) {
+    typePhonetic = `\`[${escapePipes(transliteration)}]\``;
   }
 
   const translation = escapePipes(result.vietnameseTranslation?.trim() || "");
@@ -107,7 +123,7 @@ export function formatTableRow(result: LookupResult, highlightWord: boolean = tr
  * > - **Phiên âm**: ...
  * > - **Nghĩa tiếng Việt**: ...
  * > - **Ngữ cảnh**: ...
- * > - **Thẻ**: #vocabulary #english-study
+ * > - **Thẻ**: #vocabulary #english-study #vocab/...
  */
 export function formatCallout(result: LookupResult): string {
   const query = result.query.trim();
@@ -118,24 +134,41 @@ export function formatCallout(result: LookupResult): string {
     if (!phonetic.startsWith("/")) phonetic = `/${phonetic}`;
     if (!phonetic.endsWith("/")) phonetic = `${phonetic}/`;
   }
+  const transliteration = result.transliteration?.trim();
 
   let phoneticLine = "-";
   if (pos && phonetic) {
     phoneticLine = `\`${phonetic}\` (*${pos}*)`;
+    if (transliteration) {
+      phoneticLine += ` \`[${transliteration}]\``;
+    }
+  } else if (pos && transliteration) {
+    phoneticLine = `\`[${transliteration}]\` (*${pos}*)`;
   } else if (pos) {
     phoneticLine = `*${pos}*`;
   } else if (phonetic) {
     phoneticLine = `\`${phonetic}\``;
+    if (transliteration) {
+      phoneticLine += ` \`[${transliteration}]\``;
+    }
+  } else if (transliteration) {
+    phoneticLine = `\`[${transliteration}]\``;
   }
 
   const context = highlightWordInContext(result.contextSentence || "", result.query).trim();
+
+  const langMeta = getLanguageMeta(result.sourceLang || "en");
+  const tagString =
+    langMeta.code === "en"
+      ? "#vocabulary #english-study #vocab/english"
+      : `#vocabulary ${langMeta.vocabTag}`;
 
   return [
     `> [!vocab] ${query}`,
     `> - **Phiên âm**: ${phoneticLine}`,
     `> - **Nghĩa tiếng Việt**: ${result.vietnameseTranslation?.trim() || "-"}`,
     `> - **Ngữ cảnh**: ${context || "-"}`,
-    `> - **Thẻ**: #vocabulary #english-study`,
+    `> - **Thẻ**: ${tagString}`,
   ].join("\n");
 }
 

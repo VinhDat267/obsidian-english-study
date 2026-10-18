@@ -32,8 +32,9 @@ export class VocabService {
    *   + Defaults to `Daily Notes/YYYY-MM-DD.md`
    * - If settings.useDailyNote = false:
    *   + Uses settings.vocabFilePath (defaults to 'Vocabulary.md', ensuring .md extension)
+   *   + If settings.separateVocabFileByLanguage = true: appends _<lang> before .md (e.g. Vocabulary_ja.md)
    */
-  getResolvedFilePath(settingsOverride?: PluginSettings): string {
+  getResolvedFilePath(settingsOverride?: PluginSettings, sourceLang?: string): string {
     const s = settingsOverride || this.settings;
 
     if (s.useDailyNote) {
@@ -68,6 +69,12 @@ export class VocabService {
     if (!filePath.endsWith(".md")) {
       filePath = `${filePath}.md`;
     }
+
+    if (s.separateVocabFileByLanguage && sourceLang && sourceLang !== "auto") {
+      const baseWithoutExt = filePath.slice(0, -3);
+      filePath = `${baseWithoutExt}_${sourceLang}.md`;
+    }
+
     return filePath;
   }
 
@@ -115,7 +122,8 @@ export class VocabService {
     settingsOverride?: PluginSettings
   ): Promise<SaveVocabResult> {
     const s = settingsOverride || this.settings;
-    const targetPath = this.getResolvedFilePath(s);
+    const lang = result.sourceLang || (s.sourceLanguage !== "auto" ? s.sourceLanguage : "en");
+    const targetPath = this.getResolvedFilePath(s, lang);
     const format: VocabFormat = s.vocabFormat || "table";
 
     try {
@@ -123,7 +131,7 @@ export class VocabService {
 
       if (!file) {
         await this.ensureParentDirs(targetPath);
-        const initialContent = format === "table" ? getDefaultTemplate() : "";
+        const initialContent = format === "table" ? getDefaultTemplate(lang) : "";
         file = await this.app.vault.create(targetPath, initialContent);
       }
 

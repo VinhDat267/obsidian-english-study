@@ -203,4 +203,24 @@ describe("EnglishStudySidebar", () => {
     const historyTabBtn = sidebar.contentEl.querySelector(".tab-btn-history");
     expect(historyTabBtn.textContent).toContain("Lịch sử phiên học (0)");
   });
+
+  it("should display language badge and transliteration in deep-dive tab", () => {
+    const jaResult: LookupResult = {
+      query: "勉強",
+      type: "word",
+      vietnameseTranslation: "học tập",
+      sourceLang: "ja",
+      transliteration: "Benkyō",
+      timestamp: Date.now(),
+    };
+    sidebar.setResult(jaResult);
+
+    const badge = sidebar.contentEl.querySelector(".vocab-lang-badge");
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain("JA");
+
+    const translit = sidebar.contentEl.querySelector(".vocab-transliteration");
+    expect(translit).not.toBeNull();
+    expect(translit?.textContent).toContain("Benkyō");
+  });
 });

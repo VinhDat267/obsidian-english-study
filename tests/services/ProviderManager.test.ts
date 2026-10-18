@@ -36,6 +36,26 @@ describe("ProviderManager", () => {
       expect(manager.classify("Why not?")).toBe("sentence");
       expect(manager.classify("The experiment succeeded.")).toBe("sentence");
     });
+
+    it("should classify CJK text adaptively without whitespace", () => {
+      // 1 - 2 CJK characters -> word
+      expect(manager.classify("猫")).toBe("word");
+      expect(manager.classify("勉強")).toBe("word");
+      expect(manager.classify("你好")).toBe("word");
+
+      // 3 - 6 CJK characters -> phrase
+      expect(manager.classify("いい天気")).toBe("phrase");
+      expect(manager.classify("人工智能")).toBe("phrase");
+
+      // > 6 CJK characters -> sentence
+      expect(manager.classify("今日はとてもいい天気ですね")).toBe("sentence");
+      expect(manager.classify("机器学习正在改变软件工程")).toBe("sentence");
+
+      // CJK sentence punctuation (。 ！？ …)
+      expect(manager.classify("待って。")).toBe("sentence");
+      expect(manager.classify("こんにちは！")).toBe("sentence");
+      expect(manager.classify("本当？")).toBe("sentence");
+    });
   });
 
   describe("cache management", () => {
@@ -502,6 +522,55 @@ describe("ProviderManager", () => {
       await manager.lookup("colour", "The colour was red.", undefined, customSettings);
 
       expect(freeDictSpy).toHaveBeenCalledWith("colour", "uk");
+    });
+
+    it("should bypass FreeDict when CJK text is detected and populate sourceLang & transliteration", async () => {
+      const freeDictSpy = vi.spyOn(manager["freeDict"], "lookup");
+      const gtSpy = vi.spyOn(manager["googleTranslate"], "translateWithMeta").mockResolvedValue({
+        translation: "xin chào",
+        detectedLang: "ja",
+        transliteration: "Konnichiwa",
+      });
+
+      const result = await manager.lookup("こんにちは", "こんにちは世界");
+
+      // FreeDict must NOT be called for CJK text
+      expect(freeDictSpy).not.toHaveBeenCalled();
+      expect(gtSpy).toHaveBeenCalledWith("こんにちは", "auto", "vi", expect.any(String));
+
+      expect(result.sourceLang).toBe("ja");
+      expect(result.transliteration).toBe("Konnichiwa");
+      expect(result.vietnameseTranslation).toBe("xin chào");
+    });
+
+    it("should isolate cache entries by targetLanguage", async () => {
+      const gtSpy = vi.spyOn(manager["googleTranslate"], "translateWithMeta");
+
+      // 1st lookup: targetLang = "vi"
+      gtSpy.mockResolvedValueOnce({
+        translation: "xin chào",
+        detectedLang: "ja",
+        transliteration: "Konnichiwa",
+      });
+      const resVi = await manager.lookup("こんにちは", "こんにちは", undefined, {
+        ...DEFAULT_SETTINGS,
+        targetLanguage: "vi",
+      });
+      expect(resVi.vietnameseTranslation).toBe("xin chào");
+      expect(gtSpy).toHaveBeenCalledTimes(1);
+
+      // 2nd lookup: targetLang = "en" -> must not return cached Vietnamese result
+      gtSpy.mockResolvedValueOnce({
+        translation: "hello",
+        detectedLang: "ja",
+        transliteration: "Konnichiwa",
+      });
+      const resEn = await manager.lookup("こんにちは", "こんにちは", undefined, {
+        ...DEFAULT_SETTINGS,
+        targetLanguage: "en",
+      });
+      expect(resEn.vietnameseTranslation).toBe("hello");
+      expect(gtSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

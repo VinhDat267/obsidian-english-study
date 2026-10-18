@@ -9,7 +9,8 @@ import { LRUCache } from "../../utils/lruCache";
 import { cleanSelection } from "../../utils/textCleaner";
 import { extractContextSentence } from "../../utils/textParser";
 import { FreeDictService, FreeDictResult } from "./FreeDictService";
-import { GoogleTranslate } from "./GoogleTranslate";
+import { detectScript } from "../../utils/languageHelper";
+import { GoogleTranslate, GoogleTranslationMeta } from "./GoogleTranslate";
 import { GeminiService } from "./GeminiService";
 
 export class ProviderManager {
@@ -33,10 +34,15 @@ export class ProviderManager {
   }
 
   /**
-   * Phân loại 3 mức theo thiết kế spec:
-   * - cleanText có 1 từ: 'word'
-   * - cleanText có <= 4 từ và không có dấu kết thúc câu (. ! ?): 'phrase'
-   * - cleanText > 4 từ hoặc có dấu kết thúc câu: 'sentence'
+   * Phân loại 3 mức thích ứng cả ký tự Latin và CJK:
+   * - CJK (tiếng Trung, Nhật không có khoảng trắng):
+   *   + <= 2 ký tự: 'word'
+   *   + 3-6 ký tự: 'phrase'
+   *   + > 6 ký tự hoặc có dấu câu (. ! ? 。 ！ ？ …): 'sentence'
+   * - Ngôn ngữ có khoảng trắng:
+   *   + 1 từ: 'word'
+   *   + <= 4 từ: 'phrase'
+   *   + > 4 từ hoặc có dấu kết thúc câu: 'sentence'
    */
   classify(cleanText: string): LookupType {
     const trimmed = cleanText ? cleanText.trim() : "";
@@ -44,10 +50,21 @@ export class ProviderManager {
       return "word";
     }
 
-    // Có dấu kết thúc câu (. ! ?)
-    const hasSentencePunctuation = /[.!?]/.test(trimmed);
+    // Dấu kết thúc câu Latin và CJK (. ! ? 。 ！ ？ …)
+    const hasSentencePunctuation = /[.!?。！？…]/.test(trimmed);
 
-    // Đếm số từ theo khoảng trắng
+    const script = detectScript(trimmed);
+    if (script === "ja" || script === "zh") {
+      if (hasSentencePunctuation || trimmed.length > 6) {
+        return "sentence";
+      }
+      if (trimmed.length <= 2) {
+        return "word";
+      }
+      return "phrase";
+    }
+
+    // Đếm số từ theo khoảng trắng cho các ngôn ngữ có space
     const words = trimmed.split(/\s+/).filter(Boolean);
     const wordCount = words.length;
 
@@ -80,21 +97,18 @@ export class ProviderManager {
    * 1. Hủy request đang chạy trước đó nếu có (activeController?.abort()).
    * 2. Làm sạch text bằng cleanSelection(rawText).
    * 3. Trích xuất câu ngữ cảnh bằng extractContextSentence(rawContext, cleanText, cursorOffset).
-   * 4. Kiểm tra Cache: cache.get(cleanText.toLowerCase()).
+   * 4. Kiểm tra Cache: cache.get(`${targetLang}:${cleanText.toLowerCase()}`).
    *    - Nếu HIT: cập nhật timestamp và trả về ngay lập tức (0ms).
    * 5. Điều phối 3 mức (3-Tier Execution):
-   *    - Mức 'word': Gọi song song Promise.allSettled([freeDict.lookup, googleTranslate.translate]).
-   *      + Lấy định nghĩa từ điển Anh-Anh + nghĩa tiếng Việt.
-   *      + Nếu bật enableAiGrammar và có geminiApiKey: gọi thêm geminiService.analyzeContext.
-   *    - Mức 'phrase':
-   *      + Ưu tiên tra freeDict.lookup (tìm cụm động từ/thành ngữ).
-   *      + Đồng thời gọi googleTranslate.translate.
-   *      + Nếu freeDict không có: xem như cụm dịch nghĩa.
+   *    - Mức 'word' / 'phrase':
+   *      + Nếu là tiếng Anh: tra cứu FreeDict (phát âm, nghĩa Anh-Anh).
+   *      + Nếu là CJK hoặc ngôn ngữ khác: bỏ qua FreeDict, tra cứu Google Translate có lấy metadata (Pinyin/Romaji).
+   *      + Nếu bật enableAiGrammar và có geminiApiKey: gọi thêm geminiService.analyzeContext kèm sourceLang & targetLang.
    *    - Mức 'sentence':
    *      + Nếu có geminiApiKey và enableAiGrammar: dịch và phân tích ngữ cảnh qua Gemini.
    *      + Ngược lại: dịch qua GoogleTranslate.
-   * 6. Tổng hợp dữ liệu thành LookupResult chuẩn hóa.
-   * 7. Lưu vào cache.set(cleanText.toLowerCase(), result) và trả về.
+   * 6. Tổng hợp dữ liệu thành LookupResult chuẩn hóa (sourceLang, targetLang, transliteration).
+   * 7. Lưu vào cache và trả về.
    */
   async lookup(
     rawText: string,
@@ -107,6 +121,10 @@ export class ProviderManager {
     const controller = new AbortController();
     this.activeController = controller;
 
+    const effectiveSettings: PluginSettings = { ...this.settings, ...settingsOverride };
+    const targetLang = effectiveSettings.targetLanguage || "vi";
+    const sourceLang = effectiveSettings.sourceLanguage || "auto";
+
     // 2. Làm sạch text
     const cleanText = cleanSelection(rawText);
     if (!cleanText) {
@@ -116,6 +134,8 @@ export class ProviderManager {
         contextSentence: rawContext || "",
         contextSentenceClean: rawContext || "",
         vietnameseTranslation: "",
+        sourceLang: sourceLang !== "auto" ? sourceLang : "en",
+        targetLang,
         timestamp: Date.now(),
       };
     }
@@ -128,8 +148,8 @@ export class ProviderManager {
     );
     const contextSentenceClean = cleanContext;
 
-    // 4. Kiểm tra Cache
-    const cacheKey = cleanText.toLowerCase();
+    // 4. Kiểm tra Cache (cách ly theo targetLang)
+    const cacheKey = `${targetLang}:${cleanText.toLowerCase()}`;
     const cached = this.cache.get(cacheKey);
     if (cached) {
       cached.timestamp = Date.now();
@@ -142,31 +162,39 @@ export class ProviderManager {
 
     // 5. Điều phối 3 mức
     const type = this.classify(cleanText);
-    const effectiveSettings: PluginSettings = { ...this.settings, ...settingsOverride };
+    const script = detectScript(cleanText);
+    const isEnglish = (script === "latin" || script === "other") && (sourceLang === "auto" || sourceLang === "en");
 
     let phonetic: string | undefined;
     let audioUrl: string | undefined;
     let definitions: DictDefinition[] | undefined;
     let vietnameseTranslation = "";
     let aiGrammarNote: string | undefined;
+    let detectedSourceLang: string | undefined = sourceLang !== "auto" ? sourceLang : (isEnglish ? "en" : undefined);
+    let transliteration: string | undefined;
 
     if (type === "word" || type === "phrase") {
       const promises: [
         Promise<FreeDictResult | null>,
-        Promise<string | null>,
+        Promise<GoogleTranslationMeta | null>,
         Promise<string | null>
       ] = [
-        this.freeDict.lookup(cleanText, effectiveSettings.preferredAccent),
-        this.googleTranslate.translate(
+        isEnglish
+          ? this.freeDict.lookup(cleanText, effectiveSettings.preferredAccent)
+          : Promise.resolve(null),
+        this.googleTranslate.translateWithMeta(
           cleanText,
-          "vi",
+          sourceLang,
+          targetLang,
           effectiveSettings.translateEndpointUrl
         ),
         effectiveSettings.enableAiGrammar && effectiveSettings.geminiApiKey
           ? this.geminiService.analyzeContext(
               cleanText,
               contextSentenceClean,
-              effectiveSettings.geminiApiKey
+              effectiveSettings.geminiApiKey,
+              detectedSourceLang || "auto",
+              targetLang
             )
           : Promise.resolve(null),
       ];
@@ -186,7 +214,13 @@ export class ProviderManager {
       }
 
       if (gtSettled.status === "fulfilled" && gtSettled.value) {
-        vietnameseTranslation = gtSettled.value;
+        vietnameseTranslation = gtSettled.value.translation;
+        if (gtSettled.value.detectedLang) {
+          detectedSourceLang = gtSettled.value.detectedLang;
+        }
+        if (gtSettled.value.transliteration) {
+          transliteration = gtSettled.value.transliteration;
+        }
       }
 
       if (geminiSettled.status === "fulfilled" && geminiSettled.value) {
@@ -198,7 +232,9 @@ export class ProviderManager {
         const geminiRes = await this.geminiService.analyzeContext(
           cleanText,
           contextSentenceClean,
-          effectiveSettings.geminiApiKey
+          effectiveSettings.geminiApiKey,
+          sourceLang,
+          targetLang
         );
         if (controller.signal.aborted) {
           throw new DOMException("The lookup operation was aborted", "AbortError");
@@ -206,28 +242,49 @@ export class ProviderManager {
         if (geminiRes) {
           vietnameseTranslation = geminiRes;
           aiGrammarNote = geminiRes;
+          if (!detectedSourceLang) {
+            detectedSourceLang = script !== "latin" && script !== "other" ? script : "en";
+          }
         } else {
           // Fallback sang Google Translate nếu Gemini thất bại
-          const gt = await this.googleTranslate.translate(
+          const gtMeta = await this.googleTranslate.translateWithMeta(
             cleanText,
-            "vi",
+            sourceLang,
+            targetLang,
             effectiveSettings.translateEndpointUrl
           );
           if (controller.signal.aborted) {
             throw new DOMException("The lookup operation was aborted", "AbortError");
           }
-          vietnameseTranslation = gt || "";
+          if (gtMeta) {
+            vietnameseTranslation = gtMeta.translation;
+            if (gtMeta.detectedLang) {
+              detectedSourceLang = gtMeta.detectedLang;
+            }
+            if (gtMeta.transliteration) {
+              transliteration = gtMeta.transliteration;
+            }
+          }
         }
       } else {
-        const gt = await this.googleTranslate.translate(
+        const gtMeta = await this.googleTranslate.translateWithMeta(
           cleanText,
-          "vi",
+          sourceLang,
+          targetLang,
           effectiveSettings.translateEndpointUrl
         );
         if (controller.signal.aborted) {
           throw new DOMException("The lookup operation was aborted", "AbortError");
         }
-        vietnameseTranslation = gt || "";
+        if (gtMeta) {
+          vietnameseTranslation = gtMeta.translation;
+          if (gtMeta.detectedLang) {
+            detectedSourceLang = gtMeta.detectedLang;
+          }
+          if (gtMeta.transliteration) {
+            transliteration = gtMeta.transliteration;
+          }
+        }
       }
     }
 
@@ -246,6 +303,9 @@ export class ProviderManager {
       vietnameseTranslation,
       ...(definitions && definitions.length > 0 ? { definitions } : {}),
       ...(aiGrammarNote ? { aiGrammarNote } : {}),
+      ...(detectedSourceLang ? { sourceLang: detectedSourceLang } : {}),
+      targetLang,
+      ...(transliteration ? { transliteration } : {}),
       timestamp: Date.now(),
     };
 

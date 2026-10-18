@@ -193,4 +193,100 @@ describe("GoogleTranslate", () => {
       expect(requestUrl).not.toHaveBeenCalled();
     });
   });
+
+  describe("translateWithMeta - Multilingual & Transliteration (dt=rm)", () => {
+    it("should extract translation, detectedLang, and Romaji transliteration for Japanese", async () => {
+      const mockGoogleData = [
+        [
+          ["xin chào", "こんにちは", null, null, 1],
+          [null, null, "Konnichiwa", "Konnichiwa"],
+        ],
+        null,
+        "ja",
+      ];
+
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockGoogleData,
+        text: JSON.stringify(mockGoogleData),
+      });
+
+      const result = await (translator as any).translateWithMeta("こんにちは", "auto", "vi");
+
+      expect(requestUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: expect.stringContaining("dt=rm"),
+        })
+      );
+      expect(result).not.toBeNull();
+      expect(result.translation).toBe("xin chào");
+      expect(result.detectedLang).toBe("ja");
+      expect(result.transliteration).toBe("Konnichiwa");
+    });
+
+    it("should extract translation, detectedLang, and Pinyin transliteration for Chinese", async () => {
+      const mockGoogleData = [
+        [
+          ["xin chào", "你好", null, null, 1],
+          [null, null, "Nǐ hǎo", "Nǐ hǎo"],
+        ],
+        null,
+        "zh-CN",
+      ];
+
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockGoogleData,
+        text: JSON.stringify(mockGoogleData),
+      });
+
+      const result = await (translator as any).translateWithMeta("你好", "auto", "vi");
+
+      expect(result).not.toBeNull();
+      expect(result.translation).toBe("xin chào");
+      expect(result.detectedLang).toBe("zh-CN");
+      expect(result.transliteration).toBe("Nǐ hǎo");
+    });
+
+    it("should extract meta from Lingva mirror fallback when primary endpoint fails", async () => {
+      // 1st call primary fails
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 500,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: null,
+        text: "Error",
+      });
+
+      // 2nd call mirror Lingva returns pronunciation
+      const mockLingvaData = {
+        translation: "xin chào",
+        info: {
+          detectedSource: "ja",
+          pronunciation: {
+            query: "Konnichiwa",
+          },
+        },
+      };
+
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockLingvaData,
+        text: JSON.stringify(mockLingvaData),
+      });
+
+      const result = await (translator as any).translateWithMeta("こんにちは", "auto", "vi");
+
+      expect(result).not.toBeNull();
+      expect(result.translation).toBe("xin chào");
+      expect(result.detectedLang).toBe("ja");
+      expect(result.transliteration).toBe("Konnichiwa");
+    });
+  });
 });

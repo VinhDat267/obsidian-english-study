@@ -15,7 +15,9 @@ export class GeminiService extends BaseProvider {
     targetText: string,
     contextSentence: string,
     apiKey: string,
-    model: string = "gemini-2.0-flash"
+    model: string = "gemini-2.0-flash",
+    sourceLang?: string,
+    targetLang: string = "vi"
   ): Promise<string | null> {
     const cleanKey = apiKey ? apiKey.trim() : "";
     if (!cleanKey) {
@@ -30,7 +32,17 @@ export class GeminiService extends BaseProvider {
     const cleanContext = contextSentence ? contextSentence.trim() : "";
     const selectedModel = model && model.trim() ? model.trim() : "gemini-2.0-flash";
 
-    const prompt = `Bạn là một chuyên gia ngôn ngữ học. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cấu trúc ngữ pháp đặc biệt hoặc thành ngữ liên quan (nếu có) bằng tiếng Việt.`;
+    let prompt: string;
+    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+    if (sourceLang === "ja") {
+      prompt = `Bạn là chuyên gia tiếng Nhật. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Furigana/Romaji, Hán tự Kanji (nếu có) và ngữ pháp liên quan bằng ${langTargetName}.`;
+    } else if (sourceLang === "zh") {
+      prompt = `Bạn là chuyên gia tiếng Trung. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra phiên âm Pinyin, từ loại và ngữ pháp liên quan bằng ${langTargetName}.`;
+    } else if (sourceLang === "ko") {
+      prompt = `Bạn là chuyên gia tiếng Hàn. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Romaja, kính ngữ hoặc ngữ pháp liên quan bằng ${langTargetName}.`;
+    } else {
+      prompt = `Bạn là một chuyên gia ngôn ngữ học. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cấu trúc ngữ pháp đặc biệt hoặc thành ngữ liên quan (nếu có) bằng ${langTargetName}.`;
+    }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent?key=${encodeURIComponent(cleanKey)}`;
 

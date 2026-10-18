@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 import { LookupResult } from "../types";
 import { calculatePosition, RectLike } from "../utils/domHelper";
+import { getLanguageMeta } from "../utils/languageHelper";
 
 export interface PopoverCallbacks {
   onSave: (result: LookupResult) => Promise<void> | void;
@@ -94,6 +95,13 @@ export class FloatingPopover {
     const titleGroup = document.createElement("div");
     titleGroup.className = "popover-title-group";
 
+    const langMeta = getLanguageMeta(result.sourceLang || "en");
+    const langBadge = document.createElement("span");
+    langBadge.className = "vocab-lang-badge";
+    langBadge.textContent = langMeta.badge;
+    langBadge.setAttribute("title", langMeta.nameVi);
+    titleGroup.appendChild(langBadge);
+
     const queryEl = document.createElement("span");
     queryEl.className = "vocab-query";
     queryEl.textContent = result.query;
@@ -106,6 +114,13 @@ export class FloatingPopover {
         ? result.phonetic
         : `/${result.phonetic}/`;
       titleGroup.appendChild(phoneticEl);
+    }
+
+    if (result.transliteration) {
+      const translitEl = document.createElement("span");
+      translitEl.className = "vocab-transliteration";
+      translitEl.textContent = `[${result.transliteration}]`;
+      titleGroup.appendChild(translitEl);
     }
 
     // Audio Button
@@ -129,7 +144,7 @@ export class FloatingPopover {
     audioBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      this.toggleAudio(result.query, result.audioUrl, audioBtn);
+      this.toggleAudio(result.query, result.audioUrl, audioBtn, result.sourceLang);
     });
     titleGroup.appendChild(audioBtn);
 
@@ -679,7 +694,8 @@ export class FloatingPopover {
   private toggleAudio(
     query: string,
     audioUrl?: string,
-    audioBtn?: HTMLElement
+    audioBtn?: HTMLElement,
+    sourceLang?: string
   ): void {
     if (this.isPlayingAudio) {
       this.stopAudio(audioBtn);
@@ -699,27 +715,42 @@ export class FloatingPopover {
 
         audio.onerror = () => {
           this.currentAudio = null;
-          this.playSpeechSynthesis(query, audioBtn);
+          this.playSpeechSynthesis(query, audioBtn, sourceLang);
         };
 
         audio.play().catch(() => {
           this.currentAudio = null;
-          this.playSpeechSynthesis(query, audioBtn);
+          this.playSpeechSynthesis(query, audioBtn, sourceLang);
         });
       } catch {
-        this.playSpeechSynthesis(query, audioBtn);
+        this.playSpeechSynthesis(query, audioBtn, sourceLang);
       }
     } else {
-      this.playSpeechSynthesis(query, audioBtn);
+      this.playSpeechSynthesis(query, audioBtn, sourceLang);
     }
   }
 
-  private playSpeechSynthesis(text: string, audioBtn?: HTMLElement): void {
+  private playSpeechSynthesis(
+    text: string,
+    audioBtn?: HTMLElement,
+    sourceLang?: string
+  ): void {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-US";
+        const langMeta = getLanguageMeta(sourceLang || "en");
+        utterance.lang = langMeta.speechLocale;
+
+        if (typeof window.speechSynthesis.getVoices === "function") {
+          const voices = window.speechSynthesis.getVoices();
+          const matchedVoice = voices.find(
+            (v) => v.lang === langMeta.speechLocale || v.lang.startsWith(langMeta.code)
+          );
+          if (matchedVoice) {
+            utterance.voice = matchedVoice;
+          }
+        }
 
         this.setPlayingState(true, audioBtn);
 

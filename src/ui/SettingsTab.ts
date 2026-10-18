@@ -96,6 +96,66 @@ export class EnglishStudySettingTab extends PluginSettingTab {
       );
 
     // =========================================================================
+    // Nhóm: NGÔN NGỮ HỌC TẬP (MULTILINGUAL SETTINGS)
+    // =========================================================================
+    new Setting(containerEl)
+      .setName("NGÔN NGỮ HỌC TẬP (MULTILINGUAL SETTINGS)")
+      .setHeading();
+
+    new Setting(containerEl)
+      .setName("Ngôn ngữ nguồn (Học tập)")
+      .setDesc(
+        "Chọn ngôn ngữ của tài liệu bạn đang học. Đặt 'Tự động nhận diện' để plugin tự phát hiện mọi ngôn ngữ."
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("auto", "🌐 Tự động nhận diện (Tất cả ngôn ngữ - Khuyến nghị)")
+          .addOption("en", "🇬🇧 Tiếng Anh (English)")
+          .addOption("ja", "🇯🇵 Tiếng Nhật (Japanese)")
+          .addOption("zh", "🇨🇳 Tiếng Trung (Chinese)")
+          .addOption("ko", "🇰🇷 Tiếng Hàn (Korean)")
+          .addOption("fr", "🇫🇷 Tiếng Pháp (French)")
+          .addOption("de", "🇩🇪 Tiếng Đức (German)")
+          .addOption("es", "🇪🇸 Tiếng Tây Ban Nha (Spanish)")
+          .addOption("ru", "🇷🇺 Tiếng Nga (Russian)")
+          .setValue(this.pluginInstance.settings.sourceLanguage || "auto")
+          .onChange(async (value: string) => {
+            this.pluginInstance.settings.sourceLanguage = value;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Ngôn ngữ đích (Dịch nghĩa)")
+      .setDesc("Ngôn ngữ hiển thị bản dịch nghĩa khi bạn tra từ hoặc câu ngữ cảnh.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("vi", "🇻🇳 Tiếng Việt (Mặc định)")
+          .addOption("en", "🇬🇧 Tiếng Anh (English)")
+          .addOption("zh", "🇨🇳 Tiếng Trung (Chinese)")
+          .addOption("ja", "🇯🇵 Tiếng Nhật (Japanese)")
+          .setValue(this.pluginInstance.settings.targetLanguage || "vi")
+          .onChange(async (value: string) => {
+            this.pluginInstance.settings.targetLanguage = value;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Tách riêng file từ vựng cho từng ngôn ngữ")
+      .setDesc(
+        "Tự động tạo các file từ vựng riêng biệt cho từng ngôn ngữ (ví dụ: Vocabulary_ja.md, Vocabulary_zh.md) khi lưu từ vào Vault."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(Boolean(this.pluginInstance.settings.separateVocabFileByLanguage))
+          .onChange(async (value: boolean) => {
+            this.pluginInstance.settings.separateVocabFileByLanguage = value;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    // =========================================================================
     // Nhóm 2: SỔ TỪ VỰNG (VOCABULARY VAULT)
     // =========================================================================
     new Setting(containerEl)

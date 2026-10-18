@@ -25,17 +25,65 @@ describe("EnglishStudySettingTab", () => {
     settingsTab = new EnglishStudySettingTab(app, pluginMock);
   });
 
-  it("should render all 4 setting groups and headings", () => {
+  it("should render all 5 setting groups and headings", () => {
     settingsTab.display();
 
     const headings = Setting.instances.filter((s) => s.isHeading);
-    expect(headings.length).toBe(4);
+    expect(headings.length).toBe(5);
 
     const headingNames = headings.map((h) => h.name);
     expect(headingNames).toContain("TƯƠNG TÁC ĐỌC (TRIGGER & DISPLAY)");
+    expect(headingNames).toContain("NGÔN NGỮ HỌC TẬP (MULTILINGUAL SETTINGS)");
     expect(headingNames).toContain("SỔ TỪ VỰNG (VOCABULARY VAULT)");
     expect(headingNames).toContain("DỊCH THUẬT & TRÍ TUỆ NHÂN TẠO (AI & ENGINES)");
     expect(headingNames).toContain("PHÁT ÂM (AUDIO)");
+  });
+
+  describe("Group: Multilingual Settings", () => {
+    it("should update sourceLanguage dropdown and save settings", async () => {
+      settingsTab.display();
+
+      const sourceSetting = Setting.instances.find(
+        (s) => s.name.includes("Ngôn ngữ nguồn") || s.name.includes("nguồn")
+      );
+      expect(sourceSetting).toBeDefined();
+
+      const dropdown = sourceSetting!.dropdownComponents[0];
+      await dropdown._onChange("ja");
+
+      expect(pluginMock.settings.sourceLanguage).toBe("ja");
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
+
+    it("should update targetLanguage dropdown and save settings", async () => {
+      settingsTab.display();
+
+      const targetSetting = Setting.instances.find(
+        (s) => s.name.includes("Ngôn ngữ đích") || s.name.includes("đích")
+      );
+      expect(targetSetting).toBeDefined();
+
+      const dropdown = targetSetting!.dropdownComponents[0];
+      await dropdown._onChange("en");
+
+      expect(pluginMock.settings.targetLanguage).toBe("en");
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
+
+    it("should toggle separateVocabFileByLanguage and save settings", async () => {
+      settingsTab.display();
+
+      const separateSetting = Setting.instances.find(
+        (s) => s.name.includes("Tách riêng file từ vựng") || s.name.includes("Tách")
+      );
+      expect(separateSetting).toBeDefined();
+
+      const toggle = separateSetting!.toggleComponents[0];
+      await toggle._onChange(true);
+
+      expect(pluginMock.settings.separateVocabFileByLanguage).toBe(true);
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
   });
 
   describe("Group 1: Trigger & Display", () => {
@@ -117,7 +165,7 @@ describe("EnglishStudySettingTab", () => {
       settingsTab.display();
 
       const pathSetting = Setting.instances.find(
-        (s) => s.name === "Đường dẫn file từ vựng" || s.name.includes("file từ vựng")
+        (s) => s.name === "Đường dẫn file từ vựng"
       );
       expect(pathSetting).toBeDefined();
 

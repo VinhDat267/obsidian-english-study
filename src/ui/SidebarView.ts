@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { LookupResult } from "../types";
 import { LRUCache } from "../utils/lruCache";
+import { getLanguageMeta } from "../utils/languageHelper";
 
 export const VIEW_TYPE_ENGLISH_STUDY = "english-study-sidebar";
 
@@ -145,6 +146,13 @@ export class EnglishStudySidebar extends ItemView {
     const header = deepDiveContainer.createDiv({ cls: "sidebar-detail-header" });
     const titleGroup = header.createDiv({ cls: "sidebar-title-group" });
 
+    const langMeta = getLanguageMeta(result.sourceLang || "en");
+    const langBadge = titleGroup.createEl("span", {
+      cls: "vocab-lang-badge",
+      text: langMeta.badge,
+    });
+    langBadge.setAttribute("title", langMeta.nameVi);
+
     titleGroup.createEl("span", {
       cls: "vocab-query",
       text: result.query,
@@ -157,6 +165,13 @@ export class EnglishStudySidebar extends ItemView {
       titleGroup.createEl("span", {
         cls: "vocab-phonetic",
         text: formattedPhonetic,
+      });
+    }
+
+    if (result.transliteration) {
+      titleGroup.createEl("span", {
+        cls: "vocab-transliteration",
+        text: `[${result.transliteration}]`,
       });
     }
 
@@ -175,7 +190,7 @@ export class EnglishStudySidebar extends ItemView {
     audioBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      this.toggleAudio(result.query, result.audioUrl, audioBtn);
+      this.toggleAudio(result.query, result.audioUrl, audioBtn, result.sourceLang);
     });
 
     // Body: Vietnamese meaning
@@ -411,7 +426,8 @@ export class EnglishStudySidebar extends ItemView {
   private toggleAudio(
     query: string,
     audioUrl?: string,
-    audioBtn?: HTMLElement
+    audioBtn?: HTMLElement,
+    sourceLang?: string
   ): void {
     if (this.isPlayingAudio) {
       this.stopAudio(audioBtn);
@@ -431,27 +447,42 @@ export class EnglishStudySidebar extends ItemView {
 
         audio.onerror = () => {
           this.currentAudio = null;
-          this.playSpeechSynthesis(query, audioBtn);
+          this.playSpeechSynthesis(query, audioBtn, sourceLang);
         };
 
         audio.play().catch(() => {
           this.currentAudio = null;
-          this.playSpeechSynthesis(query, audioBtn);
+          this.playSpeechSynthesis(query, audioBtn, sourceLang);
         });
       } catch {
-        this.playSpeechSynthesis(query, audioBtn);
+        this.playSpeechSynthesis(query, audioBtn, sourceLang);
       }
     } else {
-      this.playSpeechSynthesis(query, audioBtn);
+      this.playSpeechSynthesis(query, audioBtn, sourceLang);
     }
   }
 
-  private playSpeechSynthesis(text: string, audioBtn?: HTMLElement): void {
+  private playSpeechSynthesis(
+    text: string,
+    audioBtn?: HTMLElement,
+    sourceLang?: string
+  ): void {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-US";
+        const langMeta = getLanguageMeta(sourceLang || "en");
+        utterance.lang = langMeta.speechLocale;
+
+        if (typeof window.speechSynthesis.getVoices === "function") {
+          const voices = window.speechSynthesis.getVoices();
+          const matchedVoice = voices.find(
+            (v) => v.lang === langMeta.speechLocale || v.lang.startsWith(langMeta.code)
+          );
+          if (matchedVoice) {
+            utterance.voice = matchedVoice;
+          }
+        }
 
         this.setPlayingState(true, audioBtn);
 

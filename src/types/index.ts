@@ -20,12 +20,22 @@ export interface LookupResult {
   definitions?: DictDefinition[];
   aiGrammarNote?: string;
   timestamp: number;
+
+  // Multilingual properties
+  sourceLang?: string;
+  targetLang?: string;
+  transliteration?: string;
 }
 
 export interface PluginSettings {
   // Nhóm 1: Tương tác đọc
   autoTranslateOnSelection: boolean;
   triggerMode: TriggerMode;
+
+  // Nhóm Ngôn ngữ học tập (Multilingual)
+  sourceLanguage: string;
+  targetLanguage: string;
+  separateVocabFileByLanguage: boolean;
 
   // Nhóm 2: Sổ từ vựng
   vocabFilePath: string;
@@ -46,6 +56,9 @@ export interface PluginSettings {
 export const DEFAULT_SETTINGS: PluginSettings = {
   autoTranslateOnSelection: false,
   triggerMode: "icon",
+  sourceLanguage: "auto",
+  targetLanguage: "vi",
+  separateVocabFileByLanguage: false,
   vocabFilePath: "Vocabulary.md",
   vocabFormat: "table",
   useDailyNote: false,

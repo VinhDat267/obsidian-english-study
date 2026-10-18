@@ -141,6 +141,21 @@ describe("vocabFormatter", () => {
       const rowPhonetic = formatTableRow(phoneticOnly);
       expect(rowPhonetic).toContain("| `/haɪˈpɑː.θə.sɪs/` |");
     });
+
+    it("should include transliteration [Romaji/Pinyin] in type & phonetic column when present", () => {
+      const cjkResult: LookupResult = {
+        query: "勉強",
+        type: "word",
+        contextSentence: "日本語を勉強します",
+        contextSentenceClean: "日本語を勉強します",
+        transliteration: "Benkyō",
+        sourceLang: "ja",
+        vietnameseTranslation: "học tập",
+        timestamp: Date.now(),
+      };
+      const row = formatTableRow(cjkResult);
+      expect(row).toContain("| **勉強** | `[Benkyō]` | học tập |");
+    });
   });
 
   describe("formatCallout", () => {
@@ -168,6 +183,24 @@ describe("vocabFormatter", () => {
       };
       const calloutPos = formatCallout(posOnly);
       expect(calloutPos).toContain("> - **Phiên âm**: *noun*");
+    });
+
+    it("should include language tag and transliteration for CJK / non-English vocab in callout", () => {
+      const cjkResult: LookupResult = {
+        query: "猫",
+        type: "word",
+        contextSentence: "これは猫です。",
+        contextSentenceClean: "これは猫です。",
+        transliteration: "Neko",
+        sourceLang: "ja",
+        vietnameseTranslation: "con mèo",
+        timestamp: Date.now(),
+      };
+      const callout = formatCallout(cjkResult);
+      expect(callout).toContain("> [!vocab] 猫");
+      expect(callout).toContain("> - **Phiên âm**: `[Neko]`");
+      expect(callout).toContain("> - **Nghĩa tiếng Việt**: con mèo");
+      expect(callout).toContain("#vocab/japanese");
     });
   });
 

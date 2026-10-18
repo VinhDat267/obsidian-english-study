@@ -718,6 +718,78 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.hide();
       expect(popover.getCustomPosition()).toBeNull();
     });
+
+    it("should display language badge and transliteration when provided in LookupResult", () => {
+      const popover = new FloatingPopover();
+      const jaResult: LookupResult = {
+        query: "こんにちは",
+        type: "word",
+        contextSentence: "こんにちは世界",
+        contextSentenceClean: "こんにちは世界",
+        vietnameseTranslation: "xin chào",
+        sourceLang: "ja",
+        transliteration: "Konnichiwa",
+        timestamp: Date.now(),
+      };
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        jaResult,
+        { onSave: vi.fn() }
+      );
+      const el = popover.getElement()!;
+      const badge = el.querySelector(".vocab-lang-badge");
+      expect(badge).toBeDefined();
+      expect(badge?.textContent).toContain("JA");
+
+      const translit = el.querySelector(".vocab-transliteration");
+      expect(translit).toBeDefined();
+      expect(translit?.textContent).toContain("Konnichiwa");
+      popover.hide();
+    });
+
+    it("should set speech utterance lang according to sourceLang on audio click", () => {
+      const popover = new FloatingPopover();
+      const speakMock = vi.fn();
+      (window as any).speechSynthesis = {
+        speak: speakMock,
+        cancel: vi.fn(),
+      };
+      (global as any).SpeechSynthesisUtterance = class MockSpeechSynthesisUtterance {
+        text: string;
+        lang: string = "";
+        constructor(text: string) {
+          this.text = text;
+        }
+      };
+
+      const jaResult: LookupResult = {
+        query: "こんにちは",
+        type: "word",
+        contextSentence: "こんにちは世界",
+        contextSentenceClean: "こんにちは世界",
+        vietnameseTranslation: "xin chào",
+        sourceLang: "ja",
+        timestamp: Date.now(),
+      };
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        jaResult,
+        { onSave: vi.fn() }
+      );
+      const el = popover.getElement()!;
+      const audioBtn = el.querySelector(".audio-btn") as any;
+      audioBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(speakMock).toHaveBeenCalled();
+      const utterance = speakMock.mock.calls[0][0];
+      expect(utterance.lang).toBe("ja-JP");
+      popover.hide();
+    });
   });
 });
+
 
