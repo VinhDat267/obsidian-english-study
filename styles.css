@@ -1,0 +1,726 @@
+/* ==========================================================================
+   Obsidian English Study Plugin - Stylesheet
+   100% Theme Variables & Obsidian UI Guidelines
+   ========================================================================== */
+
+/* ---------------------------------------------------------
+   Floating Trigger Icon
+   --------------------------------------------------------- */
+.english-study-trigger {
+  position: fixed;
+  z-index: var(--layer-popover, 100);
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--background-floating, var(--background-primary));
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  box-shadow: var(--shadow-s, 0 2px 6px rgba(0, 0, 0, 0.15));
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.english-study-trigger:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-accent);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-m, 0 4px 10px rgba(0, 0, 0, 0.2));
+}
+
+.english-study-trigger:active {
+  transform: scale(0.95);
+  background-color: var(--background-modifier-active);
+}
+
+.english-study-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------------------------------------------------------
+   Floating Popover Card
+   --------------------------------------------------------- */
+.english-study-popover {
+  position: fixed;
+  z-index: var(--layer-popover, 100);
+  width: 380px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background-color: var(--background-floating, var(--background-primary));
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 8px);
+  box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.25));
+  font-size: var(--font-ui-small, 12px);
+  line-height: 1.5;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: english-study-popover-appear 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes english-study-popover-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------------------------------------------------------
+   Popover Header
+   --------------------------------------------------------- */
+.english-study-popover .popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 8px;
+}
+
+.english-study-popover .popover-title-group {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.english-study-popover .vocab-query {
+  font-size: var(--font-ui-medium, 15px);
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.english-study-popover .vocab-phonetic {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller, 11px);
+  color: var(--text-muted);
+}
+
+.english-study-popover .audio-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: var(--radius-s, 4px);
+  transition: color 0.15s ease, background-color 0.15s ease;
+  line-height: 1;
+}
+
+.english-study-popover .audio-btn:hover {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-popover .audio-btn.audio-playing {
+  color: var(--interactive-accent);
+  animation: english-study-pulse 1s infinite alternate ease-in-out;
+}
+
+@keyframes english-study-pulse {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+}
+
+.english-study-popover .popover-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.english-study-popover .popover-btn-pin,
+.english-study-popover .popover-btn-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: var(--radius-s, 4px);
+  transition: color 0.15s ease, background-color 0.15s ease;
+  line-height: 1;
+}
+
+.english-study-popover .popover-btn-pin:hover,
+.english-study-popover .popover-btn-close:hover {
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-popover .popover-btn-close:hover {
+  color: var(--text-error, #f44336);
+}
+
+/* ---------------------------------------------------------
+   Popover Body
+   --------------------------------------------------------- */
+.english-study-popover .popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.english-study-popover .vocab-meaning-vi {
+  font-size: var(--font-ui-medium, 14px);
+  font-weight: 600;
+  color: var(--text-accent);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.english-study-popover .vocab-definitions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.english-study-popover .vocab-def-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 2px;
+}
+
+.english-study-popover .vocab-pos-tag {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-accent);
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 3px);
+  padding: 1px 5px;
+  margin-right: 4px;
+  letter-spacing: 0.5px;
+}
+
+.english-study-popover .vocab-meaning-en {
+  color: var(--text-normal);
+  line-height: 1.4;
+}
+
+.english-study-popover .vocab-example {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--font-ui-smaller, 11px);
+  padding-left: 8px;
+  border-left: 2px solid var(--background-modifier-border);
+  margin-top: 2px;
+}
+
+.english-study-popover .vocab-ai-note {
+  background-color: var(--background-secondary);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-s, 4px);
+  padding: 6px 10px;
+  margin-top: 4px;
+}
+
+.english-study-popover .vocab-ai-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-accent);
+  margin-bottom: 2px;
+}
+
+.english-study-popover .vocab-ai-content {
+  font-size: var(--font-ui-smaller, 11.5px);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------
+   Popover Footer
+   --------------------------------------------------------- */
+.english-study-popover .popover-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 8px;
+}
+
+.english-study-popover .vocab-context-box {
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-s, 4px);
+  padding: 6px 8px;
+  font-size: var(--font-ui-smaller, 11px);
+  color: var(--text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.english-study-popover .vocab-context-label {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.english-study-popover .vocab-context-text {
+  font-style: italic;
+}
+
+.english-study-popover .vocab-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.english-study-popover .vocab-btn-save {
+  flex: 1;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  padding: 6px 12px;
+  font-size: var(--font-ui-small, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.english-study-popover .vocab-btn-save:hover:not(:disabled) {
+  background-color: var(--interactive-accent-hover);
+}
+
+.english-study-popover .vocab-btn-save:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.english-study-popover .vocab-btn-save.saved {
+  background-color: var(--interactive-success, #4caf50);
+  color: #fff;
+}
+
+.english-study-popover .vocab-btn-copy {
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  padding: 6px 10px;
+  font-size: var(--font-ui-small, 12px);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.english-study-popover .vocab-btn-copy:hover {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--text-accent);
+}
+
+/* ---------------------------------------------------------
+   Sidebar View
+   --------------------------------------------------------- */
+.english-study-sidebar-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px 14px;
+  gap: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.english-study-sidebar-view .sidebar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 10px;
+}
+
+.english-study-sidebar-view .sidebar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.english-study-sidebar-view .sidebar-tab-btn {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  padding: 5px 10px;
+  font-size: var(--font-ui-smaller, 11px);
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.english-study-sidebar-view .sidebar-tab-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.english-study-sidebar-view .sidebar-tab-btn.active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+.english-study-sidebar-view .sidebar-btn-clear {
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  padding: 4px 8px;
+  font-size: var(--font-ui-smaller, 11px);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.english-study-sidebar-view .sidebar-btn-clear:hover {
+  color: var(--text-error, #f44336);
+  border-color: var(--text-error, #f44336);
+  background: var(--background-modifier-hover);
+}
+
+.english-study-sidebar-view .sidebar-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.english-study-sidebar-view .deep-dive-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.english-study-sidebar-view .sidebar-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 8px;
+}
+
+.english-study-sidebar-view .sidebar-title-group {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Empty State */
+.english-study-sidebar-view .empty-state,
+.empty-state.sidebar-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small, 12px);
+  line-height: 1.6;
+  background: var(--background-secondary-alt, var(--background-secondary));
+  border-radius: var(--radius-m, 6px);
+  border: 1px dashed var(--background-modifier-border);
+  margin-top: 10px;
+}
+
+.english-study-sidebar-view .empty-state p {
+  margin: 0;
+}
+
+/* Shared vocab styling in sidebar */
+.english-study-sidebar-view .vocab-query {
+  font-size: var(--font-ui-large, 18px);
+  font-weight: 700;
+  color: var(--text-normal);
+  word-break: break-word;
+}
+
+.english-study-sidebar-view .vocab-phonetic {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small, 12px);
+  color: var(--text-muted);
+}
+
+.english-study-sidebar-view .audio-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: var(--radius-s, 4px);
+  transition: color 0.15s ease, background-color 0.15s ease;
+  line-height: 1;
+}
+
+.english-study-sidebar-view .audio-btn:hover {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-sidebar-view .audio-btn.audio-playing {
+  color: var(--interactive-accent);
+  animation: english-study-pulse 1s infinite alternate ease-in-out;
+}
+
+.english-study-sidebar-view .vocab-meaning-vi {
+  font-size: var(--font-ui-medium, 15px);
+  font-weight: 600;
+  color: var(--text-accent);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.english-study-sidebar-view .vocab-definitions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.english-study-sidebar-view .vocab-def-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s, 4px);
+  border-left: 3px solid var(--text-accent);
+}
+
+.english-study-sidebar-view .vocab-pos-tag {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-accent);
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 3px);
+  padding: 1px 5px;
+  letter-spacing: 0.5px;
+}
+
+.english-study-sidebar-view .vocab-meaning-en {
+  color: var(--text-normal);
+  line-height: 1.4;
+  font-size: var(--font-ui-small, 12.5px);
+}
+
+.english-study-sidebar-view .vocab-example {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--font-ui-smaller, 11px);
+  padding-left: 6px;
+  border-left: 2px solid var(--background-modifier-border);
+  margin-top: 2px;
+}
+
+.english-study-sidebar-view .vocab-ai-note {
+  background-color: var(--background-secondary);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-s, 4px);
+  padding: 8px 10px;
+}
+
+.english-study-sidebar-view .vocab-ai-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-accent);
+  margin-bottom: 4px;
+}
+
+.english-study-sidebar-view .vocab-ai-content {
+  font-size: var(--font-ui-small, 12px);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.english-study-sidebar-view .vocab-context-box {
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-s, 4px);
+  padding: 8px 10px;
+  font-size: var(--font-ui-small, 12px);
+  color: var(--text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.english-study-sidebar-view .vocab-context-label {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.english-study-sidebar-view .vocab-context-text {
+  font-style: italic;
+}
+
+.english-study-sidebar-view .vocab-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.english-study-sidebar-view .vocab-btn-save {
+  flex: 1;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  padding: 7px 12px;
+  font-size: var(--font-ui-small, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.english-study-sidebar-view .vocab-btn-save:hover:not(:disabled) {
+  background-color: var(--interactive-accent-hover);
+}
+
+.english-study-sidebar-view .vocab-btn-save:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.english-study-sidebar-view .vocab-btn-save.saved {
+  background-color: var(--interactive-success, #4caf50);
+  color: #fff;
+}
+
+.english-study-sidebar-view .vocab-btn-copy {
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  padding: 7px 12px;
+  font-size: var(--font-ui-small, 12px);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.english-study-sidebar-view .vocab-btn-copy:hover {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--text-accent);
+}
+
+/* ---------------------------------------------------------
+   History Tab & Items
+   --------------------------------------------------------- */
+.english-study-sidebar-view .history-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.english-study-sidebar-view .history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.english-study-sidebar-view .history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.english-study-sidebar-view .history-item:hover {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--text-accent);
+  transform: translateX(2px);
+}
+
+.english-study-sidebar-view .history-item-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.english-study-sidebar-view .history-query {
+  font-weight: 600;
+  font-size: var(--font-ui-small, 13px);
+  color: var(--text-normal);
+}
+
+.english-study-sidebar-view .history-phonetic {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller, 11px);
+  color: var(--text-muted);
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.english-study-sidebar-view .history-time {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.english-study-sidebar-view .history-meaning {
+  font-size: var(--font-ui-smaller, 11.5px);
+  color: var(--text-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

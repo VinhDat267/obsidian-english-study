@@ -1,0 +1,29 @@
+{
+  "name": "obsidian-english-study",
+  "version": "1.0.0",
+  "description": "Personal English study assistant for Obsidian - dictionary lookup, sentence translation, and contextual vocabulary notebook.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "node esbuild.config.mjs --watch",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "english-study",
+    "dictionary",
+    "translation",
+    "vocabulary"
+  ],
+  "author": "Personal",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.21.0",
+    "obsidian": "^1.7.2",
+    "tslib": "^2.6.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,0 +1,503 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { App, Editor, MarkdownView, WorkspaceLeaf, createMockObsidianElement } from "obsidian";
+import EnglishStudyPlugin from "../main.ts";
+import { DEFAULT_SETTINGS, LookupResult } from "../src/types";
+import { VIEW_TYPE_ENGLISH_STUDY } from "../src/ui/SidebarView";
+
+describe("EnglishStudyPlugin Integration (main.ts)", () => {
+  let app: App;
+  let plugin: EnglishStudyPlugin;
+  let originalDocument: any;
+  let originalWindow: any;
+  let mockBody: any;
+  let docListeners: Record<string, ((...args: any[]) => void)[]>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    originalDocument = (global as any).document;
+    originalWindow = (global as any).window;
+
+    docListeners = {};
+    mockBody = createMockObsidianElement("body");
+
+    (global as any).document = {
+      createElement: vi.fn((tag: string) => createMockObsidianElement(tag)),
+      body: mockBody,
+      addEventListener: vi.fn((event: string, handler: any) => {
+        if (!docListeners[event]) docListeners[event] = [];
+        docListeners[event].push(handler);
+      }),
+      removeEventListener: vi.fn((event: string, handler: any) => {
+        if (docListeners[event]) {
+          docListeners[event] = docListeners[event].filter((h) => h !== handler);
+        }
+      }),
+      dispatchEvent: vi.fn(),
+    };
+
+    (global as any).window = {
+      innerWidth: 1024,
+      innerHeight: 768,
+      getSelection: vi.fn(() => ({
+        rangeCount: 1,
+        getRangeAt: () => ({
+          getBoundingClientRect: () => ({
+            top: 100,
+            bottom: 120,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+        }),
+      })),
+    };
+
+    app = new App();
+    plugin = new EnglishStudyPlugin(app, {
+      id: "obsidian-english-study",
+      name: "English Study",
+      version: "1.0.0",
+    } as any);
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    (global as any).document = originalDocument;
+    (global as any).window = originalWindow;
+  });
+
+  describe("Lifecycle & Registrations (onload / onunload)", () => {
+    it("should load settings and initialize all services in onload()", async () => {
+      await plugin.onload();
+
+      expect(plugin.settings).toBeDefined();
+      expect(plugin.settings.triggerMode).toBe(DEFAULT_SETTINGS.triggerMode);
+      expect(plugin.providerManager).toBeDefined();
+      expect(plugin.vocabService).toBeDefined();
+      expect(plugin.geminiService).toBeDefined();
+      expect(plugin.floatingTrigger).toBeDefined();
+      expect(plugin.floatingPopover).toBeDefined();
+    });
+
+    it("should register sidebar view, ribbon icon, commands, events and settings tab", async () => {
+      await plugin.onload();
+
+      // View registration
+      expect(plugin.views.has(VIEW_TYPE_ENGLISH_STUDY)).toBe(true);
+
+      // Ribbon icon
+      expect(plugin.ribbonIcons.length).toBe(1);
+      expect(plugin.ribbonIcons[0].icon).toBe("book-open");
+      expect(plugin.ribbonIcons[0].title).toBe("Mở English Study Panel");
+
+      // Commands (3 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view)
+      expect(plugin.commands.length).toBe(3);
+      const commandIds = plugin.commands.map((c) => c.id);
+      expect(commandIds).toContain("lookup-selected-text");
+      expect(commandIds).toContain("save-to-vocabulary");
+      expect(commandIds).toContain("open-sidebar-view");
+
+      // DOM events (mouseup, keyup, scroll)
+      expect(plugin.domEvents.length).toBe(3);
+      const eventTypes = plugin.domEvents.map((e) => e.type);
+      expect(eventTypes).toContain("mouseup");
+      expect(eventTypes).toContain("keyup");
+      expect(eventTypes).toContain("scroll");
+
+      const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
+      expect(scrollEvent?.options).toBe(true);
+
+      // Workspace event (active-leaf-change)
+      expect(plugin.events.length).toBe(1);
+
+      // Settings tab
+      expect(plugin.settingTabs.length).toBe(1);
+    });
+
+    it("should dismiss floating UI on scroll event", async () => {
+      await plugin.onload();
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+
+      const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
+      expect(scrollEvent).toBeDefined();
+
+      scrollEvent!.callback();
+      expect(dismissSpy).toHaveBeenCalled();
+    });
+
+    it("should clean up timers and hide UI on onunload()", async () => {
+      await plugin.onload();
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+
+      plugin.onunload();
+
+      expect(dismissSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe("Settings Management (loadSettings / saveSettings)", () => {
+    it("should merge saved data with DEFAULT_SETTINGS in loadSettings()", async () => {
+      vi.spyOn(plugin, "loadData").mockResolvedValue({
+        triggerMode: "hotkey-only",
+        geminiApiKey: "custom-api-key",
+      });
+
+      await plugin.loadSettings();
+
+      expect(plugin.settings.triggerMode).toBe("hotkey-only");
+      expect(plugin.settings.geminiApiKey).toBe("custom-api-key");
+      expect(plugin.settings.vocabFilePath).toBe(DEFAULT_SETTINGS.vocabFilePath);
+    });
+
+    it("should persist settings and update vocabService in saveSettings()", async () => {
+      await plugin.onload();
+      const saveDataSpy = vi.spyOn(plugin, "saveData").mockResolvedValue(undefined);
+      const updateSettingsSpy = vi.spyOn(plugin.vocabService, "updateSettings");
+
+      plugin.settings.preferredAccent = "uk";
+      await plugin.saveSettings();
+
+      expect(saveDataSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ preferredAccent: "uk" })
+      );
+      expect(updateSettingsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ preferredAccent: "uk" })
+      );
+    });
+  });
+
+  describe("Sidebar View Activation (activateSidebarView)", () => {
+    it("should reveal existing leaf if sidebar view is already open", async () => {
+      await plugin.onload();
+      const mockLeaf = new WorkspaceLeaf();
+      vi.spyOn(app.workspace, "getLeavesOfType").mockReturnValue([mockLeaf]);
+      const revealSpy = vi.spyOn(app.workspace, "revealLeaf");
+
+      await plugin.activateSidebarView();
+
+      expect(revealSpy).toHaveBeenCalledWith(mockLeaf);
+    });
+
+    it("should create new right leaf and set view state if sidebar view does not exist", async () => {
+      await plugin.onload();
+      const mockLeaf = new WorkspaceLeaf();
+      vi.spyOn(app.workspace, "getLeavesOfType").mockReturnValue([]);
+      vi.spyOn(app.workspace, "getRightLeaf").mockReturnValue(mockLeaf);
+      const setViewStateSpy = vi.spyOn(mockLeaf, "setViewState");
+      const revealSpy = vi.spyOn(app.workspace, "revealLeaf");
+
+      await plugin.activateSidebarView();
+
+      expect(setViewStateSpy).toHaveBeenCalledWith({
+        type: VIEW_TYPE_ENGLISH_STUDY,
+        active: true,
+      });
+      expect(revealSpy).toHaveBeenCalledWith(mockLeaf);
+    });
+  });
+
+  describe("performLookup()", () => {
+    let editor: Editor;
+
+    beforeEach(async () => {
+      await plugin.onload();
+      editor = new Editor("Artificial intelligence is transforming software engineering.\nIt boosts developer velocity.");
+    });
+
+    it("should return null and not trigger lookup if selection is empty", async () => {
+      editor.setSelectionText("");
+      const lookupSpy = vi.spyOn(plugin.providerManager, "lookup");
+
+      const result = await plugin.performLookup(editor);
+
+      expect(result).toBeNull();
+      expect(lookupSpy).not.toHaveBeenCalled();
+    });
+
+    it("should hide floatingTrigger, invoke providerManager.lookup, store lastLookupResult, and show popover", async () => {
+      editor.setSelectionText("intelligence");
+      editor.setCursor({ line: 0, ch: 15 });
+
+      const mockResult: LookupResult = {
+        query: "intelligence",
+        type: "word",
+        contextSentence: "Artificial intelligence is transforming software engineering.",
+        contextSentenceClean: "Artificial intelligence is transforming software engineering.",
+        vietnameseTranslation: "Trí tuệ nhân tạo",
+        timestamp: Date.now(),
+      };
+
+      const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
+      const popoverShowSpy = vi.spyOn(plugin.floatingPopover, "show");
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+
+      const result = await plugin.performLookup(editor);
+
+      expect(triggerHideSpy).toHaveBeenCalled();
+      expect(plugin.providerManager.lookup).toHaveBeenCalledWith(
+        "intelligence",
+        expect.stringContaining("Artificial intelligence is transforming software engineering."),
+        expect.any(Number),
+        plugin.settings
+      );
+      expect(result).toEqual(mockResult);
+      expect((plugin as any).lastLookupResult).toEqual(mockResult);
+      expect(popoverShowSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        mockResult,
+        expect.objectContaining({
+          onSave: expect.any(Function),
+          onPinToSidebar: expect.any(Function),
+        })
+      );
+    });
+
+    it("should synchronize result to sidebarView if sidebar is already initialized", async () => {
+      editor.setSelectionText("velocity");
+      editor.setCursor({ line: 1, ch: 20 });
+
+      const mockResult: LookupResult = {
+        query: "velocity",
+        type: "word",
+        contextSentence: "It boosts developer velocity.",
+        contextSentenceClean: "It boosts developer velocity.",
+        vietnameseTranslation: "Tốc độ",
+        timestamp: Date.now(),
+      };
+
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+
+      plugin.sidebarView = {
+        setResult: vi.fn(),
+      } as any;
+
+      await plugin.performLookup(editor);
+
+      expect(plugin.sidebarView!.setResult).toHaveBeenCalledWith(mockResult);
+    });
+
+    it("popover onSave callback should invoke vocabService.saveVocab", async () => {
+      editor.setSelectionText("developer");
+      const mockResult: LookupResult = {
+        query: "developer",
+        type: "word",
+        contextSentence: "It boosts developer velocity.",
+        contextSentenceClean: "It boosts developer velocity.",
+        vietnameseTranslation: "Lập trình viên",
+        timestamp: Date.now(),
+      };
+
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+      let capturedCallbacks: any = null;
+      vi.spyOn(plugin.floatingPopover, "show").mockImplementation((rect, res, cb) => {
+        capturedCallbacks = cb;
+      });
+
+      await plugin.performLookup(editor);
+
+      const saveVocabSpy = vi.spyOn(plugin.vocabService, "saveVocab").mockResolvedValue({
+        success: true,
+        isDuplicate: false,
+        filePath: "Vocabulary.md",
+      });
+
+      expect(capturedCallbacks).toBeDefined();
+      await capturedCallbacks.onSave(mockResult);
+
+      expect(saveVocabSpy).toHaveBeenCalledWith(mockResult, plugin.settings);
+    });
+
+    it("should return null gracefully if lookup is aborted (AbortError)", async () => {
+      editor.setSelectionText("canceled");
+      const abortError = new Error("The user aborted a request.");
+      abortError.name = "AbortError";
+      vi.spyOn(plugin.providerManager, "lookup").mockRejectedValue(abortError);
+
+      const result = await plugin.performLookup(editor);
+
+      expect(result).toBeNull();
+    });
+
+    it("popover onPinToSidebar callback should dismiss floating UI and activate sidebar", async () => {
+      editor.setSelectionText("developer");
+      const mockResult: LookupResult = {
+        query: "developer",
+        type: "word",
+        contextSentence: "It boosts developer velocity.",
+        contextSentenceClean: "It boosts developer velocity.",
+        vietnameseTranslation: "Lập trình viên",
+        timestamp: Date.now(),
+      };
+
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+      let capturedCallbacks: any = null;
+      vi.spyOn(plugin.floatingPopover, "show").mockImplementation((rect, res, cb) => {
+        capturedCallbacks = cb;
+      });
+
+      await plugin.performLookup(editor);
+
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+      const activateSpy = vi.spyOn(plugin, "activateSidebarView").mockResolvedValue();
+
+      expect(capturedCallbacks).toBeDefined();
+      capturedCallbacks.onPinToSidebar(mockResult);
+
+      expect(dismissSpy).toHaveBeenCalled();
+      expect(activateSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe("handleSelectionDebounced() across 3 trigger modes", () => {
+    let mockView: MarkdownView;
+    let editor: Editor;
+
+    beforeEach(async () => {
+      await plugin.onload();
+      const leaf = new WorkspaceLeaf();
+      mockView = new MarkdownView(leaf);
+      editor = mockView.editor;
+      editor.setValue("Learning English with Obsidian plugins.");
+      app.workspace.activeLeaf = leaf;
+      vi.spyOn(app.workspace, "getActiveViewOfType").mockReturnValue(mockView);
+    });
+
+    it("should do nothing and hide trigger if selection is empty after debounce", () => {
+      editor.setSelectionText("   ");
+      const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(triggerHideSpy).toHaveBeenCalled();
+    });
+
+    it("mode 'hotkey-only': should hide trigger and NOT trigger lookup", () => {
+      plugin.settings.triggerMode = "hotkey-only";
+      editor.setSelectionText("Obsidian");
+      const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
+      const performLookupSpy = vi.spyOn(plugin, "performLookup");
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(triggerHideSpy).toHaveBeenCalled();
+      expect(performLookupSpy).not.toHaveBeenCalled();
+    });
+
+    it("mode 'auto-popup': should directly trigger performLookup(editor)", () => {
+      plugin.settings.triggerMode = "auto-popup";
+      editor.setSelectionText("Obsidian");
+      const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
+      const performLookupSpy = vi.spyOn(plugin, "performLookup").mockResolvedValue(null);
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(triggerHideSpy).toHaveBeenCalled();
+      expect(performLookupSpy).toHaveBeenCalledWith(editor);
+    });
+
+    it("mode 'icon': should show floatingTrigger with onClick callback to performLookup", () => {
+      plugin.settings.triggerMode = "icon";
+      editor.setSelectionText("Obsidian");
+      const triggerShowSpy = vi.spyOn(plugin.floatingTrigger, "show");
+      const performLookupSpy = vi.spyOn(plugin, "performLookup").mockResolvedValue(null);
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(triggerShowSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Function)
+      );
+
+      // Trigger the click callback passed to floatingTrigger.show
+      const onClickCb = triggerShowSpy.mock.calls[0][1];
+      onClickCb({} as any);
+
+      expect(performLookupSpy).toHaveBeenCalledWith(editor);
+    });
+  });
+
+  describe("Commands Verification", () => {
+    let editor: Editor;
+    let mockView: MarkdownView;
+
+    beforeEach(async () => {
+      await plugin.onload();
+      const leaf = new WorkspaceLeaf();
+      mockView = new MarkdownView(leaf);
+      editor = mockView.editor;
+      editor.setValue("Exploring vocabulary integration.");
+    });
+
+    it("lookup-selected-text command: checks selection and executes performLookup", () => {
+      const lookupCmd = plugin.commands.find((c) => c.id === "lookup-selected-text");
+      expect(lookupCmd).toBeDefined();
+
+      editor.setSelectionText("");
+      expect(lookupCmd!.editorCheckCallback!(true, editor, mockView)).toBe(false);
+
+      editor.setSelectionText("vocabulary");
+      expect(lookupCmd!.editorCheckCallback!(true, editor, mockView)).toBe(true);
+
+      const performLookupSpy = vi.spyOn(plugin, "performLookup").mockResolvedValue(null);
+      lookupCmd!.editorCheckCallback!(false, editor, mockView);
+      expect(performLookupSpy).toHaveBeenCalledWith(editor);
+    });
+
+    it("save-to-vocabulary command: checks lastLookupResult and invokes vocabService.saveVocab", () => {
+      const saveCmd = plugin.commands.find((c) => c.id === "save-to-vocabulary");
+      expect(saveCmd).toBeDefined();
+
+      // No last lookup result -> check returns false
+      (plugin as any).lastLookupResult = null;
+      expect(saveCmd!.checkCallback!(true)).toBe(false);
+
+      const mockResult: LookupResult = {
+        query: "vocabulary",
+        type: "word",
+        contextSentence: "Exploring vocabulary integration.",
+        contextSentenceClean: "Exploring vocabulary integration.",
+        vietnameseTranslation: "Từ vựng",
+        timestamp: Date.now(),
+      };
+      (plugin as any).lastLookupResult = mockResult;
+      expect(saveCmd!.checkCallback!(true)).toBe(true);
+
+      const saveVocabSpy = vi.spyOn(plugin.vocabService, "saveVocab").mockResolvedValue({
+        success: true,
+        isDuplicate: false,
+        filePath: "Vocabulary.md",
+      });
+
+      saveCmd!.checkCallback!(false);
+      expect(saveVocabSpy).toHaveBeenCalledWith(mockResult, plugin.settings);
+    });
+
+    it("open-sidebar-view command: executes activateSidebarView", () => {
+      const openCmd = plugin.commands.find((c) => c.id === "open-sidebar-view");
+      expect(openCmd).toBeDefined();
+
+      const activateSpy = vi.spyOn(plugin, "activateSidebarView").mockResolvedValue();
+      openCmd!.callback!();
+      expect(activateSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe("dismissFloatingUi()", () => {
+    it("should dismiss both floating trigger and popover", async () => {
+      await plugin.onload();
+      const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
+      const popoverHideSpy = vi.spyOn(plugin.floatingPopover, "hide");
+
+      plugin.dismissFloatingUi();
+
+      expect(triggerHideSpy).toHaveBeenCalled();
+      expect(popoverHideSpy).toHaveBeenCalled();
+    });
+  });
+});

@@ -1,0 +1,486 @@
+import { setIcon } from "obsidian";
+import { LookupResult } from "../types";
+import { calculatePosition, RectLike } from "../utils/domHelper";
+
+export interface PopoverCallbacks {
+  onSave: (result: LookupResult) => Promise<void> | void;
+  onPinToSidebar?: (result: LookupResult) => void;
+  onClose?: () => void;
+}
+
+export class FloatingPopover {
+  private element: HTMLElement | null = null;
+  private currentResult: LookupResult | null = null;
+  private isPlayingAudio: boolean = false;
+  private currentAudio: HTMLAudioElement | null = null;
+  private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
+  private outsideTimeout: any = null;
+  private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  /**
+   * Hiển thị Card Popover:
+   * 1. Tính toán vị trí bằng calculatePosition(rect, ...).
+   * 2. Header:
+   *    - Từ / Cụm từ (Font lớn, đậm)
+   *    - Phiên âm IPA (nếu có)
+   *    - Nút Loa phát âm (icon volume-2):
+   *      + Nếu có audioUrl: phát bằng HTML5 Audio.
+   *      + Fallback: phát qua window.speechSynthesis.
+   *      + Hiển thị trạng thái đang phát (audio-playing).
+   *    - Nút Ghim sang Sidebar (icon panel-right)
+   *    - Nút Đóng (icon x)
+   * 3. Body:
+   *    - Nghĩa tiếng Việt (nổi bật, rõ ràng)
+   *    - Danh sách định nghĩa tiếng Anh (definitions: partOfSpeech + meaningEn + example)
+   *    - Badge phân tích AI (nếu có aiGrammarNote)
+   * 4. Footer:
+   *    - Hiển thị trích đoạn câu ngữ cảnh bài đọc
+   *    - Nút "💾 Lưu vào sổ từ vựng" (gọi callbacks.onSave)
+   *    - Nút "📋 Copy nghĩa" (copy vào clipboard)
+   * 5. Sự kiện:
+   *    - Tự ẩn khi click ra ngoài element (mousedown outside).
+   *    - Tự ẩn khi bấm phím Escape.
+   */
+  show(
+    rect: RectLike,
+    result: LookupResult,
+    callbacks: PopoverCallbacks
+  ): void {
+    this.hide();
+
+    this.currentResult = result;
+
+    const popover = document.createElement("div");
+    popover.className = "english-study-popover";
+    popover.setAttribute("role", "dialog");
+    popover.setAttribute("aria-label", "Chi tiết từ vựng");
+
+    // Prevent clicks inside popover from propagating to document
+    popover.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
+    // 1. Header
+    const header = document.createElement("div");
+    header.className = "popover-header";
+
+    const titleGroup = document.createElement("div");
+    titleGroup.className = "popover-title-group";
+
+    const queryEl = document.createElement("span");
+    queryEl.className = "vocab-query";
+    queryEl.textContent = result.query;
+    titleGroup.appendChild(queryEl);
+
+    if (result.phonetic) {
+      const phoneticEl = document.createElement("span");
+      phoneticEl.className = "vocab-phonetic";
+      phoneticEl.textContent = result.phonetic.startsWith("/")
+        ? result.phonetic
+        : `/${result.phonetic}/`;
+      titleGroup.appendChild(phoneticEl);
+    }
+
+    // Audio Button
+    const audioBtn = document.createElement("button");
+    audioBtn.className = "audio-btn";
+    audioBtn.setAttribute("aria-label", "Phát âm");
+    audioBtn.setAttribute("title", "Phát âm");
+    try {
+      setIcon(audioBtn, "volume-2");
+    } catch {
+      // fallback
+    }
+    if (!audioBtn.innerHTML.trim()) {
+      audioBtn.textContent = "🔊";
+    }
+
+    audioBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleAudio(result.query, result.audioUrl, audioBtn);
+    });
+    titleGroup.appendChild(audioBtn);
+
+    header.appendChild(titleGroup);
+
+    // Header Actions (Pin & Close)
+    const headerActions = document.createElement("div");
+    headerActions.className = "popover-header-actions";
+
+    if (callbacks.onPinToSidebar) {
+      const pinBtn = document.createElement("button");
+      pinBtn.className = "popover-btn-pin";
+      pinBtn.setAttribute("aria-label", "Ghim sang Sidebar");
+      pinBtn.setAttribute("title", "Ghim sang Sidebar");
+      try {
+        setIcon(pinBtn, "panel-right");
+      } catch {
+        // fallback
+      }
+      if (!pinBtn.innerHTML.trim()) {
+        pinBtn.textContent = "📌";
+      }
+
+      pinBtn.addEventListener("click", (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        callbacks.onPinToSidebar?.(result);
+      });
+      headerActions.appendChild(pinBtn);
+    }
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "popover-btn-close";
+    closeBtn.setAttribute("aria-label", "Đóng");
+    closeBtn.setAttribute("title", "Đóng");
+    try {
+      setIcon(closeBtn, "x");
+    } catch {
+      // fallback
+    }
+    if (!closeBtn.innerHTML.trim()) {
+      closeBtn.textContent = "✕";
+    }
+
+    closeBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.hide();
+      callbacks.onClose?.();
+    });
+    headerActions.appendChild(closeBtn);
+
+    header.appendChild(headerActions);
+    popover.appendChild(header);
+
+    // 2. Body
+    const body = document.createElement("div");
+    body.className = "popover-body";
+
+    // Vietnamese Translation
+    if (result.vietnameseTranslation) {
+      const viMeaning = document.createElement("div");
+      viMeaning.className = "vocab-meaning-vi";
+      viMeaning.textContent = result.vietnameseTranslation;
+      body.appendChild(viMeaning);
+    }
+
+    // English Definitions
+    if (result.definitions && result.definitions.length > 0) {
+      const defsList = document.createElement("div");
+      defsList.className = "vocab-definitions";
+
+      result.definitions.forEach((def) => {
+        const item = document.createElement("div");
+        item.className = "vocab-def-item";
+
+        if (def.partOfSpeech) {
+          const pos = document.createElement("span");
+          pos.className = "vocab-pos-tag";
+          pos.textContent = def.partOfSpeech;
+          item.appendChild(pos);
+        }
+
+        const meaning = document.createElement("span");
+        meaning.className = "vocab-meaning-en";
+        meaning.textContent = def.meaningEn;
+        item.appendChild(meaning);
+
+        if (def.example) {
+          const ex = document.createElement("div");
+          ex.className = "vocab-example";
+          ex.textContent = `"${def.example}"`;
+          item.appendChild(ex);
+        }
+
+        defsList.appendChild(item);
+      });
+
+      body.appendChild(defsList);
+    }
+
+    // AI Grammar Note
+    if (result.aiGrammarNote) {
+      const aiNote = document.createElement("div");
+      aiNote.className = "vocab-ai-note";
+
+      const aiBadge = document.createElement("div");
+      aiBadge.className = "vocab-ai-badge";
+      aiBadge.textContent = "🤖 Phân tích ngữ pháp AI";
+      aiNote.appendChild(aiBadge);
+
+      const aiContent = document.createElement("div");
+      aiContent.className = "vocab-ai-content";
+      aiContent.textContent = result.aiGrammarNote;
+      aiNote.appendChild(aiContent);
+
+      body.appendChild(aiNote);
+    }
+
+    popover.appendChild(body);
+
+    // 3. Footer
+    const footer = document.createElement("div");
+    footer.className = "popover-footer";
+
+    // Context Sentence
+    const contextText = result.contextSentence || result.contextSentenceClean;
+    if (contextText) {
+      const contextBox = document.createElement("div");
+      contextBox.className = "vocab-context-box";
+
+      const contextLabel = document.createElement("span");
+      contextLabel.className = "vocab-context-label";
+      contextLabel.textContent = "Ngữ cảnh: ";
+      contextBox.appendChild(contextLabel);
+
+      const contextSentence = document.createElement("span");
+      contextSentence.className = "vocab-context-text";
+      contextSentence.textContent = `"${contextText}"`;
+      contextBox.appendChild(contextSentence);
+
+      footer.appendChild(contextBox);
+    }
+
+    // Action buttons
+    const actions = document.createElement("div");
+    actions.className = "vocab-actions";
+
+    // Save button
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "vocab-btn-save";
+    saveBtn.textContent = "💾 Lưu vào sổ từ vựng";
+
+    saveBtn.addEventListener("click", async (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      saveBtn.disabled = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = "Đang lưu...";
+      try {
+        await callbacks.onSave(result);
+        saveBtn.textContent = "Đã lưu ✓";
+        saveBtn.classList.add("saved");
+      } catch (err) {
+        saveBtn.textContent = "Lỗi khi lưu ✕";
+        saveBtn.disabled = false;
+        setTimeout(() => {
+          saveBtn.textContent = originalText;
+        }, 2000);
+      }
+    });
+    actions.appendChild(saveBtn);
+
+    // Copy button
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "vocab-btn-copy";
+    copyBtn.textContent = "📋 Copy nghĩa";
+
+    copyBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const textToCopy = `${result.query}${
+        result.phonetic ? ` [${result.phonetic}]` : ""
+      }\n- Nghĩa: ${result.vietnameseTranslation}${
+        contextText ? `\n- Ngữ cảnh: "${contextText}"` : ""
+      }`;
+
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy);
+      }
+      copyBtn.textContent = "Đã copy ✓";
+      setTimeout(() => {
+        if (copyBtn) copyBtn.textContent = "📋 Copy nghĩa";
+      }, 2000);
+    });
+    actions.appendChild(copyBtn);
+
+    footer.appendChild(actions);
+    popover.appendChild(footer);
+
+    // Measure and position
+    popover.style.position = "fixed";
+    popover.style.visibility = "hidden";
+    document.body.appendChild(popover);
+
+    const rectBounds = popover.getBoundingClientRect();
+    const popoverWidth = rectBounds.width || 380;
+    const popoverHeight = rectBounds.height || 280;
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+
+    const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
+    popover.style.top = `${pos.top}px`;
+    popover.style.left = `${pos.left}px`;
+    popover.style.visibility = "visible";
+
+    this.element = popover;
+
+    // Outside click event listener
+    this.outsideClickHandler = (e: MouseEvent) => {
+      if (this.element && !this.element.contains(e.target as Node)) {
+        this.hide();
+        callbacks.onClose?.();
+      }
+    };
+    this.outsideTimeout = setTimeout(() => {
+      if (this.outsideClickHandler && typeof document !== "undefined") {
+        document.addEventListener("mousedown", this.outsideClickHandler);
+      }
+    }, 0);
+
+    // Escape key listener
+    this.keydownHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        this.hide();
+        callbacks.onClose?.();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("keydown", this.keydownHandler);
+    }
+  }
+
+  hide(): void {
+    this.stopAudio();
+
+    if (this.outsideTimeout) {
+      clearTimeout(this.outsideTimeout);
+      this.outsideTimeout = null;
+    }
+
+    if (this.outsideClickHandler) {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("mousedown", this.outsideClickHandler);
+      }
+      this.outsideClickHandler = null;
+    }
+
+    if (this.keydownHandler) {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("keydown", this.keydownHandler);
+      }
+      this.keydownHandler = null;
+    }
+
+    if (this.element) {
+      if (this.element.parentElement) {
+        this.element.parentElement.removeChild(this.element);
+      }
+      this.element = null;
+    }
+
+    this.currentResult = null;
+  }
+
+  isVisible(): boolean {
+    return (
+      this.element !== null &&
+      typeof document !== "undefined" &&
+      document.body.contains(this.element)
+    );
+  }
+
+  getElement(): HTMLElement | null {
+    return this.element;
+  }
+
+  private toggleAudio(
+    query: string,
+    audioUrl?: string,
+    audioBtn?: HTMLElement
+  ): void {
+    if (this.isPlayingAudio) {
+      this.stopAudio(audioBtn);
+      return;
+    }
+
+    if (audioUrl) {
+      try {
+        const audio = new Audio(audioUrl);
+        this.currentAudio = audio;
+        this.setPlayingState(true, audioBtn);
+
+        audio.onended = () => {
+          this.setPlayingState(false, audioBtn);
+          this.currentAudio = null;
+        };
+
+        audio.onerror = () => {
+          this.currentAudio = null;
+          this.playSpeechSynthesis(query, audioBtn);
+        };
+
+        audio.play().catch(() => {
+          this.currentAudio = null;
+          this.playSpeechSynthesis(query, audioBtn);
+        });
+      } catch {
+        this.playSpeechSynthesis(query, audioBtn);
+      }
+    } else {
+      this.playSpeechSynthesis(query, audioBtn);
+    }
+  }
+
+  private playSpeechSynthesis(text: string, audioBtn?: HTMLElement): void {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-US";
+
+        this.setPlayingState(true, audioBtn);
+
+        utterance.onend = () => {
+          this.setPlayingState(false, audioBtn);
+        };
+
+        utterance.onerror = () => {
+          this.setPlayingState(false, audioBtn);
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        this.setPlayingState(false, audioBtn);
+      }
+    } else {
+      this.setPlayingState(false, audioBtn);
+    }
+  }
+
+  private stopAudio(audioBtn?: HTMLElement): void {
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+      } catch {
+        // ignore
+      }
+      this.currentAudio = null;
+    }
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // ignore
+      }
+    }
+
+    this.setPlayingState(false, audioBtn);
+  }
+
+  private setPlayingState(playing: boolean, audioBtn?: HTMLElement): void {
+    this.isPlayingAudio = playing;
+    const btn = audioBtn || this.element?.querySelector<HTMLElement>(".audio-btn");
+    if (btn) {
+      if (playing) {
+        btn.classList.add("audio-playing");
+      } else {
+        btn.classList.remove("audio-playing");
+      }
+    }
+  }
+}
