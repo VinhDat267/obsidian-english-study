@@ -91,6 +91,59 @@ Yêu cầu:
   }
 
   /**
+   * 3. DỊCH HÀNG LOẠT (BATCH TRANSLATION) CHO TÀI LIỆU SONG NGỮ
+   * Gom cụm nhiều đoạn văn bản trong 1 prompt để tối ưu quota 15 RPM
+   */
+  async translateBatch(
+    items: Array<{ id: number; text: string }>,
+    apiKey: string,
+    docContext?: DocumentContextMeta,
+    targetLang: string = "vi",
+    model: string = "gemini-flash-latest"
+  ): Promise<Map<number, string> | null> {
+    const cleanKey = apiKey ? apiKey.trim() : "";
+    if (!cleanKey || items.length === 0) return null;
+
+    const contextHint = this.buildContextHint(docContext);
+    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+
+    const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là một dịch giả chuyên gia. Hãy dịch từng đoạn văn bản sau sang ${langTargetName} một cách tự nhiên, chính xác và giữ đúng ngữ cảnh chuyên môn của tài liệu.
+Đầu vào là mảng JSON:
+${JSON.stringify(items, null, 2)}
+
+Yêu cầu BẮT BUỘC:
+- Trả về DUY NHẤT một mảng JSON hợp lệ chứa id và bản dịch tương ứng theo cấu trúc:
+[
+  {"id": 0, "translation": "..."},
+  ...
+]
+- Không thêm bất kỳ văn bản giải thích, tiền tố hoặc markdown fence ngoài mảng JSON.`;
+
+    const responseText = await this.callGeminiApi(prompt, cleanKey, model);
+    if (!responseText) return null;
+
+    try {
+      let cleanJson = responseText.trim();
+      if (cleanJson.startsWith("```")) {
+        cleanJson = cleanJson.replace(/^```[a-zA-Z]*\n?/, "").replace(/\n?```$/, "").trim();
+      }
+      const parsed = JSON.parse(cleanJson);
+      if (Array.isArray(parsed)) {
+        const resultMap = new Map<number, string>();
+        for (const item of parsed) {
+          if (item && typeof item.id === "number" && typeof item.translation === "string") {
+            resultMap.set(item.id, item.translation.trim());
+          }
+        }
+        return resultMap;
+      }
+    } catch {
+      // JSON parse failed
+    }
+    return null;
+  }
+
+  /**
    * Gọi API Gemini với prompt và key
    */
   private async callGeminiApi(

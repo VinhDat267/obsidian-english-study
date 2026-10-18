@@ -150,6 +150,8 @@ export class Workspace {
     }
     return null;
   });
+  public getActiveFile = vi.fn((): any => null);
+  public getLeaf = vi.fn((newTab?: boolean) => new WorkspaceLeaf());
 }
 
 export class App {
@@ -529,6 +531,36 @@ export class PluginSettingTab {
 
   display(): any {}
   hide(): any {}
+}
+
+export class Modal {
+  public app: App;
+  public containerEl: any;
+  public modalEl: any;
+  public titleEl: any;
+  public contentEl: any;
+
+  constructor(app: App) {
+    this.app = app;
+    this.containerEl = createMockObsidianElement("div");
+    this.modalEl = createMockObsidianElement("div");
+    this.titleEl = createMockObsidianElement("div");
+    this.contentEl = createMockObsidianElement("div");
+    this.containerEl.appendChild(this.modalEl);
+    this.modalEl.appendChild(this.titleEl);
+    this.modalEl.appendChild(this.contentEl);
+  }
+
+  open(): void {
+    this.onOpen();
+  }
+
+  close(): void {
+    this.onClose();
+  }
+
+  onOpen(): void {}
+  onClose(): void {}
 }
 
 export class View {

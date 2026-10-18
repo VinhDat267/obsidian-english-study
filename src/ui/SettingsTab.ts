@@ -4,6 +4,7 @@ import {
   TriggerMode,
   VocabFormat,
   PreferredAccent,
+  BilingualStyle,
 } from "../types";
 
 export interface PluginWithSettings {
@@ -362,6 +363,29 @@ export class EnglishStudySettingTab extends PluginSettingTab {
           .setValue(this.pluginInstance.settings.autoPlayAudio)
           .onChange(async (value: boolean) => {
             this.pluginInstance.settings.autoPlayAudio = value;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    // =========================================================================
+    // Nhóm 5: DỊCH SONG NGỮ TOÀN BỘ FILE (BILINGUAL FILE TRANSLATION)
+    // =========================================================================
+    new Setting(containerEl)
+      .setName("DỊCH SONG NGỮ TOÀN BỘ FILE (BILINGUAL FILE TRANSLATION)")
+      .setHeading();
+
+    new Setting(containerEl)
+      .setName("Phong cách hiển thị song ngữ")
+      .setDesc("Định dạng của lời dịch tiếng Việt chèn bên dưới câu/đoạn tiếng Anh.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("blockquote", "Trích dẫn viền dọc (> *Lời dịch*) [Khuyên dùng]")
+          .addOption("colored", "Chữ màu dịu mắt (<font color>)")
+          .addOption("highlight", "Tô sáng nền (==Lời dịch==)")
+          .addOption("bold_prefix", "Tiền tố in đậm (**[VI]** Lời dịch)")
+          .setValue(this.pluginInstance.settings.bilingualTranslationStyle || "blockquote")
+          .onChange(async (value: string) => {
+            this.pluginInstance.settings.bilingualTranslationStyle = value as BilingualStyle;
             await this.pluginInstance.saveSettings();
           })
       );

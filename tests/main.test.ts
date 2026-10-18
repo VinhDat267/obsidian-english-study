@@ -77,6 +77,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.providerManager).toBeDefined();
       expect(plugin.vocabService).toBeDefined();
       expect(plugin.geminiService).toBeDefined();
+      expect(plugin.bilingualTranslationService).toBeDefined();
       expect(plugin.floatingTrigger).toBeDefined();
       expect(plugin.floatingPopover).toBeDefined();
     });
@@ -92,8 +93,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.ribbonIcons[0].icon).toBe("book-open");
       expect(plugin.ribbonIcons[0].title).toBe("Mở Polyglot Study Panel");
 
-      // Commands (6 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view, toggle-ai-grammar, toggle-ai-translation, toggle-auto-translate)
-      expect(plugin.commands.length).toBe(6);
+      // Commands (7 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view, toggle-ai-grammar, toggle-ai-translation, toggle-auto-translate, bilingual-translate-file)
+      expect(plugin.commands.length).toBe(7);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");
@@ -101,6 +102,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("toggle-ai-grammar");
       expect(commandIds).toContain("toggle-ai-translation");
       expect(commandIds).toContain("toggle-auto-translate");
+      expect(commandIds).toContain("bilingual-translate-file");
 
       // DOM events (mouseup, keyup, scroll)
       expect(plugin.domEvents.length).toBe(3);
@@ -112,8 +114,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
       expect(scrollEvent?.options).toBe(true);
 
-      // Workspace event (active-leaf-change)
-      expect(plugin.events.length).toBe(1);
+      // Workspace events (active-leaf-change, editor-menu, file-menu)
+      expect(plugin.events.length).toBe(3);
 
       // Settings tab
       expect(plugin.settingTabs.length).toBe(1);
@@ -920,6 +922,52 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       );
       expect(plugin.sidebarView!.setResult).toHaveBeenCalledWith(aiUpdatedResult);
       expect((plugin as any).lastLookupResult).toEqual(aiUpdatedResult);
+    });
+  });
+
+  describe("Bilingual File Translation Command & Integration", () => {
+    it("should open bilingual translation modal when bilingual-translate-file is executed", async () => {
+      await plugin.onload();
+      const cmd = plugin.commands.find((c) => c.id === "bilingual-translate-file");
+      expect(cmd).toBeDefined();
+
+      const mockFile: any = {
+        name: "Notes.md",
+        basename: "Notes",
+        extension: "md",
+        path: "Notes.md",
+      };
+
+      vi.spyOn(app.workspace, "getActiveFile").mockReturnValue(mockFile);
+      const modalSpy = vi.spyOn(plugin, "openBilingualTranslationModal").mockResolvedValue(undefined);
+
+      const checkResult = cmd!.checkCallback!(true);
+      expect(checkResult).toBe(true);
+
+      cmd!.checkCallback!(false);
+      expect(modalSpy).toHaveBeenCalledWith(mockFile, undefined);
+    });
+
+    it("should correctly handle inplace edit and new file creation callback", async () => {
+      await plugin.onload();
+
+      const mockFile: any = {
+        name: "Guide.md",
+        basename: "Guide",
+        extension: "md",
+        path: "Folder/Guide.md",
+        parent: { path: "Folder" },
+      };
+
+      const mockEditor: any = {
+        getValue: () => "Guide content",
+        setValue: vi.fn(),
+      };
+
+      const modifySpy = vi.spyOn(app.vault, "modify").mockResolvedValue(undefined);
+      const createSpy = vi.spyOn(app.vault, "create").mockResolvedValue({ path: "Folder/Guide (Bilingual).md" } as any);
+
+      await plugin.openBilingualTranslationModal(mockFile, mockEditor);
     });
   });
 });

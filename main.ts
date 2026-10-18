@@ -1,4 +1,4 @@
-import { Plugin, Editor, MarkdownView, WorkspaceLeaf, Notice } from "obsidian";
+import { Plugin, Editor, MarkdownView, WorkspaceLeaf, Notice, TFile } from "obsidian";
 import { PluginSettings, DEFAULT_SETTINGS, LookupResult, DocumentContextMeta } from "./src/types";
 import { ProviderManager } from "./src/services/provider/ProviderManager";
 import { VocabService } from "./src/services/storage/VocabService";
@@ -7,6 +7,8 @@ import { FloatingPopover } from "./src/ui/FloatingPopover";
 import { EnglishStudySidebar, VIEW_TYPE_ENGLISH_STUDY } from "./src/ui/SidebarView";
 import { EnglishStudySettingTab, PluginWithSettings } from "./src/ui/SettingsTab";
 import { GeminiService } from "./src/services/provider/GeminiService";
+import { BilingualTranslationService } from "./src/services/translation/BilingualTranslationService";
+import { BilingualTranslationModal } from "./src/ui/BilingualTranslationModal";
 import { RectLike } from "./src/utils/domHelper";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
@@ -14,6 +16,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   providerManager!: ProviderManager;
   vocabService!: VocabService;
   geminiService!: GeminiService;
+  bilingualTranslationService!: BilingualTranslationService;
   floatingTrigger!: FloatingTrigger;
   floatingPopover!: FloatingPopover;
   sidebarView: EnglishStudySidebar | null = null;
@@ -24,6 +27,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     await this.loadSettings();
 
     this.geminiService = new GeminiService();
+    this.bilingualTranslationService = new BilingualTranslationService(undefined, this.geminiService);
     this.providerManager = new ProviderManager(this.settings);
     this.vocabService = new VocabService(this.app, this.settings);
     this.floatingTrigger = new FloatingTrigger();
@@ -140,7 +144,63 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
-    // 4. Đăng ký DOM events an toàn
+    // 3.7. Dịch song ngữ toàn bộ file Markdown (Bilingual File Translation)
+    this.addCommand({
+      id: "bilingual-translate-file",
+      name: "Dịch song ngữ file Markdown hiện tại (Bilingual File Translation)",
+      checkCallback: (checking: boolean) => {
+        const activeFile =
+          (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile()) ||
+          (this.app.workspace.getActiveViewOfType(MarkdownView) as any)?.file;
+        const canTranslate = Boolean(
+          activeFile &&
+            (activeFile.extension === "md" || (activeFile.name && activeFile.name.endsWith(".md")))
+        );
+        if (checking) return canTranslate;
+        if (canTranslate) {
+          const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+          const editor = activeView?.editor;
+          this.openBilingualTranslationModal(activeFile, editor);
+        }
+        return true;
+      },
+    });
+
+    // 4. Đăng ký Context Menus cho Editor và File Explorer
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view: MarkdownView) => {
+        menu.addItem((item: any) => {
+          item
+            .setTitle("Dịch song ngữ toàn bộ file")
+            .setIcon("languages")
+            .onClick(() => {
+              const file =
+                (view as any)?.file ||
+                (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
+              if (file) {
+                this.openBilingualTranslationModal(file, editor);
+              }
+            });
+        });
+      })
+    );
+
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu: any, file: any) => {
+        if (file && (file.extension === "md" || (file.name && file.name.endsWith(".md")))) {
+          menu.addItem((item: any) => {
+            item
+              .setTitle("Dịch song ngữ file Markdown")
+              .setIcon("languages")
+              .onClick(() => {
+                this.openBilingualTranslationModal(file);
+              });
+          });
+        }
+      })
+    );
+
+    // 5. Đăng ký DOM events an toàn
     if (typeof document !== "undefined") {
       this.registerDomEvent(document, "mouseup", () => {
         this.handleSelectionDebounced();
@@ -165,14 +225,14 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       );
     }
 
-    // 5. Tự động ẩn UI nổi khi active leaf thay đổi
+    // 6. Tự động ẩn UI nổi khi active leaf thay đổi
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
         this.dismissFloatingUi();
       })
     );
 
-    // 6. Đăng ký Setting Tab
+    // 7. Đăng ký Setting Tab
     this.addSettingTab(new EnglishStudySettingTab(this.app, this));
   }
 
@@ -643,4 +703,48 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       height: 20,
     };
   }
+
+  /**
+   * Mở Modal cấu hình và điều khiển dịch song ngữ toàn bộ file Markdown
+   */
+  async openBilingualTranslationModal(file: TFile, editor?: Editor): Promise<void> {
+    const fileContent = editor ? editor.getValue() : await this.app.vault.read(file);
+    const docContext = this.extractDocumentContext(editor);
+
+    const modal = new BilingualTranslationModal({
+      app: this.app,
+      settings: this.settings,
+      fileName: file.name,
+      fileContent,
+      docContext,
+      translationService: this.bilingualTranslationService,
+      onComplete: async (newContent: string, destination: "inplace" | "new_file") => {
+        if (destination === "inplace") {
+          if (editor) {
+            editor.setValue(newContent);
+            await this.app.vault.modify(file, newContent);
+          } else {
+            await this.app.vault.modify(file, newContent);
+          }
+        } else {
+          const dir =
+            file.parent && file.parent.path && file.parent.path !== "/"
+              ? `${file.parent.path}/`
+              : "";
+          const base = file.basename || file.name.replace(/\.[^/.]+$/, "");
+          const newPath = `${dir}${base} (Bilingual).md`;
+          const newFile = await this.app.vault.create(newPath, newContent);
+          const leaf = this.app.workspace.getLeaf
+            ? this.app.workspace.getLeaf(true)
+            : this.app.workspace.activeLeaf;
+          if (leaf && leaf.openFile) {
+            await leaf.openFile(newFile);
+          }
+        }
+      },
+    });
+
+    modal.open();
+  }
 }
+

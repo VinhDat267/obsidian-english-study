@@ -125,6 +125,7 @@ describe("Scaffolding and Mocking Environment", () => {
       expect(DEFAULT_SETTINGS.enableAiGrammar).toBe(false);
       expect(DEFAULT_SETTINGS.preferredAccent).toBe("us");
       expect(DEFAULT_SETTINGS.autoPlayAudio).toBe(false);
+      expect(DEFAULT_SETTINGS.bilingualTranslationStyle).toBe("blockquote");
     });
 
     it("should support LookupResult data contract", () => {

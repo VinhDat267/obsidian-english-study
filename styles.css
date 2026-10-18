@@ -1136,3 +1136,81 @@
     animation: none !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Bilingual File Translation Modal & Progress
+   -------------------------------------------------------------------------- */
+.bilingual-modal-info {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--english-study-radius-md, 8px);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: var(--font-ui-small, 13px);
+  line-height: 1.5;
+}
+
+.bilingual-modal-info p {
+  margin: 4px 0;
+}
+
+.bilingual-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.bilingual-progress-container {
+  padding: 12px 4px;
+}
+
+.bilingual-progress-title {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium, 14px);
+}
+
+.bilingual-progress-status {
+  font-size: var(--font-ui-small, 12px);
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.bilingual-progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: var(--background-secondary);
+  border-radius: var(--english-study-radius-pill, 9999px);
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.bilingual-progress-fill {
+  height: 100%;
+  background-color: var(--interactive-accent);
+  border-radius: var(--english-study-radius-pill, 9999px);
+  transition: width 0.25s ease-out;
+}
+
+.bilingual-progress-preview {
+  font-size: var(--font-ui-smaller, 11.5px);
+  color: var(--text-muted);
+  background-color: var(--background-secondary);
+  border-left: 3px solid var(--interactive-accent);
+  padding: 8px 12px;
+  border-radius: var(--english-study-radius-sm, 4px);
+  max-height: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 16px;
+}
+
+.bilingual-progress-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+

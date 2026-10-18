@@ -62,6 +62,56 @@ export interface PluginSettings {
   // Nhóm 4: Phát âm
   preferredAccent: PreferredAccent;
   autoPlayAudio: boolean;
+
+  // Nhóm 5: Dịch song ngữ toàn bộ file (Bilingual File Translation)
+  bilingualTranslationStyle: BilingualStyle;
+}
+
+export type BilingualStyle = "blockquote" | "colored" | "highlight" | "bold_prefix";
+
+export type MarkdownBlockType =
+  | "frontmatter"
+  | "code_block"
+  | "math_block"
+  | "table"
+  | "heading"
+  | "paragraph"
+  | "list_item"
+  | "multiple_choice"
+  | "blank_line"
+  | "existing_translation"
+  | "raw_other";
+
+export interface MarkdownBlock {
+  id: string;
+  type: MarkdownBlockType;
+  rawText: string;
+  translatableText?: string;
+  translatedText?: string;
+  skipTranslation: boolean;
+  indent?: string;
+  listPrefix?: string;
+}
+
+export interface BilingualProgressMeta {
+  current: number;
+  total: number;
+  percent: number;
+  currentText: string;
+}
+
+export interface BilingualTranslationOptions {
+  engine: "google" | "gemini";
+  targetLang?: string;
+  sourceLang?: string;
+  apiKey?: string;
+  customModel?: string;
+  customEndpointUrl?: string;
+  docContext?: DocumentContextMeta;
+  signal?: AbortSignal;
+  batchSize?: number;
+  delayMs?: number;
+  onProgress?: (progress: BilingualProgressMeta) => void;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -80,4 +130,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   enableAiGrammar: false,
   preferredAccent: "us",
   autoPlayAudio: false,
+  bilingualTranslationStyle: "blockquote",
 };

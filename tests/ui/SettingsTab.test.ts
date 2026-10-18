@@ -25,11 +25,11 @@ describe("EnglishStudySettingTab", () => {
     settingsTab = new EnglishStudySettingTab(app, pluginMock);
   });
 
-  it("should render all 5 setting groups and headings", () => {
+  it("should render all 6 setting groups and headings", () => {
     settingsTab.display();
 
     const headings = Setting.instances.filter((s) => s.isHeading);
-    expect(headings.length).toBe(5);
+    expect(headings.length).toBe(6);
 
     const headingNames = headings.map((h) => h.name);
     expect(headingNames).toContain("TƯƠNG TÁC ĐỌC (TRIGGER & DISPLAY)");
@@ -37,6 +37,24 @@ describe("EnglishStudySettingTab", () => {
     expect(headingNames).toContain("SỔ TỪ VỰNG (VOCABULARY VAULT)");
     expect(headingNames).toContain("DỊCH THUẬT & TRÍ TUỆ NHÂN TẠO (AI & ENGINES)");
     expect(headingNames).toContain("PHÁT ÂM (AUDIO)");
+    expect(headingNames).toContain("DỊCH SONG NGỮ TOÀN BỘ FILE (BILINGUAL FILE TRANSLATION)");
+  });
+
+  describe("Group: Bilingual File Translation", () => {
+    it("should update bilingualTranslationStyle and save settings", async () => {
+      settingsTab.display();
+
+      const styleSetting = Setting.instances.find((s) =>
+        s.name.includes("Phong cách hiển thị song ngữ")
+      );
+      expect(styleSetting).toBeDefined();
+
+      const dropdown = styleSetting!.dropdownComponents[0];
+      await dropdown._onChange("colored");
+
+      expect(pluginMock.settings.bilingualTranslationStyle).toBe("colored");
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
   });
 
   describe("Group: Multilingual Settings", () => {
