@@ -274,6 +274,7 @@ Các quyết định được lưu lại từ execution ledger (theo thứ tự)
 5. **Giữ nền accent 20%, chữ 600 và viền 4px:** đúng thiết kế đã duyệt; chi phí: mức nhấn có thể khác theo theme.
 6. **Giữ hai quyết định session/Vitest sau review:** không có lỗi mới từ reviewer cho hai lựa chọn này; chi phí vẫn là batch nhỏ hơn và resolve test khác.
 7. **Không sửa lỗi typecheck baseline ngoài phạm vi:** không thêm diagnostic mới; chi phí: toàn repository vẫn chưa typecheck sạch.
+8. **Giữ workspace tạm bị Git ignore:** lệnh dọn đúng thư mục của plan bị kiểm duyệt tự động từ chối với thông báo `blocked by policy`; không thử cách xóa khác. Chi phí: còn artifact kiểm thử/review cục bộ trong `.superpowers/sdd/2026-10-18-immersive-reading-translation/`. Server và tab preview đã dừng/đóng.
 
 ## References
 
