@@ -29,6 +29,8 @@ export const requestUrl = vi.fn(
   }
 );
 
+export const setIcon = vi.fn((parent: HTMLElement, iconId: string) => {});
+
 export class Notice {
   public static instances: Notice[] = [];
   public message: string;
