@@ -162,8 +162,8 @@ Highlight any text in **Edit Mode** or **Reading Mode** $\to$ view instant defin
 ### Option 2: Build From Source
 ```bash
 # 1. Clone repository
-git clone https://github.com/VinhDat267/obsidian-english-study.git
-cd obsidian-english-study
+git clone https://github.com/VinhDat267/obsidian-polyglot-study.git
+cd obsidian-polyglot-study
 
 # 2. Install dependencies
 npm install
