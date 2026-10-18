@@ -405,7 +405,8 @@ export class FloatingPopover {
       saveBtn.disabled = true;
       saveText.textContent = "Đang lưu...";
       try {
-        await callbacks.onSave(result);
+        const activeRes = this.currentResult || result;
+        await callbacks.onSave(activeRes);
         saveText.textContent = "Đã lưu ✓";
         saveBtn.classList.add("saved");
         try {
@@ -446,9 +447,11 @@ export class FloatingPopover {
     copyBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const textToCopy = `${result.query}${
-        result.phonetic ? ` [${result.phonetic}]` : ""
-      }\n- Nghĩa: ${result.vietnameseTranslation}${
+      const activeRes = this.currentResult || result;
+      const displayMeaning = activeRes.aiTranslation || activeRes.vietnameseTranslation;
+      const textToCopy = `${activeRes.query}${
+        activeRes.phonetic ? ` [${activeRes.phonetic}]` : ""
+      }\n- Nghĩa: ${displayMeaning}${
         contextText ? `\n- Ngữ cảnh: "${contextText}"` : ""
       }`;
 

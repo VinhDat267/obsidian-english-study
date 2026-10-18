@@ -379,6 +379,10 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         {
           docContext,
           onAiUpdate: (updatedResult: LookupResult) => {
+            // Bảo vệ chống race condition: Bỏ qua callback của từ cũ nếu người dùng đã tra từ mới
+            if (this.lastLookupResult && this.lastLookupResult.query !== updatedResult.query) {
+              return;
+            }
             this.lastLookupResult = updatedResult;
             this.floatingPopover.updateAiContent(updatedResult, {
               enableAiGrammar: this.settings.enableAiGrammar,

@@ -51,4 +51,21 @@ describe("markdownHelper", () => {
     expect(html).toContain("<strong>Nghĩa trong ngành:</strong>");
     expect(html).toContain("<strong>Ngữ pháp:</strong>");
   });
+
+  it("should NOT treat a line starting with bold text (**text**) as a bullet point", () => {
+    const markdown = "**Pipeline** là chuỗi xử lý tự động trong kỹ thuật phần mềm.";
+    const html = renderMarkdownToHtml(markdown);
+
+    expect(html).not.toContain('<div class="vocab-markdown-bullet">');
+    expect(html).toContain('<div class="vocab-markdown-paragraph">');
+    expect(html).toContain("<strong>Pipeline</strong>");
+  });
+
+  it("should format hyphen and asterisk lists correctly with bold", () => {
+    const markdown = "- **Điểm 1:** Chi tiết 1\n* **Điểm 2:** Chi tiết 2";
+    const html = renderMarkdownToHtml(markdown);
+
+    expect(html).toContain("<strong>Điểm 1:</strong>");
+    expect(html).toContain("<strong>Điểm 2:</strong>");
+  });
 });

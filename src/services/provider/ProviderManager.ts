@@ -335,9 +335,11 @@ export class ProviderManager {
         }
       } finally {
         result.aiLoading = false;
-        this.cache.set(cacheKey, result);
-        if (onAiUpdate) {
-          onAiUpdate(result);
+        if (!controller.signal.aborted) {
+          this.cache.set(cacheKey, result);
+          if (onAiUpdate) {
+            onAiUpdate(result);
+          }
         }
       }
     };

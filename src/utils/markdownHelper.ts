@@ -4,6 +4,7 @@
  */
 
 function escapeHtml(text: string): string {
+  if (!text) return "";
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -13,6 +14,7 @@ function escapeHtml(text: string): string {
 }
 
 export function formatInlineMarkdown(text: string): string {
+  if (!text) return "";
   let escaped = escapeHtml(text);
 
   // 1. Inline code: `code`
@@ -41,8 +43,8 @@ export function renderMarkdownToHtml(markdownText: string): string {
       continue;
     }
 
-    // Kiểm tra dòng gạch đầu dòng: •, *, - hoặc số 1., 2.
-    const bulletMatch = trimmed.match(/^([•\*\-]\s*|\d+\.\s*)(.*)$/);
+    // Kiểm tra dòng gạch đầu dòng: •, hoặc - / * theo sau bởi khoảng trắng, hoặc số 1. / 1)
+    const bulletMatch = trimmed.match(/^([•]\s*|[\*\-]\s+|\d+[\.\)]\s+)(.*)$/);
 
     if (bulletMatch) {
       const content = bulletMatch[2];
