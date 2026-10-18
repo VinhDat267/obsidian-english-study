@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-english-study",
+  "name": "English Study Assistant",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Personal English learning assistant: dictionary, translation, and vocabulary note manager.",
+  "author": "Personal",
+  "isDesktopOnly": false
+}
