@@ -30,11 +30,13 @@ export const requestUrl = vi.fn(
 );
 
 export class Notice {
+  public static instances: Notice[] = [];
   public message: string;
   public timeout?: number;
   constructor(message: string, timeout?: number) {
     this.message = message;
     this.timeout = timeout;
+    Notice.instances.push(this);
   }
   hide(): void {}
 }
@@ -58,14 +60,20 @@ export class TFolder extends TAbstractFile {
 
 export class Vault {
   private files: Map<string, { file: TFile; content: string }> = new Map();
+  private folders: Map<string, TFolder> = new Map();
 
   getAbstractFileByPath(path: string): TAbstractFile | null {
-    const entry = this.files.get(path);
-    return entry ? entry.file : null;
+    const normalized = path.replace(/^\/+|\/+$/g, "");
+    const fileEntry = this.files.get(normalized) || this.files.get(path);
+    if (fileEntry) return fileEntry.file;
+    const folderEntry = this.folders.get(normalized) || this.folders.get(path);
+    if (folderEntry) return folderEntry;
+    return null;
   }
 
   async read(file: TFile): Promise<string> {
-    const entry = this.files.get(file.path);
+    const normalized = file.path.replace(/^\/+|\/+$/g, "");
+    const entry = this.files.get(normalized) || this.files.get(file.path);
     return entry ? entry.content : "";
   }
 
@@ -74,17 +82,32 @@ export class Vault {
   }
 
   async create(path: string, data: string): Promise<TFile> {
+    const normalized = path.replace(/^\/+|\/+$/g, "");
     const file = new TFile();
-    file.path = path;
-    file.name = path.split("/").pop() || path;
+    file.path = normalized;
+    file.name = normalized.split("/").pop() || normalized;
     file.basename = file.name.replace(/\.[^/.]+$/, "");
     file.vault = this;
-    this.files.set(path, { file, content: data });
+    this.files.set(normalized, { file, content: data });
     return file;
   }
 
+  async createFolder(path: string): Promise<TFolder> {
+    const normalized = path.replace(/^\/+|\/+$/g, "");
+    if (this.folders.has(normalized)) {
+      throw new Error("Folder already exists.");
+    }
+    const folder = new TFolder();
+    folder.path = normalized;
+    folder.name = normalized.split("/").pop() || normalized;
+    folder.vault = this;
+    this.folders.set(normalized, folder);
+    return folder;
+  }
+
   async modify(file: TFile, data: string): Promise<void> {
-    this.files.set(file.path, { file, content: data });
+    const normalized = file.path.replace(/^\/+|\/+$/g, "");
+    this.files.set(normalized, { file, content: data });
   }
 
   async process(file: TFile, fn: (data: string) => string): Promise<string> {
@@ -95,7 +118,11 @@ export class Vault {
   }
 
   async delete(file: TFile): Promise<void> {
+    const normalized = file.path.replace(/^\/+|\/+$/g, "");
+    this.files.delete(normalized);
     this.files.delete(file.path);
+    this.folders.delete(normalized);
+    this.folders.delete(file.path);
   }
 }
 
