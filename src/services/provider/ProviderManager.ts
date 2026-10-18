@@ -156,7 +156,7 @@ export class ProviderManager {
         Promise<string | null>,
         Promise<string | null>
       ] = [
-        this.freeDict.lookup(cleanText),
+        this.freeDict.lookup(cleanText, effectiveSettings.preferredAccent),
         this.googleTranslate.translate(
           cleanText,
           "vi",
@@ -172,6 +172,10 @@ export class ProviderManager {
       ];
 
       const [dictSettled, gtSettled, geminiSettled] = await Promise.allSettled(promises);
+
+      if (controller.signal.aborted) {
+        throw new DOMException("The lookup operation was aborted", "AbortError");
+      }
 
       if (dictSettled.status === "fulfilled" && dictSettled.value) {
         phonetic = dictSettled.value.phonetic;
@@ -196,6 +200,9 @@ export class ProviderManager {
           contextSentenceClean,
           effectiveSettings.geminiApiKey
         );
+        if (controller.signal.aborted) {
+          throw new DOMException("The lookup operation was aborted", "AbortError");
+        }
         if (geminiRes) {
           vietnameseTranslation = geminiRes;
           aiGrammarNote = geminiRes;
@@ -206,6 +213,9 @@ export class ProviderManager {
             "vi",
             effectiveSettings.translateEndpointUrl
           );
+          if (controller.signal.aborted) {
+            throw new DOMException("The lookup operation was aborted", "AbortError");
+          }
           vietnameseTranslation = gt || "";
         }
       } else {
@@ -214,8 +224,15 @@ export class ProviderManager {
           "vi",
           effectiveSettings.translateEndpointUrl
         );
+        if (controller.signal.aborted) {
+          throw new DOMException("The lookup operation was aborted", "AbortError");
+        }
         vietnameseTranslation = gt || "";
       }
+    }
+
+    if (controller.signal.aborted) {
+      throw new DOMException("The lookup operation was aborted", "AbortError");
     }
 
     // 6. Tổng hợp dữ liệu thành LookupResult chuẩn hóa

@@ -451,9 +451,57 @@ describe("ProviderManager", () => {
     });
   });
 
-  describe("cancelPending", () => {
-    it("should abort active controller without throwing errors", () => {
+  describe("cancelPending and AbortController", () => {
+    it("should abort active controller without throwing errors when idle", () => {
       expect(() => manager.cancelPending()).not.toThrow();
+    });
+
+    it("should cause an in-flight lookup to reject with AbortError when cancelPending is called", async () => {
+      let resolveRequest: any;
+      const deferredPromise = new Promise<any>((resolve) => {
+        resolveRequest = resolve;
+      });
+
+      vi.mocked(requestUrl).mockImplementation(async () => {
+        return deferredPromise;
+      });
+
+      const lookupPromise = manager.lookup("slowword", "This is a slowword in context.");
+
+      // Cancel while in-flight
+      manager.cancelPending();
+
+      // Resolve the network call
+      resolveRequest({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: [],
+        text: "[]",
+      });
+
+      await expect(lookupPromise).rejects.toThrow("The lookup operation was aborted");
+      await expect(lookupPromise).rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    it("should pass effective preferredAccent to FreeDictService.lookup", async () => {
+      const freeDictSpy = vi.spyOn(manager["freeDict"], "lookup");
+      vi.mocked(requestUrl).mockResolvedValue({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: [],
+        text: "[]",
+      });
+
+      const customSettings = {
+        ...DEFAULT_SETTINGS,
+        preferredAccent: "uk" as const,
+      };
+
+      await manager.lookup("colour", "The colour was red.", undefined, customSettings);
+
+      expect(freeDictSpy).toHaveBeenCalledWith("colour", "uk");
     });
   });
 });

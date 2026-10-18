@@ -107,7 +107,7 @@ export class FreeDictService extends BaseProvider {
    *      + Nếu tra từ gốc thành công: gán isStemFallback = true, originalQuery = word.
    * 4. Trả về null nếu không tìm thấy hoặc lỗi mạng.
    */
-  async lookup(word: string): Promise<FreeDictResult | null> {
+  async lookup(word: string, accent?: "us" | "uk"): Promise<FreeDictResult | null> {
     const cleanWord = word ? word.trim().toLowerCase() : "";
     if (!cleanWord) {
       return null;
@@ -118,7 +118,7 @@ export class FreeDictService extends BaseProvider {
 
     const json = this.extractJson(res);
     if (res && res.status === 200 && Array.isArray(json) && json.length > 0) {
-      const parsed = this.parseEntries(json, cleanWord);
+      const parsed = this.parseEntries(json, cleanWord, accent);
       if (parsed) {
         return parsed;
       }
@@ -133,7 +133,7 @@ export class FreeDictService extends BaseProvider {
         const stemJson = this.extractJson(stemRes);
 
         if (stemRes && stemRes.status === 200 && Array.isArray(stemJson) && stemJson.length > 0) {
-          const parsed = this.parseEntries(stemJson, candidate);
+          const parsed = this.parseEntries(stemJson, candidate, accent);
           if (parsed) {
             return {
               ...parsed,
@@ -163,7 +163,11 @@ export class FreeDictService extends BaseProvider {
     return null;
   }
 
-  private parseEntries(entries: any[], queryWord: string): FreeDictResult | null {
+  private parseEntries(
+    entries: any[],
+    queryWord: string,
+    accent?: "us" | "uk"
+  ): FreeDictResult | null {
     if (!Array.isArray(entries) || entries.length === 0) {
       return null;
     }
@@ -216,7 +220,8 @@ export class FreeDictService extends BaseProvider {
         (a) => a.includes("-uk.mp3") || a.endsWith("-uk.mp3")
       );
 
-      if (this.preferredAccent === "uk") {
+      const targetAccent = accent || this.preferredAccent;
+      if (targetAccent === "uk") {
         audioUrl =
           ukAudio ||
           usAudio ||

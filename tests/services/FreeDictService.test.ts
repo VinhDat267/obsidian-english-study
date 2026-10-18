@@ -109,6 +109,36 @@ describe("FreeDictService", () => {
       expect(result?.audioUrl).toBe("https://api.dictionaryapi.dev/media/pronunciations/en/water-uk.mp3");
     });
 
+    it("should prioritize accent provided as argument over constructor accent", async () => {
+      const defaultService = new FreeDictService("us");
+      const mockResponse = [
+        {
+          word: "water",
+          phonetics: [
+            { audio: "https://api.dictionaryapi.dev/media/pronunciations/en/water-us.mp3" },
+            { audio: "https://api.dictionaryapi.dev/media/pronunciations/en/water-uk.mp3" },
+          ],
+          meanings: [
+            {
+              partOfSpeech: "noun",
+              definitions: [{ definition: "A liquid" }],
+            },
+          ],
+        },
+      ];
+
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockResponse,
+        text: JSON.stringify(mockResponse),
+      });
+
+      const result = await defaultService.lookup("water", "uk");
+      expect(result?.audioUrl).toBe("https://api.dictionaryapi.dev/media/pronunciations/en/water-uk.mp3");
+    });
+
     it("should fallback to phonetic text in phonetics array if entry.phonetic is missing", async () => {
       const mockResponse = [
         {
