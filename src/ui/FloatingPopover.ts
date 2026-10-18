@@ -11,6 +11,8 @@ export interface PopoverCallbacks {
 export class FloatingPopover {
   private element: HTMLElement | null = null;
   private currentResult: LookupResult | null = null;
+  private currentQuery: string | null = null;
+  private customPosition: { left: number; top: number } | null = null;
   private isPlayingAudio: boolean = false;
   private currentAudio: HTMLAudioElement | null = null;
   private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -18,12 +20,13 @@ export class FloatingPopover {
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private dragMouseDownHandler: ((e: MouseEvent) => void) | null = null;
   private dragMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
-  private dragMouseUpHandler: ((e: MouseEvent) => void) | null = null;
+  private dragMouseUpHandler: ((e?: MouseEvent) => void) | null = null;
   private isDragging: boolean = false;
+  private justDraggedTimestamp: number = 0;
 
   /**
    * Hiển thị Card Popover:
-   * 1. Tính toán vị trí bằng calculatePosition(rect, ...).
+   * 1. Tính toán vị trí bằng calculatePosition(rect, ...) hoặc sử dụng customPosition nếu đã di chuyển.
    * 2. Header:
    *    - Từ / Cụm từ (Font lớn, đậm)
    *    - Phiên âm IPA (nếu có)
@@ -50,17 +53,23 @@ export class FloatingPopover {
     result: LookupResult,
     callbacks: PopoverCallbacks
   ): void {
+    const preservedPosition = this.customPosition;
     this.hide();
+    this.customPosition = preservedPosition;
 
     this.currentResult = result;
+    this.currentQuery = result.query;
 
     const popover = document.createElement("div");
     popover.className = "english-study-popover";
     popover.setAttribute("role", "dialog");
     popover.setAttribute("aria-label", "Chi tiết từ vựng");
 
-    // Prevent clicks inside popover from propagating to document
+    // Prevent clicks and mouse releases inside popover from propagating to document
     popover.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+    popover.addEventListener("mouseup", (e: MouseEvent) => {
       e.stopPropagation();
     });
 
@@ -401,9 +410,20 @@ export class FloatingPopover {
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
 
-    const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
-    popover.style.top = `${pos.top}px`;
-    popover.style.left = `${pos.left}px`;
+    if (this.customPosition) {
+      const padding = 8;
+      const maxLeft = Math.max(padding, vw - popoverWidth - padding);
+      const maxTop = Math.max(padding, vh - popoverHeight - padding);
+      const clampedLeft = Math.max(padding, Math.min(this.customPosition.left, maxLeft));
+      const clampedTop = Math.max(padding, Math.min(this.customPosition.top, maxTop));
+      popover.style.top = `${clampedTop}px`;
+      popover.style.left = `${clampedLeft}px`;
+      this.customPosition = { left: clampedLeft, top: clampedTop };
+    } else {
+      const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
+      popover.style.top = `${pos.top}px`;
+      popover.style.left = `${pos.left}px`;
+    }
     popover.style.visibility = "visible";
 
     this.element = popover;
@@ -441,7 +461,13 @@ export class FloatingPopover {
     query: string,
     callbacks: { onClose?: () => void }
   ): void {
+    if (this.currentQuery !== query) {
+      this.customPosition = null;
+    }
+    const preservedPosition = this.customPosition;
     this.hide();
+    this.customPosition = preservedPosition;
+    this.currentQuery = query;
 
     const popover = document.createElement("div");
     popover.className = "english-study-popover popover-loading";
@@ -449,7 +475,11 @@ export class FloatingPopover {
     popover.setAttribute("aria-live", "polite");
     popover.setAttribute("aria-label", `Đang tra cứu ${query}`);
 
+    // Prevent clicks and mouse releases inside popover from propagating to document
     popover.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+    popover.addEventListener("mouseup", (e: MouseEvent) => {
       e.stopPropagation();
     });
 
@@ -536,9 +566,20 @@ export class FloatingPopover {
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
 
-    const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
-    popover.style.top = `${pos.top}px`;
-    popover.style.left = `${pos.left}px`;
+    if (this.customPosition) {
+      const padding = 8;
+      const maxLeft = Math.max(padding, vw - popoverWidth - padding);
+      const maxTop = Math.max(padding, vh - popoverHeight - padding);
+      const clampedLeft = Math.max(padding, Math.min(this.customPosition.left, maxLeft));
+      const clampedTop = Math.max(padding, Math.min(this.customPosition.top, maxTop));
+      popover.style.top = `${clampedTop}px`;
+      popover.style.left = `${clampedLeft}px`;
+      this.customPosition = { left: clampedLeft, top: clampedTop };
+    } else {
+      const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
+      popover.style.top = `${pos.top}px`;
+      popover.style.left = `${pos.left}px`;
+    }
     popover.style.visibility = "visible";
 
     this.element = popover;
@@ -599,6 +640,8 @@ export class FloatingPopover {
     }
 
     this.currentResult = null;
+    this.currentQuery = null;
+    this.customPosition = null;
   }
 
   isVisible(): boolean {
@@ -611,6 +654,26 @@ export class FloatingPopover {
 
   getElement(): HTMLElement | null {
     return this.element;
+  }
+
+  getCurrentQuery(): string | null {
+    return this.currentQuery;
+  }
+
+  getCustomPosition(): { left: number; top: number } | null {
+    return this.customPosition ? { ...this.customPosition } : null;
+  }
+
+  resetCustomPosition(): void {
+    this.customPosition = null;
+  }
+
+  isUserDragging(): boolean {
+    return this.isDragging;
+  }
+
+  wasJustDragged(thresholdMs: number = 400): boolean {
+    return Date.now() - this.justDraggedTimestamp < thresholdMs;
   }
 
   private toggleAudio(
@@ -730,19 +793,28 @@ export class FloatingPopover {
       if (e.preventDefault) {
         e.preventDefault();
       }
+      if (e.stopPropagation) {
+        e.stopPropagation();
+      }
       this.isDragging = true;
       popover.classList.add("is-dragging");
 
       const startX = e.clientX;
       const startY = e.clientY;
-      const initialLeft = parseFloat(popover.style.left) || 0;
-      const initialTop = parseFloat(popover.style.top) || 0;
+      const rectBounds = popover.getBoundingClientRect();
+      const initialLeft = parseFloat(popover.style.left) || rectBounds.left || 0;
+      const initialTop = parseFloat(popover.style.top) || rectBounds.top || 0;
+      let hasActuallyMoved = false;
 
       this.dragMouseMoveHandler = (moveEvent: MouseEvent) => {
         if (!this.isDragging) return;
 
         const deltaX = moveEvent.clientX - startX;
         const deltaY = moveEvent.clientY - startY;
+
+        if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+          hasActuallyMoved = true;
+        }
 
         let newLeft = initialLeft + deltaX;
         let newTop = initialTop + deltaY;
@@ -763,9 +835,14 @@ export class FloatingPopover {
 
         popover.style.left = `${newLeft}px`;
         popover.style.top = `${newTop}px`;
+        this.customPosition = { left: newLeft, top: newTop };
       };
 
-      this.dragMouseUpHandler = () => {
+      this.dragMouseUpHandler = (upEvent?: MouseEvent) => {
+        this.justDraggedTimestamp = Date.now();
+        if (upEvent && typeof upEvent.stopPropagation === "function") {
+          upEvent.stopPropagation();
+        }
         this.isDragging = false;
         popover.classList.remove("is-dragging");
         this.removeDragWindowListeners();
@@ -773,7 +850,8 @@ export class FloatingPopover {
 
       if (typeof window !== "undefined") {
         window.addEventListener("mousemove", this.dragMouseMoveHandler);
-        window.addEventListener("mouseup", this.dragMouseUpHandler);
+        window.addEventListener("mouseup", this.dragMouseUpHandler, true);
+        window.addEventListener("mouseup", this.dragMouseUpHandler, false);
       }
     };
 
@@ -787,7 +865,8 @@ export class FloatingPopover {
         this.dragMouseMoveHandler = null;
       }
       if (this.dragMouseUpHandler) {
-        window.removeEventListener("mouseup", this.dragMouseUpHandler);
+        window.removeEventListener("mouseup", this.dragMouseUpHandler, true);
+        window.removeEventListener("mouseup", this.dragMouseUpHandler, false);
         this.dragMouseUpHandler = null;
       }
     }

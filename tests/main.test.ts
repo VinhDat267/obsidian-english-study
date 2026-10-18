@@ -467,7 +467,64 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
 
       expect(performLookupSpy).toHaveBeenCalledWith(editor);
     });
+
+    it("should NOT re-trigger lookup or reset popover when popover is being dragged or was just dragged", async () => {
+      plugin.settings.autoTranslateOnSelection = true;
+      plugin.settings.triggerMode = "auto-popup";
+      editor.setSelectionText("authentication");
+
+      const performLookupSpy = vi.spyOn(plugin, "performLookup").mockResolvedValue(null);
+
+      // Initial selection lookup
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+      expect(performLookupSpy).toHaveBeenCalledTimes(1);
+
+      performLookupSpy.mockClear();
+
+      // Now simulate user dragging the popover
+      vi.spyOn(plugin.floatingPopover, "wasJustDragged").mockReturnValue(true);
+
+      // Mouseup fires when drag ends
+      const mouseupEvent = plugin.domEvents.find((e) => e.type === "mouseup");
+      expect(mouseupEvent).toBeDefined();
+      mouseupEvent!.callback();
+
+      vi.advanceTimersByTime(150);
+
+      // performLookup must NOT have been called again!
+      expect(performLookupSpy).not.toHaveBeenCalled();
+    });
+
+    it("should NOT re-trigger lookup if popover is already open and showing the current selected text", async () => {
+      plugin.settings.autoTranslateOnSelection = true;
+      plugin.settings.triggerMode = "auto-popup";
+      editor.setSelectionText("authentication");
+
+      const performLookupSpy = vi.spyOn(plugin, "performLookup").mockResolvedValue(null);
+
+      // Initial lookup
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+      expect(performLookupSpy).toHaveBeenCalledTimes(1);
+
+      performLookupSpy.mockClear();
+
+      // Popover is currently visible and showing "authentication"
+      vi.spyOn(plugin.floatingPopover, "isVisible").mockReturnValue(true);
+      vi.spyOn(plugin.floatingPopover, "getCurrentQuery").mockReturnValue("authentication");
+
+      // Another mouseup occurs (e.g. user clicked inside popover or on drag handle)
+      const mouseupEvent = plugin.domEvents.find((e) => e.type === "mouseup");
+      mouseupEvent!.callback();
+
+      vi.advanceTimersByTime(150);
+
+      // performLookup must NOT be triggered again
+      expect(performLookupSpy).not.toHaveBeenCalled();
+    });
   });
+
 
   describe("Commands Verification", () => {
     let editor: Editor;

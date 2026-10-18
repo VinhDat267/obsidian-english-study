@@ -632,5 +632,92 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
       expect(popover.isVisible()).toBe(false);
     });
+
+    it("should preserve dragged position when transitioning from showLoading to show", () => {
+      const popover = new FloatingPopover();
+      const rect = { top: 100, bottom: 120, left: 200, right: 280 };
+      popover.showLoading(rect, "authentication", { onClose: vi.fn() });
+
+      const el = popover.getElement()!;
+      const header = el.querySelector(".popover-header")!;
+      const initialLeft = parseInt(el.style.left, 10);
+      const initialTop = parseInt(el.style.top, 10);
+
+      // Drag loading card by (+150, +100)
+      header.dispatchEvent({
+        type: "mousedown",
+        clientX: 300,
+        clientY: 200,
+        button: 0,
+        target: header,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+      window.dispatchEvent({
+        type: "mousemove",
+        clientX: 450,
+        clientY: 300,
+      });
+      window.dispatchEvent({
+        type: "mouseup",
+        clientX: 450,
+        clientY: 300,
+      });
+
+      expect(parseInt(el.style.left, 10)).toBe(initialLeft + 150);
+      expect(parseInt(el.style.top, 10)).toBe(initialTop + 100);
+
+      // Now lookup finishes and calls show() with result
+      popover.show(rect, mockResult, { onSave: vi.fn() });
+
+      const newEl = popover.getElement()!;
+      // New element must stay at the dragged position, NOT snap back to rect!
+      expect(parseInt(newEl.style.left, 10)).toBe(initialLeft + 150);
+      expect(parseInt(newEl.style.top, 10)).toBe(initialTop + 100);
+
+      popover.hide();
+    });
+
+    it("should report isUserDragging and wasJustDragged accurately", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = popover.getElement()!;
+      const header = el.querySelector(".popover-header")!;
+
+      expect(popover.isUserDragging()).toBe(false);
+      expect(popover.wasJustDragged()).toBe(false);
+
+      // Start drag
+      header.dispatchEvent({
+        type: "mousedown",
+        clientX: 300,
+        clientY: 200,
+        button: 0,
+        target: header,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isUserDragging()).toBe(true);
+
+      // End drag
+      window.dispatchEvent({
+        type: "mouseup",
+        clientX: 300,
+        clientY: 200,
+      });
+
+      expect(popover.isUserDragging()).toBe(false);
+      expect(popover.wasJustDragged()).toBe(true);
+
+      popover.hide();
+      expect(popover.getCustomPosition()).toBeNull();
+    });
   });
 });
+

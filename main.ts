@@ -349,6 +349,14 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   private processSelection(): void {
+    // 0. Nếu popover đang được kéo hoặc vừa mới kết thúc kéo -> tuyệt đối không re-trigger selection
+    if (
+      this.floatingPopover &&
+      (this.floatingPopover.isUserDragging() || this.floatingPopover.wasJustDragged())
+    ) {
+      return;
+    }
+
     const activeView =
       (this.app.workspace.getActiveViewOfType &&
         this.app.workspace.getActiveViewOfType(MarkdownView)) ||
@@ -395,6 +403,15 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     if (!selectedText) {
       this.dismissFloatingTrigger();
+      return;
+    }
+
+    // 3. Nếu Popover đang hiển thị và đã chứa nội dung tra cứu của chính từ/câu này -> giữ nguyên vị trí, không re-lookup
+    if (
+      this.floatingPopover &&
+      this.floatingPopover.isVisible() &&
+      this.floatingPopover.getCurrentQuery() === selectedText
+    ) {
       return;
     }
 
