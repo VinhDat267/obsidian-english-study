@@ -500,4 +500,149 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(popoverHideSpy).toHaveBeenCalled();
     });
   });
+
+  describe("Reading Mode Support", () => {
+    let mockView: MarkdownView;
+
+    beforeEach(async () => {
+      await plugin.onload();
+      const leaf = new WorkspaceLeaf();
+      mockView = new MarkdownView(leaf);
+      mockView.editor.setValue("");
+      mockView.editor.setSelectionText("");
+      app.workspace.activeLeaf = leaf;
+      vi.spyOn(app.workspace, "getActiveViewOfType").mockReturnValue(mockView);
+    });
+
+    it("should lookup text in Reading mode via performLookupFromReading", async () => {
+      const mockResult: LookupResult = {
+        query: "serendipity",
+        type: "word",
+        contextSentence: "Finding this book was sheer serendipity.",
+        contextSentenceClean: "Finding this book was sheer serendipity.",
+        vietnameseTranslation: "Sự tình cờ may mắn",
+        timestamp: Date.now(),
+      };
+
+      const lookupSpy = vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+      const popoverSpy = vi.spyOn(plugin.floatingPopover, "show");
+
+      const res = await plugin.performLookupFromReading(
+        "serendipity",
+        "Finding this book was sheer serendipity.",
+        28
+      );
+
+      expect(res).toEqual(mockResult);
+      expect(lookupSpy).toHaveBeenCalledWith(
+        "serendipity",
+        "Finding this book was sheer serendipity.",
+        28,
+        plugin.settings
+      );
+      expect(popoverSpy).toHaveBeenCalled();
+    });
+
+    it("should detect reading view selection in handleSelectionDebounced and show trigger", () => {
+      plugin.settings.triggerMode = "icon";
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "serendipity",
+        anchorNode: mockView.contentEl,
+        getRangeAt: () => ({
+          commonAncestorContainer: {
+            nodeType: 1,
+            parentElement: mockView.contentEl,
+            closest: vi.fn(() => ({
+              textContent: "Finding this book was sheer serendipity.",
+            })),
+          },
+          getBoundingClientRect: () => ({
+            top: 150,
+            bottom: 170,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+        }),
+      }));
+
+      const triggerShowSpy = vi.spyOn(plugin.floatingTrigger, "show");
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(triggerShowSpy).toHaveBeenCalled();
+    });
+
+    it("should auto-popup in Reading mode when triggerMode is auto-popup", () => {
+      plugin.settings.triggerMode = "auto-popup";
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "serendipity",
+        anchorNode: mockView.contentEl,
+        getRangeAt: () => ({
+          commonAncestorContainer: {
+            nodeType: 1,
+            closest: vi.fn(() => ({
+              textContent: "Finding this book was sheer serendipity.",
+            })),
+          },
+          getBoundingClientRect: () => ({
+            top: 150,
+            bottom: 170,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+        }),
+      }));
+
+      const performSpy = vi.spyOn(plugin, "performLookupFromReading").mockResolvedValue(null);
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(performSpy).toHaveBeenCalledWith(
+        "serendipity",
+        "Finding this book was sheer serendipity.",
+        expect.any(Number)
+      );
+    });
+
+    it("should support checkCallback in lookup-selected-text command for Reading mode", () => {
+      const lookupCmd = plugin.commands.find((c) => c.id === "lookup-selected-text");
+      expect(lookupCmd).toBeDefined();
+
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "ephemeral",
+        anchorNode: mockView.contentEl,
+        getRangeAt: () => ({
+          commonAncestorContainer: {
+            nodeType: 1,
+            closest: vi.fn(() => ({
+              textContent: "The blossoms are ephemeral.",
+            })),
+          },
+          getBoundingClientRect: () => ({
+            top: 100,
+            bottom: 120,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+        }),
+      }));
+
+      expect(lookupCmd!.checkCallback!(true)).toBe(true);
+
+      const performSpy = vi.spyOn(plugin, "performLookupFromReading").mockResolvedValue(null);
+      lookupCmd!.checkCallback!(false);
+      expect(performSpy).toHaveBeenCalled();
+    });
+  });
 });

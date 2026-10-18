@@ -50,6 +50,21 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.addCommand({
       id: "lookup-selected-text",
       name: "Tra từ điển / Dịch câu bôi đen",
+      checkCallback: (checking: boolean) => {
+        if (typeof window === "undefined" || !window.getSelection) {
+          return false;
+        }
+        const sel = window.getSelection();
+        const domText =
+          sel && typeof sel.toString === "function" ? sel.toString().trim() : "";
+        if (domText && domText !== "[object Object]") {
+          if (checking) return true;
+          const ctx = this.extractReadingModeContext(sel!);
+          this.performLookupFromReading(domText, ctx.paragraph, ctx.cursorOffset);
+          return true;
+        }
+        return false;
+      },
       editorCheckCallback: (
         checking: boolean,
         editor: Editor,
@@ -178,7 +193,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   /**
-   * Thực hiện tra cứu văn bản đang chọn trong Editor:
+   * Thực hiện tra cứu văn bản đang chọn trong Editor (Edit mode):
    * 1. Ẩn floatingTrigger nếu đang hiện.
    * 2. Lấy selected text, vị trí cursor, đoạn văn bao quanh cursor.
    * 3. Gọi providerManager.lookup(selectedText, paragraph, cursorOffset, this.settings).
@@ -187,10 +202,6 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
    * 6. Đồng bộ sang SidebarView nếu đang mở.
    */
   async performLookup(editor: Editor): Promise<LookupResult | null> {
-    if (this.floatingTrigger) {
-      this.floatingTrigger.hide();
-    }
-
     const selectedText = editor.getSelection ? editor.getSelection() : "";
     if (!selectedText || !selectedText.trim()) {
       return null;
@@ -233,6 +244,39 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     if (!paragraph) {
       paragraph = selectedText;
+    }
+
+    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset);
+  }
+
+  /**
+   * Thực hiện tra cứu văn bản khi đang ở Reading Mode (Preview mode)
+   */
+  async performLookupFromReading(
+    selectedText: string,
+    paragraph: string,
+    cursorOffset: number = 0
+  ): Promise<LookupResult | null> {
+    if (!selectedText || !selectedText.trim()) {
+      return null;
+    }
+    return this.executeLookupAndShow(
+      selectedText.trim(),
+      paragraph || selectedText.trim(),
+      cursorOffset
+    );
+  }
+
+  /**
+   * Core logic thực hiện gọi ProviderManager và hiển thị kết quả lên UI nổi + Sidebar
+   */
+  private async executeLookupAndShow(
+    selectedText: string,
+    paragraph: string,
+    cursorOffset: number
+  ): Promise<LookupResult | null> {
+    if (this.floatingTrigger) {
+      this.floatingTrigger.hide();
     }
 
     let result: LookupResult;
@@ -279,11 +323,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
   /**
    * Bắt sự kiện bôi đen (debounced 150ms):
-   * - Lấy active MarkdownView, kiểm tra editor.getSelection().trim().
+   * - Hỗ trợ cả 2 chế độ Edit Mode và Reading Mode.
+   * - Lấy active MarkdownView, kiểm tra editor selection hoặc DOM selection.
    * - Nếu rỗng: ẩn floatingTrigger và return.
    * - Nếu settings.triggerMode === 'hotkey-only': ẩn trigger và return (chờ phím tắt).
-   * - Nếu settings.triggerMode === 'auto-popup': gọi performLookup(editor).
-   * - Nếu settings.triggerMode === 'icon': lấy selection bounding rect, gọi floatingTrigger.show(rect, () => this.performLookup(editor)).
+   * - Nếu settings.triggerMode === 'auto-popup': gọi lookup ngay.
+   * - Nếu settings.triggerMode === 'icon': lấy selection bounding rect, gọi floatingTrigger.show.
    */
   handleSelectionDebounced(): void {
     if (this.selectionDebounceTimer) {
@@ -302,16 +347,44 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         ? this.app.workspace.activeLeaf.view
         : null);
 
-    if (!activeView || !activeView.editor) {
+    if (!activeView) {
       this.dismissFloatingTrigger();
       return;
     }
 
-    const editor = activeView.editor;
-    const selection = editor.getSelection ? editor.getSelection() : "";
-    const trimmed = selection ? selection.trim() : "";
+    // 1. Kiểm tra lựa chọn từ Editor (Edit mode)
+    let selectedText = "";
+    let isEditorMode = false;
+    if (activeView.editor && typeof activeView.editor.getSelection === "function") {
+      const editorSel = activeView.editor.getSelection();
+      if (editorSel && editorSel.trim().length > 0) {
+        selectedText = editorSel.trim();
+        isEditorMode = true;
+      }
+    }
 
-    if (!trimmed) {
+    // 2. Nếu không có selection trong editor -> kiểm tra DOM selection (Reading mode)
+    let readingContext: { paragraph: string; cursorOffset: number } | null = null;
+    if (!isEditorMode && typeof window !== "undefined" && window.getSelection) {
+      const sel = window.getSelection();
+      const domSel =
+        sel && typeof sel.toString === "function" ? sel.toString().trim() : "";
+      if (domSel.length > 0 && domSel !== "[object Object]") {
+        const anchorNode = sel?.anchorNode;
+        const isInsideView =
+          !activeView.contentEl ||
+          !anchorNode ||
+          !activeView.contentEl.contains ||
+          activeView.contentEl.contains(anchorNode);
+
+        if (isInsideView) {
+          selectedText = domSel;
+          readingContext = this.extractReadingModeContext(sel!);
+        }
+      }
+    }
+
+    if (!selectedText) {
       this.dismissFloatingTrigger();
       return;
     }
@@ -321,18 +394,65 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return;
     }
 
+    const performFn = () => {
+      if (isEditorMode && activeView.editor) {
+        return this.performLookup(activeView.editor);
+      } else {
+        return this.performLookupFromReading(
+          selectedText,
+          readingContext?.paragraph || selectedText,
+          readingContext?.cursorOffset || 0
+        );
+      }
+    };
+
     if (this.settings.triggerMode === "auto-popup") {
       this.dismissFloatingTrigger();
-      this.performLookup(editor);
+      performFn();
       return;
     }
 
     if (this.settings.triggerMode === "icon") {
       const rect = this.getSelectionBoundingRect();
       this.floatingTrigger.show(rect, () => {
-        this.performLookup(editor);
+        performFn();
       });
     }
+  }
+
+  /**
+   * Trích xuất ngữ cảnh đoạn văn và vị trí từ trong Reading Mode
+   */
+  extractReadingModeContext(sel: Selection): {
+    paragraph: string;
+    cursorOffset: number;
+  } {
+    try {
+      if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        const el: any =
+          container && (container as any).nodeType === 3
+            ? (container as any).parentElement
+            : container;
+
+        if (el) {
+          const block =
+            (typeof el.closest === "function" &&
+              el.closest(
+                "p, li, blockquote, h1, h2, h3, h4, h5, h6, td, th, div.markdown-rendered > *"
+              )) ||
+            el;
+          const paragraph = block?.textContent?.trim() || sel.toString().trim();
+          const cursorOffset = Math.max(0, paragraph.indexOf(sel.toString().trim()));
+          return { paragraph, cursorOffset };
+        }
+      }
+    } catch {
+      // fallback
+    }
+    const text = typeof sel.toString === "function" ? sel.toString().trim() : "";
+    return { paragraph: text, cursorOffset: 0 };
   }
 
   private dismissFloatingTrigger(): void {
