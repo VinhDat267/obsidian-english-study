@@ -316,3 +316,19 @@ describe("GeminiService", () => {
     });
   });
 });
+describe("reading batch language and token contract", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it.each([["zh", "tiếng Trung"], ["ja", "tiếng Nhật"]])("honors target %s and explicit source", async (target, name) => {
+    vi.mocked(requestUrl).mockResolvedValueOnce({
+      status: 200, headers: {}, arrayBuffer: new ArrayBuffer(0),
+      json: { candidates: [{ content: { parts: [{ text: '[{"id":0,"translation":"ok"}]' }] } }] }, text: "",
+    });
+    await new GeminiService().translateBatch([{ id: 0, text: "Use ⟦PG0_0⟧" }], "offline-key", { noteTitle: "Memory" }, target, "gemini-flash-latest", "en");
+    const request = vi.mocked(requestUrl).mock.calls[0][0] as any;
+    const prompt = JSON.parse(request.body).contents[0].parts[0].text;
+    expect(prompt).toContain(name);
+    expect(prompt).toContain('Nguồn: en');
+    expect(prompt).toContain('Giữ nguyên');
+    expect(prompt).toContain('⟦PG');
+  });
+});

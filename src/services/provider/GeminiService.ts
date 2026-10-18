@@ -107,19 +107,24 @@ Yêu cầu:
     apiKey: string,
     docContext?: DocumentContextMeta,
     targetLang: string = "vi",
-    model: string = "gemini-flash-latest"
+    model: string = "gemini-flash-latest",
+    sourceLang: string = "auto"
   ): Promise<Map<number, string> | null> {
     const cleanKey = apiKey ? apiKey.trim() : "";
     if (!cleanKey || items.length === 0) return null;
 
     const contextHint = this.buildContextHint(docContext);
-    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+    const languages: Record<string, string> = { vi: "tiếng Việt", en: "tiếng Anh", zh: "tiếng Trung", ja: "tiếng Nhật" };
+    const langTargetName = languages[targetLang] || ("ngôn ngữ có mã " + targetLang);
 
     const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là một dịch giả chuyên gia. Hãy dịch từng đoạn văn bản sau sang ${langTargetName} một cách tự nhiên, chính xác và giữ đúng ngữ cảnh chuyên môn của tài liệu.
 Đầu vào là mảng JSON:
 ${JSON.stringify(items, null, 2)}
 
 Yêu cầu BẮT BUỘC:
+- Nguồn: ${sourceLang}. Đích: ${targetLang}.
+- Giữ nguyên chính xác mọi token có dạng ⟦PG…⟧; không sửa, thêm hoặc bỏ token.
+- Giữ nguyên các dòng và ký hiệu lựa chọn trắc nghiệm, mỗi lựa chọn trên một dòng.
 - Trả về DUY NHẤT một mảng JSON hợp lệ chứa id và bản dịch tương ứng theo cấu trúc:
 [
   {"id": 0, "translation": "..."},
