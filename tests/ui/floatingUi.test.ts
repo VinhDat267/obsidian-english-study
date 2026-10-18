@@ -356,6 +356,30 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(popover.isVisible()).toBe(false);
     });
 
+    it("should clamp maxHeight to never exceed viewport bottom and isolate wheel events", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 50, bottom: 80, left: 100, right: 200 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = popover.getElement()!;
+      expect(el.style.maxHeight).toBeDefined();
+      const maxHeight = parseInt(el.style.maxHeight, 10);
+      const top = parseInt(el.style.top, 10);
+      expect(top + maxHeight).toBeLessThanOrEqual(window.innerHeight);
+
+      // Verify wheel event stops propagation
+      const stopPropagationSpy = vi.fn();
+      el.dispatchEvent({
+        type: "wheel",
+        stopPropagation: stopPropagationSpy,
+      });
+      expect(stopPropagationSpy).toHaveBeenCalled();
+      popover.hide();
+    });
+
     it("should call onSave when clicking save button", async () => {
       const popover = new FloatingPopover();
       const onSave = vi.fn().mockResolvedValue(undefined);

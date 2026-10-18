@@ -485,21 +485,35 @@ export class FloatingPopover {
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
 
+    let finalTop = 0;
+    let finalLeft = 0;
+
     if (this.customPosition) {
       const padding = 8;
       const maxLeft = Math.max(padding, vw - popoverWidth - padding);
       const maxTop = Math.max(padding, vh - popoverHeight - padding);
       const clampedLeft = Math.max(padding, Math.min(this.customPosition.left, maxLeft));
       const clampedTop = Math.max(padding, Math.min(this.customPosition.top, maxTop));
-      popover.style.top = `${clampedTop}px`;
-      popover.style.left = `${clampedLeft}px`;
+      finalTop = clampedTop;
+      finalLeft = clampedLeft;
       this.customPosition = { left: clampedLeft, top: clampedTop };
     } else {
       const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
-      popover.style.top = `${pos.top}px`;
-      popover.style.left = `${pos.left}px`;
+      finalTop = pos.top;
+      finalLeft = pos.left;
     }
+
+    // Đảm bảo popover luôn nằm trọn vẹn trong màn hình và KHÔNG bị tràn đáy:
+    const maxAllowedHeight = Math.max(160, vh - finalTop - 12);
+    popover.style.maxHeight = `${maxAllowedHeight}px`;
+    popover.style.top = `${finalTop}px`;
+    popover.style.left = `${finalLeft}px`;
     popover.style.visibility = "visible";
+
+    // Ngăn chặn cuộn trang phía sau khi cuộn chuột bên trong popover
+    popover.addEventListener("wheel", (e: WheelEvent) => {
+      e.stopPropagation();
+    });
 
     this.element = popover;
 
@@ -744,21 +758,33 @@ export class FloatingPopover {
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
 
+    let finalTop = 0;
+    let finalLeft = 0;
+
     if (this.customPosition) {
       const padding = 8;
       const maxLeft = Math.max(padding, vw - popoverWidth - padding);
       const maxTop = Math.max(padding, vh - popoverHeight - padding);
       const clampedLeft = Math.max(padding, Math.min(this.customPosition.left, maxLeft));
       const clampedTop = Math.max(padding, Math.min(this.customPosition.top, maxTop));
-      popover.style.top = `${clampedTop}px`;
-      popover.style.left = `${clampedLeft}px`;
+      finalTop = clampedTop;
+      finalLeft = clampedLeft;
       this.customPosition = { left: clampedLeft, top: clampedTop };
     } else {
       const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
-      popover.style.top = `${pos.top}px`;
-      popover.style.left = `${pos.left}px`;
+      finalTop = pos.top;
+      finalLeft = pos.left;
     }
+
+    const maxAllowedHeight = Math.max(160, vh - finalTop - 12);
+    popover.style.maxHeight = `${maxAllowedHeight}px`;
+    popover.style.top = `${finalTop}px`;
+    popover.style.left = `${finalLeft}px`;
     popover.style.visibility = "visible";
+
+    popover.addEventListener("wheel", (e: WheelEvent) => {
+      e.stopPropagation();
+    });
 
     this.element = popover;
 
@@ -1029,6 +1055,7 @@ export class FloatingPopover {
 
         popover.style.left = `${newLeft}px`;
         popover.style.top = `${newTop}px`;
+        popover.style.maxHeight = `${Math.max(160, vh - newTop - 12)}px`;
         this.customPosition = { left: newLeft, top: newTop };
       };
 

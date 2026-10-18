@@ -86,6 +86,7 @@
   max-width: calc(100vw - 32px);
   max-height: calc(85vh);
   overflow-y: auto;
+  overscroll-behavior: contain;
   box-sizing: border-box;
   background-color: var(--background-floating, var(--background-primary));
   color: var(--text-normal);

@@ -218,7 +218,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.registerDomEvent(
         document,
         "scroll",
-        () => {
+        (e: Event) => {
+          const target = e?.target as Node | null;
+          const popoverEl = this.floatingPopover?.getElement();
+          if (popoverEl && target && (popoverEl === target || popoverEl.contains(target))) {
+            return;
+          }
           this.dismissFloatingUi();
         },
         true

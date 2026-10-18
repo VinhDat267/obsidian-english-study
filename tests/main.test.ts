@@ -132,6 +132,28 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(dismissSpy).toHaveBeenCalled();
     });
 
+    it("should NOT dismiss floating UI on scroll event originating from inside popover", async () => {
+      await plugin.onload();
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+
+      const mockChild: any = {};
+      const mockPopoverElement: any = {
+        contains: vi.fn((target: any) => target === mockChild),
+      };
+      vi.spyOn(plugin.floatingPopover, "getElement").mockReturnValue(mockPopoverElement);
+
+      const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
+      expect(scrollEvent).toBeDefined();
+
+      // Cuộn bên trong popover -> KHÔNG được dismiss
+      scrollEvent!.callback({ target: mockChild });
+      expect(dismissSpy).not.toHaveBeenCalled();
+
+      // Cuộn bên ngoài popover -> dismiss bình thường
+      scrollEvent!.callback({ target: {} });
+      expect(dismissSpy).toHaveBeenCalled();
+    });
+
     it("should clean up timers and hide UI on onunload()", async () => {
       await plugin.onload();
       const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
