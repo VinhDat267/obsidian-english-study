@@ -4,6 +4,8 @@ import { App, MarkdownView, Notice } from "obsidian";
 import { DEFAULT_SETTINGS } from "../../src/types";
 import { ReadingTranslationController } from "../../src/reading/ReadingTranslationController";
 import { ReadingTranslationService } from "../../src/reading/ReadingTranslationService";
+import type { GoogleTranslate } from "../../src/services/provider/GoogleTranslate";
+import type { GeminiService } from "../../src/services/provider/GeminiService";
 import { deferred, flushPromises, makeReadingView, makeReadingContext, TestIntersectionObserver } from "../helpers/reading";
 
 let app: App, settings: typeof DEFAULT_SETTINGS, controller: ReadingTranslationController;
@@ -15,7 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => { controller?.unload(); window.IntersectionObserver = originalObserver; document.body.replaceChildren(); vi.restoreAllMocks(); });
 
-function setup(google = { translateWithMeta: vi.fn(async (text: string) => ({ translation: "Dịch " + text, detectedLang: "en" })) }, gemini?: any) {
+function setup(google: Pick<GoogleTranslate, "translateWithMeta"> = { translateWithMeta: vi.fn(async (text: string) => ({ translation: "Dịch " + text, detectedLang: "en" })) }, gemini?: Pick<GeminiService, "translateBatch">) {
   controller = new ReadingTranslationController(app, new ReadingTranslationService({ google, gemini }), () => settings);
   controller.load();
   return google;
@@ -90,7 +92,7 @@ describe("pane scoped reading translation", () => {
     const right = makeReadingView(app, "<p>Other</p>", "Medicine/Right.md");
     app.workspace.activeLeaf = right.leaf;
     app.metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ["os"] } });
-    const gemini = { translateBatch: vi.fn(async (items: any[]) => new Map(items.map(i => [i.id, "Dịch " + i.text]))) };
+    const gemini = { translateBatch: vi.fn(async (items: any[], _key?: string, _context?: any) => new Map(items.map(i => [i.id, "Dịch " + i.text]))) };
     settings.readingTranslationEngine = "gemini"; settings.geminiApiKey = "offline";
     setup(undefined, gemini); attach(left); controller.toggle(left); await visible();
     expect(gemini.translateBatch.mock.calls[0][2]).toEqual({ noteTitle: "Left", folderPath: "IT", tags: ["os"], heading: "Allocation" });
@@ -179,5 +181,22 @@ describe("pane scoped reading translation", () => {
     controller.processSection(view.previewMode.containerEl, makeReadingContext(view).ctx); await visible();
     contexts[0].unload();
     expect(view.previewMode.containerEl.querySelectorAll(".polyglot-reading-translation")).toHaveLength(1);
+  });
+
+  it("makes_host_div_actions_keyboard_operable", () => {
+    const view = makeReadingView(app, "<p>Hello</p>", "Note.md");
+    vi.spyOn(view, "addAction").mockImplementation((_icon, _title, callback) => {
+      const action = document.createElement("div");
+      action.addEventListener("click", callback);
+      view.containerEl.prepend(action); return action;
+    });
+    setup(); attach(view);
+    const action = view.containerEl.firstElementChild as HTMLElement;
+    expect(action.getAttribute("role")).toBe("button");
+    expect(action.tabIndex).toBe(0);
+    action.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(controller.isEnabled(view)).toBe(true);
+    action.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(controller.isEnabled(view)).toBe(false);
   });
 });

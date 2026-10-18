@@ -368,10 +368,30 @@ export class EnglishStudySettingTab extends PluginSettingTab {
       );
 
     // =========================================================================
-    // Nhóm 5: DỊCH SONG NGỮ TOÀN BỘ FILE (BILINGUAL FILE TRANSLATION)
+    // Dịch tạm thời trong Reading Mode.
+    new Setting(containerEl)
+      .setName("DỊCH SONG NGỮ KHI ĐỌC")
+      .setDesc("Bản dịch nổi rõ dưới từng đoạn trong Reading Mode. Bật/tắt bằng icon ngôn ngữ hoặc Command Palette; không ghi vào ghi chú.")
+      .setHeading();
+
+    new Setting(containerEl)
+      .setName("Công cụ dịch khi đọc")
+      .setDesc("Dùng ngôn ngữ nguồn/đích đã chọn ở trên. Gemini cần API key; độc lập với phân tích ngữ pháp AI.")
+      .addDropdown(dropdown => dropdown
+        .addOption("google", "Google Translate")
+        .addOption("gemini", "Gemini")
+        .setValue(this.pluginInstance.settings.readingTranslationEngine || "google")
+        .onChange(async (value: string) => {
+          this.pluginInstance.settings.readingTranslationEngine = value === "gemini" ? "gemini" : "google";
+          await this.pluginInstance.saveSettings();
+        })
+      );
+
+    // Xuất nội dung song ngữ ra Markdown là luồng riêng.
     // =========================================================================
     new Setting(containerEl)
       .setName("DỊCH SONG NGỮ TOÀN BỘ FILE (BILINGUAL FILE TRANSLATION)")
+      .setDesc("Chèn và lưu bản dịch vào file Markdown hiện tại hoặc file mới. Khác với chế độ dịch tạm thời khi đọc ở trên.")
       .setHeading();
 
     new Setting(containerEl)

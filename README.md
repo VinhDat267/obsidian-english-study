@@ -4,7 +4,7 @@
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vitest](https://img.shields.io/badge/Tests-273%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
+[![Vitest](https://img.shields.io/badge/Tests-386%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -22,6 +22,19 @@ Highlight any text in **Edit Mode** or **Reading Mode** $\to$ view instant defin
 ---
 
 ## ✨ Key Features & Capabilities
+
+### 📖 Immersive Bilingual Reading
+
+Open a note in **Reading Mode**, then use the **languages icon in the note header** or the command **Bật/tắt dịch song ngữ khi đọc**.
+
+- Translations appear directly below their source blocks, with a prominent accent background, a vertical border, and semibold text that follows the Obsidian theme.
+- Translation starts for blocks in or near the visible area and continues as you scroll. Each pane can be toggled independently.
+- The source Markdown is never rewritten by this mode. Turning it off removes the temporary translations; switching files or entering Edit Mode ends that pane's session.
+- Inline code and math are protected. Code blocks, tables, embeds, and interactive content are skipped. Failed blocks offer **Thử lại** instead of presenting the original text as a successful translation.
+- In **Settings → Polyglot Study Assistant → DỊCH SONG NGỮ KHI ĐỌC**, choose Google Translate (default) or Gemini (requires your API key). The existing source/target language settings apply; AI grammar is a separate option.
+- Successful translations are cached in memory, up to 200 entries. Changes to translation settings end existing reading sessions; toggle again to apply them.
+
+The separate **Dịch song ngữ file Markdown hiện tại** command writes bilingual Markdown to the current file or a new file. Use the reading command above for a temporary view.
 
 ### 🌍 1. Multilingual Study Expansion (Đa Ngôn Ngữ Toàn Diện)
 - **Automatic Script & Language Detection**:
@@ -168,7 +181,7 @@ cd obsidian-polyglot-study
 # 2. Install dependencies
 npm install
 
-# 3. Run full test suite (273 tests)
+# 3. Run full test suite (386 tests)
 npm test
 
 # 4. Build production bundle
@@ -185,6 +198,7 @@ Copy `main.js`, `manifest.json`, and `styles.css` into your vault's plugin direc
 | **Tra từ điển / Dịch câu bôi đen (Đa ngôn ngữ)** | `Alt + T` or `Ctrl + Shift + D` | Look up highlighted text in Edit or Reading mode. |
 | **Lưu từ vựng vào sổ** | `Alt + S` | Save active lookup result into your vocabulary notebook. |
 | **Mở thanh bên Polyglot Study** | `Alt + P` | Open and focus the right sidebar study panel. |
+| **Bật/tắt dịch song ngữ khi đọc** | Assign in Obsidian | Toggle temporary bilingual translations in the active Reading Mode pane. |
 
 ---
 
@@ -219,14 +233,18 @@ Open **Settings > Polyglot Study Assistant** to customize your environment:
 The project is built on strict **Test-Driven Development (TDD)** principles:
 
 ```bash
-# Run 273 tests across 17 test suites
+# Run 386 tests across 26 test suites
 npm test
+
+# Check the reading feature against the real Obsidian API types
+npm run typecheck:reading
 
 # Run tests with coverage
 npx vitest run --coverage
 ```
 
 ### Test Suite Breakdown:
+- `tests/reading/`: Real DOM fixtures for extraction, protected code/math, safe rendering, per-pane lifecycle, cancellation, lazy scheduling, cache isolation, and the complete plugin flow with HTTP mocked. Tests assert that reading mode does not write notes.
 - `languageHelper`: Script detection across CJK, Cyrillic, and Latin, language metadata, speech locales, Dataview tags.
 - `GoogleTranslate`: Parsing multi-chunk translations, `dt=rm` Romaji/Pinyin extraction, fallback mirror handling.
 - `ProviderManager`: CJK-aware 3-tier classification, FreeDict bypass, language-aware cache key isolation, `AbortController` cancellation.
@@ -234,6 +252,8 @@ npx vitest run --coverage
 - `FloatingPopover` & `SidebarView`: Language badge rendering (`[🇯🇵 JA]`), transliteration display, Web Speech TTS locale assignment, drag-and-drop viewport clamping.
 - `SettingsTab`: All 5 setting groups verification, dropdown change handlers, toggle synchronization.
 - `main`: Full plugin lifecycle, ribbon icons, commands, Edit and Reading mode lookups.
+
+Verification limits: automated tests use a mocked Obsidian host and HTTP. The reading feature passes its dedicated check against the installed real Obsidian API types; the repository-wide typecheck still has pre-existing errors. Browser fixture checks cover representative light/dark themes, narrow panes, and 200% CSS zoom. Actual Obsidian and live-provider acceptance remain separate and were not run for this change.
 
 ---
 

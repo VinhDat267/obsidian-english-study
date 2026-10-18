@@ -737,7 +737,7 @@ export class MarkdownView extends View {
   public mode: "source" | "preview" = "source";
   public getMode = vi.fn(() => this.mode);
   public previewMode = {
-    containerEl: createMockObsidianElement("div"),
+    containerEl: createMockObsidianElement("div") as HTMLElement,
     rerender: vi.fn((_full?: boolean) => {}),
     getScroll: vi.fn(() => 0),
     applyScroll: vi.fn((_scroll: number) => {}),

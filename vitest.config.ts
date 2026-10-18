@@ -7,6 +7,7 @@ export default defineConfig({
     globals: true,
   },
   resolve: {
+    extensions: [".ts", ".tsx", ".mjs", ".js", ".mts", ".json"],
     alias: {
       obsidian: path.resolve(__dirname, "__mocks__/obsidian.ts"),
     },

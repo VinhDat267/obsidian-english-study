@@ -317,7 +317,7 @@ describe("GeminiService", () => {
   });
 });
 describe("reading batch language and token contract", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
   it.each([["zh", "tiếng Trung"], ["ja", "tiếng Nhật"]])("honors target %s and explicit source", async (target, name) => {
     vi.mocked(requestUrl).mockResolvedValueOnce({
       status: 200, headers: {}, arrayBuffer: new ArrayBuffer(0),

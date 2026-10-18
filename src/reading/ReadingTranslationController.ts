@@ -15,7 +15,7 @@ interface PaneSession {
   view: MarkdownView; path: string; root: HTMLElement; active: boolean;
   config: ReadingTranslationConfig; sections: Map<HTMLElement, Section>;
 }
-interface TrackedView { action: HTMLElement; observer?: MutationObserver }
+interface TrackedView { action: HTMLElement; observer?: MutationObserver; disposeAction: () => void }
 
 export class ReadingTranslationController extends Component {
   private panes = new Map<MarkdownView, PaneSession>();
@@ -41,7 +41,7 @@ export class ReadingTranslationController extends Component {
   onunload(): void {
     this.running = false;
     for (const view of Array.from(this.panes.keys())) this.stop(view);
-    for (const tracked of this.tracked.values()) { tracked.observer?.disconnect(); tracked.action.remove(); }
+    for (const tracked of this.tracked.values()) { tracked.observer?.disconnect(); tracked.disposeAction(); }
     this.tracked.clear();
     this.service.dispose();
   }
@@ -108,15 +108,25 @@ export class ReadingTranslationController extends Component {
       .map(leaf => leaf.view).filter((view): view is MarkdownView => view instanceof MarkdownView));
     for (const [view, tracked] of this.tracked) {
       if (!views.has(view)) {
-        this.stop(view); tracked.observer?.disconnect(); tracked.action.remove(); this.tracked.delete(view);
+        this.stop(view); tracked.observer?.disconnect(); tracked.disposeAction(); this.tracked.delete(view);
       }
     }
     for (const view of views) {
       if (!this.tracked.has(view)) {
         const action = view.addAction("languages", "Bật/tắt dịch song ngữ khi đọc", () => this.toggle(view));
+        const onKeydown = (event: KeyboardEvent) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          if (!event.repeat) this.toggle(view);
+        };
+        if (action.tagName !== "BUTTON") {
+          action.setAttribute("role", "button"); action.tabIndex = 0;
+          action.addEventListener("keydown", onKeydown);
+        }
+        const disposeAction = () => { action.removeEventListener("keydown", onKeydown); action.remove(); };
         const owner = view.containerEl.ownerDocument?.defaultView;
         const Observer = owner?.MutationObserver;
-        const observer = Observer ? new Observer(records => {
+        const observer = Observer ? new Observer((records: MutationRecord[]) => {
           const relevant = records.some(record => {
             const target = record.target.nodeType === 1 ? record.target as Element : record.target.parentElement;
             if (target?.closest(".polyglot-reading-translation")) return false;
@@ -129,7 +139,7 @@ export class ReadingTranslationController extends Component {
           }
         }) : undefined;
         observer?.observe(view.containerEl, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
-        this.tracked.set(view, { action, observer });
+        this.tracked.set(view, { action, observer, disposeAction });
       }
       const pane = this.panes.get(view);
       if (pane && !this.valid(pane)) this.stop(view);

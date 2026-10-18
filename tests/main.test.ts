@@ -94,7 +94,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.ribbonIcons[0].title).toBe("Mở Polyglot Study Panel");
 
       // Commands (7 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view, toggle-ai-grammar, toggle-ai-translation, toggle-auto-translate, bilingual-translate-file)
-      expect(plugin.commands.length).toBe(7);
+      expect(plugin.commands.length).toBe(8);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");

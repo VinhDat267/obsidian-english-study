@@ -29,13 +29,14 @@ Polyglot Study Assistant hỗ trợ học ngoại ngữ trong ghi chú: tra từ
 - Chế độ đọc song ngữ mới phải giữ từng đoạn gốc và bản dịch liền nhau để đối chiếu.
 - Tiếp tục dùng provider của project. Không cần tích hợp tài khoản hoặc SDK Immersive Translate để đạt trải nghiệm được yêu cầu.
 - Tác vụ lưu từ vựng do người dùng chủ động thực hiện vẫn là một luồng riêng.
-- Đặc tả đọc song ngữ mới đã được người dùng duyệt ngày 2026-10-18; kế hoạch đang được chuẩn bị, tính năng chưa triển khai.
+- Chế độ đọc song ngữ mới đã được triển khai theo lựa chọn Native ngày 2026-10-18, với nền nổi rõ và chữ đậm; đang chờ review toàn nhánh. Kiểm chứng trong Obsidian và provider thật chưa chạy.
 
 ## Evidence on Hand
 
 - `README.md`, `main.ts`, `src/types/index.ts`, các service provider, storage, translation và UI là nguồn mô tả hiện trạng.
 - `docs/superpowers/specs/2026-10-18-immersive-reading-translation-design.md` ghi thiết kế cho yêu cầu mới.
 - Kiểm tra ở snapshot `515e7b0`: 337 test trên 21 file pass; typecheck hiện thất bại. Test dùng mock Obsidian/HTTP, không thay thế bằng chứng chạy trong Obsidian thật.
+- Sau triển khai: 386 test trên 26 file pass, build và typecheck riêng phần đọc với API Obsidian thật pass. Typecheck toàn repository còn 49 lỗi có sẵn, không thêm lỗi so với baseline. Browser fixture đã kiểm tra sáng/tối và pane hẹp; không phải bằng chứng chạy trong Obsidian.
 
 ## Product Principles
 

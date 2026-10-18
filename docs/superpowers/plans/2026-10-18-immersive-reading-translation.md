@@ -10,7 +10,7 @@
 
 **Spec:** [2026-10-18-immersive-reading-translation-design.md](../specs/2026-10-18-immersive-reading-translation-design.md), được người dùng duyệt ngày 2026-10-18.
 
-**Status:** Kế hoạch chờ người dùng duyệt và chọn cách thực hiện; chưa triển khai.
+**Status:** Người dùng đã duyệt và chọn Native. Đã triển khai, kiểm thử cục bộ; đang chờ review toàn nhánh.
 
 ## Global Constraints
 
@@ -96,8 +96,8 @@ interface ReadingTranslationSession {
 - Produces `extractReadingBlocks(root: HTMLElement): ReadingBlock[]` và `restoreReadingFragments(text: string, fragments: readonly ReadingProtectedFragment[], doc: Document): DocumentFragment | null`.
 - Test helper `mountReadingHtml(html: string): HTMLElement` gắn HTML fixture vào `document.body`; `deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(reason?: unknown): void }` điều khiển phản hồi chậm.
 
-- [ ] **Step 1:** Gắn jsdom vào test DOM qua comment `// @vitest-environment jsdom`, giữ môi trường Node mặc định của suite cũ. Cài `npm install --save-dev --save-exact jsdom@26.1.0`; tạo fixture gồm heading, paragraph, list lồng, trắc nghiệm, code, math, bảng, embed và blockquote bình thường. Không cài package runtime cho plugin.
-- [ ] **Step 2:** Viết `extracts_each_inline_run_once_without_mutating_original_nodes` với fixture `<ul><li>Outer <code>x()</code><p>Paragraph</p><ul><li>Inner</li></ul>Tail</li></ul>`, cùng `protects_math_code_and_preserves_user_blockquotes`:
+- [x] **Step 1:** Gắn jsdom vào test DOM qua comment `// @vitest-environment jsdom`, giữ môi trường Node mặc định của suite cũ. Cài `npm install --save-dev --save-exact jsdom@26.1.0`; tạo fixture gồm heading, paragraph, list lồng, trắc nghiệm, code, math, bảng, embed và blockquote bình thường. Không cài package runtime cho plugin.
+- [x] **Step 2:** Viết `extracts_each_inline_run_once_without_mutating_original_nodes` với fixture `<ul><li>Outer <code>x()</code><p>Paragraph</p><ul><li>Inner</li></ul>Tail</li></ul>`, cùng `protects_math_code_and_preserves_user_blockquotes`:
 
 ```ts
 expect(blocks.map(b => b.kind)).toEqual(['list-item', 'paragraph', 'list-item', 'list-item']);
@@ -108,11 +108,11 @@ expect(extractReadingBlocks(quoteRoot)).toHaveLength(1);
 expect(extractReadingBlocks(technicalOnlyRoot)).toHaveLength(0);
 ```
 
-- [ ] **Step 3:** Chạy `npm test -- tests/reading/blockExtractor.test.ts`; xác nhận RED do module/chức năng chưa tồn tại, không phải thiếu environment.
-- [ ] **Step 4:** Cài extractor theo từng nhóm node inline liên tục. Heading/paragraph đặt anchor sau phần tử; text trực tiếp trong `li` đặt anchor bên trong `li`, trước block tiếp theo để không chèn `div` trực tiếp dưới `ul/ol`. Không lấy cả text của nested list. Bỏ ancestor kỹ thuật/interactivity và class `.polyglot-reading-translation`. Giữ soft newline và chuyển `br` thành newline trong text gửi dịch; nếu nhiều phương án trắc nghiệm cùng một paragraph, giữ paragraph gốc nguyên vẹn và đối chiếu bằng các dòng riêng trong bản dịch bên dưới. Test cả phương án ở paragraph/list riêng lẫn chung một paragraph có `br`.
-- [ ] **Step 5:** Sinh token theo thứ tự inline ổn định trong mỗi khối, chọn prefix không xuất hiện trong text gốc; không dùng nonce thay đổi mỗi lần render. `cacheSeed` là JSON của masked text và các loại/nội dung inline. Restore bằng text node xen các clone của fragment gốc; trả `null` nếu token thiếu, lặp hoặc xuất hiện token lạ. Thêm test va prefix có sẵn trong văn bản, token bị mất/lặp và đảm bảo khôi phục không chuyển node gốc. Không bắt buộc thứ tự token trong ngôn ngữ đích giống ngôn ngữ nguồn.
-- [ ] **Step 6:** Thêm field `readingTranslationEngine: ReadingEngine` vào `PluginSettings`, default `google`. Tạo `tsconfig.reading.json` extends cấu hình hiện có nhưng đặt `paths: {}`, `lib: ['DOM', 'DOM.Iterable', 'ES2018']`, `noEmit: true`, include `src/reading/**/*.ts`, exclude test/mock. Thêm script `typecheck:reading` chạy `tsc --project tsconfig.reading.json --noEmit`; các import provider được TypeScript theo dõi tự nhiên.
-- [ ] **Step 7:** Chạy test Task 1, `npm test -- tests/scaffold.test.ts`, `npm run typecheck:reading`; yêu cầu PASS. Commit đúng các file của task: `feat(reading): extract translation blocks without changing notes`.
+- [x] **Step 3:** Chạy `npm test -- tests/reading/blockExtractor.test.ts`; xác nhận RED do module/chức năng chưa tồn tại, không phải thiếu environment.
+- [x] **Step 4:** Cài extractor theo từng nhóm node inline liên tục. Heading/paragraph đặt anchor sau phần tử; text trực tiếp trong `li` đặt anchor bên trong `li`, trước block tiếp theo để không chèn `div` trực tiếp dưới `ul/ol`. Không lấy cả text của nested list. Bỏ ancestor kỹ thuật/interactivity và class `.polyglot-reading-translation`. Giữ soft newline và chuyển `br` thành newline trong text gửi dịch; nếu nhiều phương án trắc nghiệm cùng một paragraph, giữ paragraph gốc nguyên vẹn và đối chiếu bằng các dòng riêng trong bản dịch bên dưới. Test cả phương án ở paragraph/list riêng lẫn chung một paragraph có `br`.
+- [x] **Step 5:** Sinh token theo thứ tự inline ổn định trong mỗi khối, chọn prefix không xuất hiện trong text gốc; không dùng nonce thay đổi mỗi lần render. `cacheSeed` là JSON của masked text và các loại/nội dung inline. Restore bằng text node xen các clone của fragment gốc; trả `null` nếu token thiếu, lặp hoặc xuất hiện token lạ. Thêm test va prefix có sẵn trong văn bản, token bị mất/lặp và đảm bảo khôi phục không chuyển node gốc. Không bắt buộc thứ tự token trong ngôn ngữ đích giống ngôn ngữ nguồn.
+- [x] **Step 6:** Thêm field `readingTranslationEngine: ReadingEngine` vào `PluginSettings`, default `google`. Tạo `tsconfig.reading.json` extends cấu hình hiện có nhưng đặt `paths: {}`, `lib: ['DOM', 'DOM.Iterable', 'ES2018']`, `noEmit: true`, include `src/reading/**/*.ts`, exclude test/mock. Thêm script `typecheck:reading` chạy `tsc --project tsconfig.reading.json --noEmit`; các import provider được TypeScript theo dõi tự nhiên.
+- [x] **Step 7:** Chạy test Task 1, `npm test -- tests/scaffold.test.ts`, `npm run typecheck:reading`; yêu cầu PASS. Commit đúng các file của task: `feat(reading): extract translation blocks without changing notes`.
 
 ## Task 2: Translate through bounded queues with real error states
 
@@ -124,7 +124,7 @@ expect(extractReadingBlocks(technicalOnlyRoot)).toHaveLength(0);
 - Methods: `createSession(config: ReadingTranslationConfig): ReadingTranslationSession`, `clearCache(): void`, `dispose(): void`.
 - Giữ 5 tham số đầu của `translateBatch(items, apiKey, docContext?, targetLang?, model?)`; thêm tham số thứ 6 `sourceLang: string = 'auto'`, vẫn trả `Promise<Map<number, string> | null>`.
 
-- [ ] **Step 1:** Viết test dùng provider stub và deferred: `limits_google_to_two_requests`, `limits_gemini_to_one_batch_of_eight`, `does_not_cache_or_publish_last_response_after_cancel`, `separates_source_target_engine_context_and_protected_content`, `reports_provider_and_token_errors`.
+- [x] **Step 1:** Viết test dùng provider stub và deferred: `limits_google_to_two_requests`, `limits_gemini_to_one_batch_of_eight`, `does_not_cache_or_publish_last_response_after_cancel`, `separates_source_target_engine_context_and_protected_content`, `reports_provider_and_token_errors`.
 
 ```ts
 expect(maxActiveGoogle).toBe(2);
@@ -136,12 +136,12 @@ expect(await nullResponse).toEqual({ status: 'error', code: 'empty' });
 expect(await brokenTokens).toEqual({ status: 'error', code: 'invalid-tokens' });
 ```
 
-- [ ] **Step 2:** Chạy `npm test -- tests/reading/ReadingTranslationService.test.ts`; xác nhận RED.
-- [ ] **Step 3:** Cài scheduler dùng chung cho các session của service, không tạo giới hạn concurrency riêng cho từng pane. Google gọi `translateWithMeta(text, sourceLang, targetLang, endpointUrl)`. Gemini chỉ gom job cùng session và cùng context, lấy tối đa 8 từ các job đã đủ điều kiện viewport; không gọi grammar. Request bị hủy cục bộ vẫn chiếm slot đến khi HTTP settle, nhưng không được publish/cache kết quả.
-- [ ] **Step 4:** Mỗi job settle đúng một lần; hủy session settle job chờ và chặn callback muộn. Lỗi HTTP/throw/null/batch thiếu ID không được biến text gốc thành success. Kiểm tra protected token trước khi cache. Lỗi do thiếu key không gửi request và không đổi provider.
-- [ ] **Step 5:** Dùng LRU 200 mục, chỉ lưu kết quả success. Khóa JSON giữ nguyên case của `[engine, sourceLang, targetLang, endpointUrl, model, cacheSeed, context]`; context có `noteTitle/heading/tags/folderPath` khi dùng Gemini, bỏ khi Google. Không đưa API key vào khóa/log. Thêm test 201 mục, cache hit không gọi lại provider và hai khối giống masked text nhưng khác inline không va cache.
-- [ ] **Step 6:** Sửa riêng prompt `translateBatch` để nêu đúng đích `vi/en/zh/ja`, nguồn rõ khi khác `auto`, bảo toàn token nguyên văn và giữ dòng/lựa chọn trắc nghiệm. Với job nhận diện được trắc nghiệm, chuẩn hóa kết quả qua `formatMultipleChoiceText` hiện có trước khi kiểm tra token/cache. Bổ sung test parse body `requestUrl`: `zh` chứa `tiếng Trung`, `ja` chứa `tiếng Nhật`, không bị mặc định thành tiếng Việt; thiếu ID chỉ làm lỗi khối tương ứng; các đáp án bị gộp trở lại thành dòng riêng. Không thay model, transport hoặc các hàm grammar ngoài nhu cầu task.
-- [ ] **Step 7:** Chạy `npm test -- tests/reading/ReadingTranslationService.test.ts tests/services/GeminiService.test.ts tests/services/BilingualTranslationService.test.ts` và `npm run typecheck:reading`; yêu cầu PASS. Commit: `feat(reading): schedule translations with cancellation and isolated cache`.
+- [x] **Step 2:** Chạy `npm test -- tests/reading/ReadingTranslationService.test.ts`; xác nhận RED.
+- [x] **Step 3:** Cài scheduler dùng chung cho các session của service, không tạo giới hạn concurrency riêng cho từng pane. Google gọi `translateWithMeta(text, sourceLang, targetLang, endpointUrl)`. Gemini chỉ gom job cùng session và cùng context, lấy tối đa 8 từ các job đã đủ điều kiện viewport; không gọi grammar. Request bị hủy cục bộ vẫn chiếm slot đến khi HTTP settle, nhưng không được publish/cache kết quả.
+- [x] **Step 4:** Mỗi job settle đúng một lần; hủy session settle job chờ và chặn callback muộn. Lỗi HTTP/throw/null/batch thiếu ID không được biến text gốc thành success. Kiểm tra protected token trước khi cache. Lỗi do thiếu key không gửi request và không đổi provider.
+- [x] **Step 5:** Dùng LRU 200 mục, chỉ lưu kết quả success. Khóa JSON giữ nguyên case của `[engine, sourceLang, targetLang, endpointUrl, model, cacheSeed, context]`; context có `noteTitle/heading/tags/folderPath` khi dùng Gemini, bỏ khi Google. Không đưa API key vào khóa/log. Thêm test 201 mục, cache hit không gọi lại provider và hai khối giống masked text nhưng khác inline không va cache.
+- [x] **Step 6:** Sửa riêng prompt `translateBatch` để nêu đúng đích `vi/en/zh/ja`, nguồn rõ khi khác `auto`, bảo toàn token nguyên văn và giữ dòng/lựa chọn trắc nghiệm. Với job nhận diện được trắc nghiệm, chuẩn hóa kết quả qua `formatMultipleChoiceText` hiện có trước khi kiểm tra token/cache. Bổ sung test parse body `requestUrl`: `zh` chứa `tiếng Trung`, `ja` chứa `tiếng Nhật`, không bị mặc định thành tiếng Việt; thiếu ID chỉ làm lỗi khối tương ứng; các đáp án bị gộp trở lại thành dòng riêng. Không thay model, transport hoặc các hàm grammar ngoài nhu cầu task.
+- [x] **Step 7:** Chạy `npm test -- tests/reading/ReadingTranslationService.test.ts tests/services/GeminiService.test.ts tests/services/BilingualTranslationService.test.ts` và `npm run typecheck:reading`; yêu cầu PASS. Commit: `feat(reading): schedule translations with cancellation and isolated cache`.
 
 ## Task 3: Render prominent translation blocks safely
 
@@ -152,7 +152,7 @@ expect(await brokenTokens).toEqual({ status: 'error', code: 'invalid-tokens' });
 - Produces `ReadingTranslationRenderer.mount(block: ReadingBlock, onRetry: () => void): ReadingTranslationView`.
 - `ReadingTranslationView` có `element: HTMLElement`, `loading(): void`, `show(result: ReadingTranslationResult): void`, `dispose(): void`; định nghĩa interface trong `src/reading/types.ts`.
 
-- [ ] **Step 1:** Viết test DOM `inserts_below_source_without_modifying_it`, `renders_provider_html_as_text`, `supports_keyboard_retry_and_disposal`, `uses_the_source_owner_document`:
+- [x] **Step 1:** Viết test DOM `inserts_below_source_without_modifying_it`, `renders_provider_html_as_text`, `supports_keyboard_retry_and_disposal`, `uses_the_source_owner_document`:
 
 ```ts
 expect(source.nextElementSibling).toBe(view.element);
@@ -164,10 +164,10 @@ retryButton.click(); expect(onRetry).toHaveBeenCalledTimes(1);
 view.dispose(); expect(view.element.isConnected).toBe(false);
 ```
 
-- [ ] **Step 2:** Chạy `npm test -- tests/reading/ReadingTranslationRenderer.test.ts`; xác nhận RED.
-- [ ] **Step 3:** Tạo DOM qua `sourceNodes[0].ownerDocument`, insert đúng `anchor`. Dùng `textContent` và fragment phục hồi; không dùng `innerHTML` với dữ liệu provider. `cancelled` dọn view, error cho nút **Thử lại**, loading hiện **Đang dịch…** với trạng thái truy cập. Dùng button thật; chỉ loading/error dùng thông báo trạng thái, tránh đọc lại mọi đoạn thành công qua live region.
-- [ ] **Step 4:** Đọc `impeccable/reference/craft-floor.md` trước khi chỉnh UI. Thêm CSS scoped `.polyglot-reading-translation` theo đúng Global Constraints; `white-space: pre-wrap`, bẻ từ dài, không ép chiều rộng, không thay style đoạn gốc. Nền fallback khai báo trước `color-mix`; màu chữ `var(--text-normal)`. Không lặp nhãn thành công hoặc thêm hiệu ứng không nằm trong thiết kế.
-- [ ] **Step 5:** Chạy test Task 3 và `npm run typecheck:reading`; yêu cầu PASS. Dùng fixture + renderer/CSS thật để kiểm tra có giới hạn: theme sáng/tối, pane 360px và 1024px, zoom 200%; chụp bằng chứng, kiểm tra màu computed/contrast >=4.5:1 và overflow. Nếu không có browser khả dụng, ghi `NOT_RUN` cho kiểm tra hình thức; không gọi jsdom là bằng chứng layout/contrast. Commit: `feat(reading): render prominent bilingual blocks`.
+- [x] **Step 2:** Chạy `npm test -- tests/reading/ReadingTranslationRenderer.test.ts`; xác nhận RED.
+- [x] **Step 3:** Tạo DOM qua `sourceNodes[0].ownerDocument`, insert đúng `anchor`. Dùng `textContent` và fragment phục hồi; không dùng `innerHTML` với dữ liệu provider. `cancelled` dọn view, error cho nút **Thử lại**, loading hiện **Đang dịch…** với trạng thái truy cập. Dùng button thật; chỉ loading/error dùng thông báo trạng thái, tránh đọc lại mọi đoạn thành công qua live region.
+- [x] **Step 4:** Đọc `impeccable/reference/craft-floor.md` trước khi chỉnh UI. Thêm CSS scoped `.polyglot-reading-translation` theo đúng Global Constraints; `white-space: pre-wrap`, bẻ từ dài, không ép chiều rộng, không thay style đoạn gốc. Nền fallback khai báo trước `color-mix`; màu chữ `var(--text-normal)`. Không lặp nhãn thành công hoặc thêm hiệu ứng không nằm trong thiết kế.
+- [x] **Step 5:** Chạy test Task 3 và `npm run typecheck:reading`; yêu cầu PASS. Dùng fixture + renderer/CSS thật để kiểm tra có giới hạn: theme sáng/tối, pane 360px và 1024px, zoom 200%; chụp bằng chứng, kiểm tra màu computed/contrast >=4.5:1 và overflow. Nếu không có browser khả dụng, ghi `NOT_RUN` cho kiểm tra hình thức; không gọi jsdom là bằng chứng layout/contrast. Commit: `feat(reading): render prominent bilingual blocks`.
 
 ## Task 4: Own sessions by pane and renderer lifecycle
 
@@ -179,8 +179,8 @@ view.dispose(); expect(view.element.isConnected).toBe(false);
 - Public methods: `toggle(view: MarkdownView): void`, `isEnabled(view: MarkdownView): boolean`, `processSection(el: HTMLElement, ctx: MarkdownPostProcessorContext): void`, `syncWorkspace(): void`, `updateSettings(): void`.
 - Test helpers: `makeReadingView(app: App, html: string, path: string): MarkdownView`; `makeReadingContext(view: MarkdownView): { ctx: MarkdownPostProcessorContext; unload(): void }`. Dùng DOM jsdom thật, provider fake và IntersectionObserver có thể chủ động emit entry trong test.
 
-- [ ] **Step 1:** Bổ sung tối thiểu mock `Component`/`MarkdownRenderChild` với load/unload/addChild/register/registerEvent và cleanup; cho mock `Plugin` kế thừa `Component`, ghi nhận `registerMarkdownPostProcessor` và trả lại callback được đăng ký. Bổ sung `MarkdownView.file/getMode/previewMode`, `View.addAction`, `Workspace.onLayoutReady`, `App.metadataCache`. Giữ nguyên helper DOM giả của suite cũ; test mới dùng DOM jsdom. `Component.addChild` chỉ tự load con khi cha đã load, đúng API thật. Test controller gọi `load()`; test integration gọi lifecycle plugin rồi đợi startup async, không giả định thêm child vào một cha chưa load sẽ tự chạy.
-- [ ] **Step 2:** Viết test `isolates_same_path_in_two_panes`, `ignores_final_reply_after_toggle_off`, `unloads_removed_sections_without_resetting_other_sections`, `invalidates_changed_settings_without_requesting_again`, `preserves_the_view_source_metadata`:
+- [x] **Step 1:** Bổ sung tối thiểu mock `Component`/`MarkdownRenderChild` với load/unload/addChild/register/registerEvent và cleanup; cho mock `Plugin` kế thừa `Component`, ghi nhận `registerMarkdownPostProcessor` và trả lại callback được đăng ký. Bổ sung `MarkdownView.file/getMode/previewMode`, `View.addAction`, `Workspace.onLayoutReady`, `App.metadataCache`. Giữ nguyên helper DOM giả của suite cũ; test mới dùng DOM jsdom. `Component.addChild` chỉ tự load con khi cha đã load, đúng API thật. Test controller gọi `load()`; test integration gọi lifecycle plugin rồi đợi startup async, không giả định thêm child vào một cha chưa load sẽ tự chạy.
+- [x] **Step 2:** Viết test `isolates_same_path_in_two_panes`, `ignores_final_reply_after_toggle_off`, `unloads_removed_sections_without_resetting_other_sections`, `invalidates_changed_settings_without_requesting_again`, `preserves_the_view_source_metadata`:
 
 ```ts
 controller.toggle(left); expect(controller.isEnabled(left)).toBe(true);
@@ -193,12 +193,12 @@ expect(observerOptions.rootMargin).toBe('300px');
 expect(offscreenProviderCalls).toBe(0);
 ```
 
-- [ ] **Step 3:** Chạy `npm test -- tests/reading/ReadingTranslationController.test.ts`; xác nhận RED.
-- [ ] **Step 4:** Cài Map keyed bằng `MarkdownView`, không keyed riêng source path. Phiên chứa source path, generation, cấu hình snapshot, section children và service session. Cấu hình mặc định `google`; đọc các field nguồn/đích/endpoint/key hiện có, model `gemini-flash-latest`. `updateSettings` so sánh field liên quan, kể cả key trong RAM; khi đổi, tắt phiên, dọn DOM, hủy job và clear cache; đổi accent/audio không kết thúc phiên.
-- [ ] **Step 5:** `processSection` tìm view có `getMode() === 'preview'`, `file.path === ctx.sourcePath` và `view.previewMode.containerEl.contains(el)`; loại section trong embed hoặc ngoài view. Đăng ký `MarkdownRenderChild` qua `ctx.addChild`. Callback unload dọn riêng section; kết quả chỉ được gắn nếu session/generation/path/config còn đúng và source node còn thuộc root hiện tại. Private helper `buildContext(view: MarkdownView, block: ReadingBlock): DocumentContextMeta` lấy noteTitle/folderPath/tags từ `view.file` và metadataCache, heading từ heading nguồn gần nhất phía trên trong root của chính view; không đọc file active ở pane khác.
-- [ ] **Step 6:** Bật phiên trước rồi gọi `view.previewMode.rerender(true)` để cả section có sẵn đi lại qua post processor; giữ và phục hồi scroll bằng `getScroll/applyScroll`. Theo dõi viewport qua IntersectionObserver có root thuộc view, `rootMargin: '300px'`; chỉ mount/enqueue khối khi vào vùng này. Nếu API observer không có, kiểm tra rect tương đối root trên scroll/resize với cùng margin, không dịch toàn bộ note như fallback. Dùng window/document của root cho observer và sự kiện để hỗ trợ popout.
-- [ ] **Step 7:** `onload` đăng ký `layout-change`, `file-open`, `active-leaf-change` rồi sync sau `onLayoutReady`. Sync chỉ giữ view còn tồn tại; đổi file/mode kết thúc phiên và gỡ UI. Bổ sung observer vòng đời có phạm vi view để phát hiện DOM/mode thay đổi giữa các workspace event; bỏ mutation do chính bản dịch tạo để tránh loop. `onunload` kết thúc mọi phiên, tháo icon/observer/listener và `service.dispose()`.
-- [ ] **Step 8:** Thêm test đoạn cuối/section bị gỡ giữa await, file/mode đổi, cùng file mở lại, view của document khác, fallback không IntersectionObserver, foreground pane đổi mà metadata vẫn đúng. Chạy test Task 4, các test Task 1–3 và `npm run typecheck:reading`; yêu cầu PASS. Commit: `feat(reading): manage pane scoped translation sessions`.
+- [x] **Step 3:** Chạy `npm test -- tests/reading/ReadingTranslationController.test.ts`; xác nhận RED.
+- [x] **Step 4:** Cài Map keyed bằng `MarkdownView`, không keyed riêng source path. Phiên chứa source path, generation, cấu hình snapshot, section children và service session. Cấu hình mặc định `google`; đọc các field nguồn/đích/endpoint/key hiện có, model `gemini-flash-latest`. `updateSettings` so sánh field liên quan, kể cả key trong RAM; khi đổi, tắt phiên, dọn DOM, hủy job và clear cache; đổi accent/audio không kết thúc phiên.
+- [x] **Step 5:** `processSection` tìm view có `getMode() === 'preview'`, `file.path === ctx.sourcePath` và `view.previewMode.containerEl.contains(el)`; loại section trong embed hoặc ngoài view. Đăng ký `MarkdownRenderChild` qua `ctx.addChild`. Callback unload dọn riêng section; kết quả chỉ được gắn nếu session/generation/path/config còn đúng và source node còn thuộc root hiện tại. Private helper `buildContext(view: MarkdownView, block: ReadingBlock): DocumentContextMeta` lấy noteTitle/folderPath/tags từ `view.file` và metadataCache, heading từ heading nguồn gần nhất phía trên trong root của chính view; không đọc file active ở pane khác.
+- [x] **Step 6:** Bật phiên trước rồi gọi `view.previewMode.rerender(true)` để cả section có sẵn đi lại qua post processor; giữ và phục hồi scroll bằng `getScroll/applyScroll`. Theo dõi viewport qua IntersectionObserver có root thuộc view, `rootMargin: '300px'`; chỉ mount/enqueue khối khi vào vùng này. Nếu API observer không có, kiểm tra rect tương đối root trên scroll/resize với cùng margin, không dịch toàn bộ note như fallback. Dùng window/document của root cho observer và sự kiện để hỗ trợ popout.
+- [x] **Step 7:** `onload` đăng ký `layout-change`, `file-open`, `active-leaf-change` rồi sync sau `onLayoutReady`. Sync chỉ giữ view còn tồn tại; đổi file/mode kết thúc phiên và gỡ UI. Bổ sung observer vòng đời có phạm vi view để phát hiện DOM/mode thay đổi giữa các workspace event; bỏ mutation do chính bản dịch tạo để tránh loop. `onunload` kết thúc mọi phiên, tháo icon/observer/listener và `service.dispose()`.
+- [x] **Step 8:** Thêm test đoạn cuối/section bị gỡ giữa await, file/mode đổi, cùng file mở lại, view của document khác, fallback không IntersectionObserver, foreground pane đổi mà metadata vẫn đúng. Chạy test Task 4, các test Task 1–3 và `npm run typecheck:reading`; yêu cầu PASS. Commit: `feat(reading): manage pane scoped translation sessions`.
 
 ## Task 5: Integrate commands, settings and verify the complete flow
 
@@ -209,7 +209,7 @@ expect(offscreenProviderCalls).toBe(0);
 - Produces `registerReadingTranslation(plugin: Plugin, getSettings: () => PluginSettings): ReadingTranslationController`; function này nằm trong phạm vi `typecheck:reading`, dùng type Obsidian thật.
 - `main.ts` giữ field `readingTranslationController?: ReadingTranslationController`, khởi tạo qua factory; `saveSettings()` gọi `readingTranslationController?.updateSettings()` sau khi lưu settings.
 
-- [ ] **Step 1:** Viết integration test DOM chạy main → adapter/controller → service thật, chỉ stub HTTP/host Obsidian. Không spy thay `service.enqueue` hoặc `controller.toggle` trong test chứng minh luồng hoàn chỉnh. Dùng ghi chú fixture, observer giả phát entry và deferred HTTP cho trường hợp tắt lúc request cuối đang chờ.
+- [x] **Step 1:** Viết integration test DOM chạy main → adapter/controller → service thật, chỉ stub HTTP/host Obsidian. Không spy thay `service.enqueue` hoặc `controller.toggle` trong test chứng minh luồng hoàn chỉnh. Dùng ghi chú fixture, observer giả phát entry và deferred HTTP cho trường hợp tắt lúc request cuối đang chờ.
 
 ```ts
 expect(command.id).toBe('toggle-reading-translation');
@@ -222,13 +222,13 @@ expect(view.editor.setValue).not.toHaveBeenCalled();
 expect(originalNoteContent).toBe(noteContentAfterScenario);
 ```
 
-- [ ] **Step 2:** Chạy `npm test -- tests/reading/pluginIntegration.test.ts`; xác nhận RED.
-- [ ] **Step 3:** Factory dùng `plugin.addChild(controller)` và `plugin.registerMarkdownPostProcessor(...)`, đăng ký command kiểm tra Reading Mode. Controller tạo action icon `languages` cho mỗi Markdown view bằng `view.addAction`, cập nhật `aria-label/aria-pressed`, ẩn trong Edit Mode và gỡ khi view đóng. Không đặt hotkey mặc định. Cập nhật test command từ 7 thành 8; kiểm tra ID mới rõ ràng, giữ các assertion event cũ trừ khi hành vi thật yêu cầu đổi.
-- [ ] **Step 4:** Thêm nhóm cài đặt **DỊCH SONG NGỮ KHI ĐỌC**, dropdown **Công cụ dịch khi đọc**: Google Translate/Gemini; default `google`. Phân biệt nhóm xuất file cũ bằng mô tả rõ rằng nhóm đó ghi nội dung Markdown; không thay mặc định xuất file hoặc tự bật dịch khi đổi engine. Test thiếu Gemini key không gửi HTTP và không chuyển provider; AI grammar toggle không tác động lựa chọn engine đọc.
-- [ ] **Step 5:** Chạy các tình huống integration: bật → kết quả → tắt; bật → lỗi → Thử lại; bật → hủy request cuối; đổi nguồn/đích/endpoint/key; hai pane cùng file; đổi file/mode; unload plugin. Mọi nhánh kiểm tra không ghi note và không còn DOM bản dịch sau khi phiên kết thúc.
-- [ ] **Step 6:** Chạy lần lượt `npm test`, `npm run typecheck:reading`, `npm run build`, `git diff --check`. Baseline khảo sát là 337 test/21 file pass; full `tsc --noEmit` có 55 lỗi trước thay đổi (8 mock, 9 application, 38 test). Chạy full typecheck để đối chiếu và ghi kết quả thực; không ép sửa lỗi cũ ngoài phạm vi hoặc báo toàn project typecheck pass khi chỉ scoped check pass. Build thay `main.js` bị Git ignore là đầu ra dự kiến ở bước triển khai, không commit bundle.
-- [ ] **Step 7:** Cập nhật README với command, engine, hình thức, cache tạm thời và phân biệt đọc tạm với xuất file. Ghi bằng chứng visual Task 3 và trạng thái chạy thật vào phần nghiệm thu của plan. Nếu không có môi trường/vault thử nghiệm được phép hoặc chưa có phép gọi provider thật, ghi `NOT_RUN` cho Obsidian/provider thật; không đổi trạng thái đó thành PASS từ test mock.
-- [ ] **Step 8:** Commit đúng file của task: `feat(reading): integrate immersive bilingual reading mode`. Rà soát toàn nhánh so với đặc tả, đối chiếu public API, thay đổi ngoài phạm vi và bằng chứng không ghi note. Nếu người dùng chọn phương thức có reviewer độc lập thì dispatch theo đúng phương thức được chọn; không tự spawn trước lựa chọn đó.
+- [x] **Step 2:** Chạy `npm test -- tests/reading/pluginIntegration.test.ts`; xác nhận RED.
+- [x] **Step 3:** Factory dùng `plugin.addChild(controller)` và `plugin.registerMarkdownPostProcessor(...)`, đăng ký command kiểm tra Reading Mode. Controller tạo action icon `languages` cho mỗi Markdown view bằng `view.addAction`, cập nhật `aria-label/aria-pressed`, ẩn trong Edit Mode và gỡ khi view đóng. Không đặt hotkey mặc định. Cập nhật test command từ 7 thành 8; kiểm tra ID mới rõ ràng, giữ các assertion event cũ trừ khi hành vi thật yêu cầu đổi.
+- [x] **Step 4:** Thêm nhóm cài đặt **DỊCH SONG NGỮ KHI ĐỌC**, dropdown **Công cụ dịch khi đọc**: Google Translate/Gemini; default `google`. Phân biệt nhóm xuất file cũ bằng mô tả rõ rằng nhóm đó ghi nội dung Markdown; không thay mặc định xuất file hoặc tự bật dịch khi đổi engine. Test thiếu Gemini key không gửi HTTP và không chuyển provider; AI grammar toggle không tác động lựa chọn engine đọc.
+- [x] **Step 5:** Chạy các tình huống integration: bật → kết quả → tắt; bật → lỗi → Thử lại; bật → hủy request cuối; đổi nguồn/đích/endpoint/key; hai pane cùng file; đổi file/mode; unload plugin. Mọi nhánh kiểm tra không ghi note và không còn DOM bản dịch sau khi phiên kết thúc.
+- [x] **Step 6:** Chạy lần lượt `npm test`, `npm run typecheck:reading`, `npm run build`, `git diff --check`. Baseline khảo sát là 337 test/21 file pass; full `tsc --noEmit` có 55 lỗi trước thay đổi (8 mock, 9 application, 38 test). Chạy full typecheck để đối chiếu và ghi kết quả thực; không ép sửa lỗi cũ ngoài phạm vi hoặc báo toàn project typecheck pass khi chỉ scoped check pass. Build thay `main.js` bị Git ignore là đầu ra dự kiến ở bước triển khai, không commit bundle.
+- [x] **Step 7:** Cập nhật README với command, engine, hình thức, cache tạm thời và phân biệt đọc tạm với xuất file. Ghi bằng chứng visual Task 3 và trạng thái chạy thật vào phần nghiệm thu của plan. Nếu không có môi trường/vault thử nghiệm được phép hoặc chưa có phép gọi provider thật, ghi `NOT_RUN` cho Obsidian/provider thật; không đổi trạng thái đó thành PASS từ test mock.
+- [x] **Step 8:** Commit đúng file của task: `feat(reading): integrate immersive bilingual reading mode`. Rà soát toàn nhánh so với đặc tả, đối chiếu public API, thay đổi ngoài phạm vi và bằng chứng không ghi note. Nếu người dùng chọn phương thức có reviewer độc lập thì dispatch theo đúng phương thức được chọn; không tự spawn trước lựa chọn đó.
 
 ## Coverage and Execution Handoff
 
@@ -244,13 +244,17 @@ expect(originalNoteContent).toBe(noteContentAfterScenario);
 
 Thứ tự thực hiện: **Task 1 → Task 2 → Task 3 → Task 4 → Task 5**. Thực hiện trên nhánh hiện tại `vinhdat/immersive-reading-translation`; trước khi triển khai áp dụng skill worktree để kiểm tra nhu cầu checkout cách ly, giữ lại các commit tài liệu đã duyệt. Không tạo project/thread khác.
 
-Đề xuất **Native**: một người thực hiện lần lượt vì controller, renderer và service phụ thuộc các hợp đồng chung, rồi một reviewer độc lập xem toàn nhánh theo workflow đã chọn. Phương án **Subagent-driven** dùng implementer và reviewer riêng theo từng task; nhiều lượt review hơn và tốn thêm context. Chưa có phương thức nào được người dùng chọn tại thời điểm viết kế hoạch.
+Người dùng đã chọn **Native** ngày 2026-10-18: thực hiện lần lượt trong cùng chat, một reviewer độc lập xem toàn nhánh ở cuối. Checkout cách ly được tạo từ nhánh tài liệu đã duyệt; nhánh triển khai là `vinhdat/immersive-reading-implementation`.
 
 ## Verification Record
 
 - Tự rà soát kế hoạch so với đặc tả: đã đối chiếu phạm vi, 12 tiêu chí nghiệm thu, 5 Review Focus và các chữ ký giữa task; bổ sung kiểm tra trắc nghiệm chung paragraph, vòng đời mock theo API thật và cache của inline content.
-- Test/build/typecheck tính năng mới: `NOT_RUN` — chưa triển khai.
-- Visual fixture và Obsidian/provider thật: `NOT_RUN` — chưa triển khai.
+- Test: **386/386**, 26 file. Build và `typecheck:reading` với type API Obsidian thật: **PASS**.
+- Typecheck toàn repository: **FAIL**, 49 lỗi so với 55 tại baseline; đối chiếu diagnostic theo file/mã/nội dung cho thấy **không có lỗi mới**. Không mô tả scoped check là toàn repository pass.
+- Browser fixture dùng renderer/CSS thật: **PASS** với 9 khối dịch, chữ 600, viền 4px; tương phản sáng 11.75:1 và tối 8.52:1. Pane 360px tại CSS zoom 200% và pane 1024px không tràn phần dịch. Đây là theme đại diện, không phải theme/vault Obsidian đang cài của người dùng.
+- Detector UI đã chạy một lần; cảnh báo viền dọc được giữ theo đặc tả đã duyệt. Các cảnh báo CSS cũ ngoài tính năng không được sửa như tác dụng phụ.
+- Obsidian/provider thật: `NOT_RUN`; không dùng credential hoặc Vault cá nhân.
+- Điều chỉnh khi thực hiện: service session thuộc từng section để hủy đúng công việc section mà không hủy pane khác; scheduler vẫn có giới hạn chung. Vitest ưu tiên `.ts` để test không đọc nhầm `main.js` sau build.
 
 ## References
 

@@ -4,7 +4,7 @@ Ngày: 2026-10-18
 
 Snapshot khảo sát: `main@515e7b0`
 
-Trạng thái: Người dùng đã duyệt bản đặc tả ngày 2026-10-18. Đang lập kế hoạch; chưa triển khai.
+Trạng thái: Người dùng đã duyệt ngày 2026-10-18; đã triển khai Native và kiểm thử cục bộ, đang chờ review toàn nhánh. Obsidian/provider thật: NOT_RUN.
 
 ## 1. Mục tiêu và quyết định đã xác nhận
 
