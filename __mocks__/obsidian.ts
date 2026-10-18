@@ -148,21 +148,229 @@ export class App {
   public workspace: Workspace = new Workspace();
 }
 
+export function createMockObsidianElement(tag: string = "div"): any {
+  const listeners: Record<string, ((...args: any[]) => void)[]> = {};
+  const attributes: Record<string, string> = {};
+  const classListSet = new Set<string>();
+  const children: any[] = [];
+  let textContent = "";
+  let classNameVal = "";
+
+  const el: any = {
+    tagName: tag.toUpperCase(),
+    style: {} as Record<string, string>,
+    get textContent() {
+      if (children.length > 0) {
+        return children.map((c) => c.textContent || "").join("");
+      }
+      return textContent;
+    },
+    set textContent(val: string) {
+      textContent = val;
+    },
+    get className() {
+      return classNameVal;
+    },
+    set className(val: string) {
+      classNameVal = val;
+      classListSet.clear();
+      val
+        .split(/\s+/)
+        .filter(Boolean)
+        .forEach((c) => classListSet.add(c));
+    },
+    innerHTML: "",
+    parentElement: null as any,
+    classList: {
+      add: (...classes: string[]) => {
+        classes.forEach((cls) => classListSet.add(cls));
+        classNameVal = Array.from(classListSet).join(" ");
+      },
+      remove: (...classes: string[]) => {
+        classes.forEach((cls) => classListSet.delete(cls));
+        classNameVal = Array.from(classListSet).join(" ");
+      },
+      contains: (cls: string) => classListSet.has(cls),
+      toggle: (cls: string, force?: boolean) => {
+        if (force !== undefined) {
+          if (force) classListSet.add(cls);
+          else classListSet.delete(cls);
+        } else {
+          if (classListSet.has(cls)) classListSet.delete(cls);
+          else classListSet.add(cls);
+        }
+        classNameVal = Array.from(classListSet).join(" ");
+      },
+    },
+    setAttribute: (name: string, val: string) => {
+      attributes[name] = val;
+    },
+    getAttribute: (name: string) => attributes[name] || null,
+    appendChild: (child: any) => {
+      child.parentElement = el;
+      children.push(child);
+      return child;
+    },
+    removeChild: (child: any) => {
+      const idx = children.indexOf(child);
+      if (idx !== -1) {
+        children.splice(idx, 1);
+        child.parentElement = null;
+      }
+      return child;
+    },
+    remove: () => {
+      if (el.parentElement) {
+        el.parentElement.removeChild(el);
+      }
+    },
+    empty: () => {
+      children.forEach((c) => (c.parentElement = null));
+      children.length = 0;
+      textContent = "";
+      el.innerHTML = "";
+    },
+    createEl: (tag: string, options?: any) => {
+      const child = createMockObsidianElement(tag);
+      if (options) {
+        if (typeof options === "string") {
+          child.className = options;
+        } else {
+          if (options.cls) child.className = options.cls;
+          if (options.text) child.textContent = options.text;
+          if (options.attr) {
+            Object.entries(options.attr).forEach(([k, v]) => child.setAttribute(k, String(v)));
+          }
+          if (options.title) child.setAttribute("title", options.title);
+          if (options.type) child.setAttribute("type", options.type);
+          if (options.placeholder) child.setAttribute("placeholder", options.placeholder);
+        }
+      }
+      el.appendChild(child);
+      return child;
+    },
+    createDiv: (options?: any) => {
+      return el.createEl("div", options);
+    },
+    createSpan: (options?: any) => {
+      return el.createEl("span", options);
+    },
+    setText: (text: string) => {
+      el.textContent = text;
+      return el;
+    },
+    addClass: (cls: string) => {
+      el.classList.add(cls);
+      return el;
+    },
+    removeClass: (cls: string) => {
+      el.classList.remove(cls);
+      return el;
+    },
+    toggleClass: (cls: string, val?: boolean) => {
+      el.classList.toggle(cls, val);
+      return el;
+    },
+    hasClass: (cls: string) => {
+      return el.classList.contains(cls);
+    },
+    addEventListener: (event: string, handler: any) => {
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(handler);
+    },
+    removeEventListener: (event: string, handler: any) => {
+      if (listeners[event]) {
+        listeners[event] = listeners[event].filter((h) => h !== handler);
+      }
+    },
+    dispatchEvent: (eventObj: { type: string; [key: string]: any }) => {
+      const handlers = listeners[eventObj.type] || [];
+      handlers.forEach((h) => h(eventObj));
+    },
+    contains: (target: any) => {
+      if (target === el) return true;
+      return children.some((c) => c.contains?.(target) ?? c === target);
+    },
+    getBoundingClientRect: () => ({
+      width: 300,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 300,
+      bottom: 600,
+    }),
+    querySelector: (selector: string): any => {
+      if (selector.startsWith(".")) {
+        const className = selector.slice(1);
+        if (classListSet.has(className)) return el;
+      }
+      if (selector.toUpperCase() === tag.toUpperCase()) return el;
+      for (const child of children) {
+        if (selector.startsWith(".")) {
+          const className = selector.slice(1);
+          if (child.classList?.contains?.(className)) return child;
+        }
+        if (child.tagName === selector.toUpperCase()) return child;
+        const found = child.querySelector?.(selector);
+        if (found) return found;
+      }
+      return null;
+    },
+    querySelectorAll: (selector: string): any[] => {
+      const results: any[] = [];
+      for (const child of children) {
+        if (selector.startsWith(".")) {
+          const className = selector.slice(1);
+          if (child.classList?.contains?.(className)) results.push(child);
+        }
+        if (child.tagName === selector.toUpperCase()) results.push(child);
+        if (child.querySelectorAll) {
+          results.push(...child.querySelectorAll(selector));
+        }
+      }
+      return results;
+    },
+    children,
+    get childNodes() {
+      return children;
+    },
+    hasChildNodes: () => children.length > 0,
+  };
+
+  return el;
+}
+
 export class Setting {
+  public static instances: Setting[] = [];
   public containerEl: any;
+  public name: string = "";
+  public desc: string | DocumentFragment = "";
+  public isHeading: boolean = false;
   public nameEl: any = {};
   public descEl: any = {};
   public controlEl: any = {};
+  public textComponents: any[] = [];
+  public dropdownComponents: any[] = [];
+  public toggleComponents: any[] = [];
+  public buttonComponents: any[] = [];
 
   constructor(containerEl: any) {
     this.containerEl = containerEl;
+    Setting.instances.push(this);
   }
 
   setName(name: string): this {
+    this.name = name;
     return this;
   }
 
   setDesc(desc: string | DocumentFragment): this {
+    this.desc = desc;
+    return this;
+  }
+
+  setHeading(): this {
+    this.isHeading = true;
     return this;
   }
 
@@ -180,52 +388,111 @@ export class Setting {
 
   addText(cb: (text: any) => any): this {
     const textComponent = {
-      setValue: vi.fn().mockReturnThis(),
-      getValue: vi.fn().mockReturnValue(""),
-      setPlaceholder: vi.fn().mockReturnThis(),
-      onChange: vi.fn().mockReturnThis(),
+      _value: "",
+      _placeholder: "",
+      _onChange: null as any,
+      setValue: vi.fn((val: string) => {
+        textComponent._value = val;
+        return textComponent;
+      }),
+      getValue: vi.fn(() => textComponent._value),
+      setPlaceholder: vi.fn((ph: string) => {
+        textComponent._placeholder = ph;
+        return textComponent;
+      }),
+      onChange: vi.fn((handler: (val: string) => any) => {
+        textComponent._onChange = handler;
+        return textComponent;
+      }),
       inputEl: { type: "text" },
     };
     cb(textComponent);
+    this.textComponents.push(textComponent);
     return this;
   }
 
   addDropdown(cb: (dropdown: any) => any): this {
     const dropdownComponent = {
-      addOption: vi.fn().mockReturnThis(),
-      addOptions: vi.fn().mockReturnThis(),
-      setValue: vi.fn().mockReturnThis(),
-      getValue: vi.fn().mockReturnValue(""),
-      onChange: vi.fn().mockReturnThis(),
+      _value: "",
+      _options: {} as Record<string, string>,
+      _onChange: null as any,
+      addOption: vi.fn((val: string, display: string) => {
+        dropdownComponent._options[val] = display;
+        return dropdownComponent;
+      }),
+      addOptions: vi.fn((opts: Record<string, string>) => {
+        Object.assign(dropdownComponent._options, opts);
+        return dropdownComponent;
+      }),
+      setValue: vi.fn((val: string) => {
+        dropdownComponent._value = val;
+        return dropdownComponent;
+      }),
+      getValue: vi.fn(() => dropdownComponent._value),
+      onChange: vi.fn((handler: (val: string) => any) => {
+        dropdownComponent._onChange = handler;
+        return dropdownComponent;
+      }),
       selectEl: {},
     };
     cb(dropdownComponent);
+    this.dropdownComponents.push(dropdownComponent);
     return this;
   }
 
   addToggle(cb: (toggle: any) => any): this {
     const toggleComponent = {
-      setValue: vi.fn().mockReturnThis(),
-      getValue: vi.fn().mockReturnValue(false),
-      onChange: vi.fn().mockReturnThis(),
+      _value: false,
+      _onChange: null as any,
+      setValue: vi.fn((val: boolean) => {
+        toggleComponent._value = val;
+        return toggleComponent;
+      }),
+      getValue: vi.fn(() => toggleComponent._value),
+      onChange: vi.fn((handler: (val: boolean) => any) => {
+        toggleComponent._onChange = handler;
+        return toggleComponent;
+      }),
       toggleEl: {},
     };
     cb(toggleComponent);
+    this.toggleComponents.push(toggleComponent);
     return this;
   }
 
   addButton(cb: (button: any) => any): this {
     const buttonComponent = {
-      setButtonText: vi.fn().mockReturnThis(),
-      setIcon: vi.fn().mockReturnThis(),
-      setClass: vi.fn().mockReturnThis(),
-      setTooltip: vi.fn().mockReturnThis(),
+      _buttonText: "",
+      _icon: "",
+      _cls: "",
+      _tooltip: "",
+      _onClick: null as any,
+      setButtonText: vi.fn((text: string) => {
+        buttonComponent._buttonText = text;
+        return buttonComponent;
+      }),
+      setIcon: vi.fn((icon: string) => {
+        buttonComponent._icon = icon;
+        return buttonComponent;
+      }),
+      setClass: vi.fn((cls: string) => {
+        buttonComponent._cls = cls;
+        return buttonComponent;
+      }),
+      setTooltip: vi.fn((tooltip: string) => {
+        buttonComponent._tooltip = tooltip;
+        return buttonComponent;
+      }),
       setWarning: vi.fn().mockReturnThis(),
       setCta: vi.fn().mockReturnThis(),
-      onClick: vi.fn().mockReturnThis(),
+      onClick: vi.fn((handler: () => any) => {
+        buttonComponent._onClick = handler;
+        return buttonComponent;
+      }),
       buttonEl: {},
     };
     cb(buttonComponent);
+    this.buttonComponents.push(buttonComponent);
     return this;
   }
 }
@@ -238,20 +505,7 @@ export class PluginSettingTab {
   constructor(app: App, plugin: Plugin) {
     this.app = app;
     this.plugin = plugin;
-    this.containerEl = {
-      empty: vi.fn(),
-      createEl: vi.fn((tag: string, attrs?: any) => ({
-        setText: vi.fn(),
-        addClass: vi.fn(),
-        setAttribute: vi.fn(),
-        style: {},
-      })),
-      createDiv: vi.fn(() => ({
-        setText: vi.fn(),
-        addClass: vi.fn(),
-        style: {},
-      })),
-    };
+    this.containerEl = createMockObsidianElement("div");
   }
 
   display(): any {}
@@ -266,32 +520,17 @@ export class View {
   constructor(leaf: WorkspaceLeaf) {
     this.leaf = leaf;
     this.app = new App();
-    this.containerEl = {
-      empty: vi.fn(),
-      createEl: vi.fn(() => ({})),
-      createDiv: vi.fn(() => ({})),
-    };
+    this.containerEl = createMockObsidianElement("div");
   }
 }
 
 export class ItemView extends View {
-  public contentEl: any = {
-    empty: vi.fn(),
-    createEl: vi.fn((tag: string, attrs?: any) => ({
-      setText: vi.fn(),
-      createEl: vi.fn(),
-      createDiv: vi.fn(),
-      addEventListener: vi.fn(),
-      style: {},
-    })),
-    createDiv: vi.fn((attrs?: any) => ({
-      setText: vi.fn(),
-      createEl: vi.fn(),
-      createDiv: vi.fn(),
-      addEventListener: vi.fn(),
-      style: {},
-    })),
-  };
+  public contentEl: any;
+
+  constructor(leaf: WorkspaceLeaf) {
+    super(leaf);
+    this.contentEl = createMockObsidianElement("div");
+  }
 
   getViewType(): string {
     return "item-view";
