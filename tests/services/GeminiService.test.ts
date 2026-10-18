@@ -274,6 +274,38 @@ describe("GeminiService", () => {
       expect(prompt).toContain("project-management");
       expect(prompt).toContain("qualifies");
     });
+
+    it("should accept alias fields fileTitle and headingContext in docContext", async () => {
+      const mockResponse = {
+        candidates: [{ content: { parts: [{ text: "Dịch chuẩn theo bệnh lý." }] } }],
+      };
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: mockResponse,
+        text: JSON.stringify(mockResponse),
+      });
+
+      await service.translateContext(
+        "arrhythmia",
+        "Patient exhibits sinus arrhythmia.",
+        "valid-key",
+        {
+          fileTitle: "Medical Pathology Note",
+          headingContext: "Cardiology Symptoms",
+          tags: ["medicine", "cardiology"],
+        }
+      );
+
+      const callArgs = vi.mocked(requestUrl).mock.calls[0][0] as any;
+      const body = JSON.parse(callArgs.body);
+      const prompt = body.contents[0].parts[0].text;
+      expect(prompt).toContain("Medical Pathology Note");
+      expect(prompt).toContain("Cardiology Symptoms");
+      expect(prompt).toContain("medicine");
+      expect(prompt).toContain("arrhythmia");
+    });
   });
 
   describe("analyzeGrammar", () => {

@@ -107,10 +107,34 @@ export class ProviderManager {
     rawContext: string,
     cursorOffset: number = 0,
     settings?: Partial<PluginSettings>,
-    docContext?: DocumentContextMeta,
+    docContext?: DocumentContextMeta | { docContext?: DocumentContextMeta; onAiUpdate?: (result: LookupResult) => void },
     onAiUpdate?: (result: LookupResult) => void
   ): Promise<LookupResult> {
     this.cancelPending();
+
+    // Hỗ trợ cả 2 cách gọi:
+    // 1. Chuẩn: lookup(text, raw, offset, settings, docContext, onAiUpdate)
+    // 2. Options wrapper: lookup(text, raw, offset, settings, { docContext, onAiUpdate })
+    let effectiveDocContext: DocumentContextMeta | undefined;
+    let effectiveOnAiUpdate = onAiUpdate;
+
+    if (docContext) {
+      if (
+        "onAiUpdate" in (docContext as any) ||
+        ("docContext" in (docContext as any) && Object.keys(docContext).length <= 2)
+      ) {
+        const wrapper = docContext as {
+          docContext?: DocumentContextMeta;
+          onAiUpdate?: (result: LookupResult) => void;
+        };
+        effectiveDocContext = wrapper.docContext;
+        if (!effectiveOnAiUpdate && typeof wrapper.onAiUpdate === "function") {
+          effectiveOnAiUpdate = wrapper.onAiUpdate;
+        }
+      } else {
+        effectiveDocContext = docContext as DocumentContextMeta;
+      }
+    }
 
     const controller = new AbortController();
     this.activeController = controller;
@@ -135,7 +159,7 @@ export class ProviderManager {
         timestamp: Date.now(),
         sourceLang,
         targetLang,
-        docContext,
+        docContext: effectiveDocContext,
       };
     }
 
@@ -281,7 +305,7 @@ export class ProviderManager {
       targetLang,
       ...(transliteration ? { transliteration } : {}),
       timestamp: Date.now(),
-      docContext,
+      docContext: effectiveDocContext,
       aiLoading: hasAnyAi,
     };
 
@@ -293,7 +317,7 @@ export class ProviderManager {
             cleanText,
             contextSentenceClean,
             effectiveSettings.geminiApiKey,
-            docContext,
+            effectiveDocContext,
             detectedSourceLang || sourceLang,
             targetLang
           );
@@ -306,7 +330,7 @@ export class ProviderManager {
         }
 
         if (needsAiGrammar) {
-          if (!onAiUpdate && !needsAiTranslation && type === "sentence" && result.aiGrammarNote) {
+          if (!effectiveOnAiUpdate && !needsAiTranslation && type === "sentence" && result.aiGrammarNote) {
             // Already populated above in legacy sentence branch
             return;
           }
@@ -315,7 +339,7 @@ export class ProviderManager {
             cleanText,
             contextSentenceClean,
             effectiveSettings.geminiApiKey,
-            docContext,
+            effectiveDocContext,
             detectedSourceLang || sourceLang,
             targetLang
           );
@@ -338,15 +362,15 @@ export class ProviderManager {
         result.aiLoading = false;
         if (!controller.signal.aborted) {
           this.cache.set(cacheKey, result);
-          if (onAiUpdate) {
-            onAiUpdate(result);
+          if (effectiveOnAiUpdate) {
+            effectiveOnAiUpdate(result);
           }
         }
       }
     };
 
     if (hasAnyAi) {
-      if (onAiUpdate) {
+      if (effectiveOnAiUpdate) {
         // Chế độ Progressive: trả về base result ngay lập tức, chạy AI ngầm
         executeAi();
         return result;

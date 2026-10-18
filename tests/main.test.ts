@@ -268,7 +268,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         expect.stringContaining("Artificial intelligence is transforming software engineering."),
         expect.any(Number),
         plugin.settings,
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
       expect(result).toEqual(mockResult);
       expect((plugin as any).lastLookupResult).toEqual(mockResult);
@@ -673,7 +674,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         "Finding this book was sheer serendipity.",
         28,
         plugin.settings,
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
       expect(popoverSpy).toHaveBeenCalled();
     });
@@ -891,8 +893,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
     it("should dispatch onAiUpdate to update popover and sidebar when background AI finishes", async () => {
       let registeredOnAiUpdate: ((result: LookupResult) => void) | undefined;
       vi.spyOn(plugin.providerManager, "lookup").mockImplementation(
-        async (_q, _p, _o, _s, options) => {
-          registeredOnAiUpdate = options?.onAiUpdate;
+        async (_q, _p, _o, _s, docContext, onAiUpdate) => {
+          registeredOnAiUpdate = onAiUpdate ?? (docContext as any)?.onAiUpdate;
           return {
             query: "sprint",
             type: "word",

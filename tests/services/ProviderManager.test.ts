@@ -623,6 +623,70 @@ describe("ProviderManager", () => {
       expect(updatedResult.aiGrammarNote).toBe("• **Cấu trúc:** `qualify as + Noun`");
     });
 
+    it("should unpack { docContext, onAiUpdate } when passed as the 5th argument and enable progressive loading", async () => {
+      vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValueOnce({
+        word: "sprint",
+        phonetic: "/sprɪnt/",
+        definitions: [{ partOfSpeech: "noun", definition: "A fast run" }],
+      });
+      vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValueOnce({
+        translation: "chạy nước rút",
+      });
+      const translateSpy = vi.spyOn((manager as any).geminiService, "translateContext").mockResolvedValueOnce(
+        "Giai đoạn nước rút trong Agile."
+      );
+      vi.spyOn((manager as any).geminiService, "analyzeGrammar").mockResolvedValueOnce(
+        "• **Từ loại:** Danh từ"
+      );
+
+      const onAiUpdate = vi.fn();
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        geminiApiKey: "valid-key",
+        enableAiTranslation: true,
+        enableAiGrammar: true,
+      };
+
+      const docContextMeta = {
+        noteTitle: "Scrum Methodology",
+        heading: "Sprint Planning",
+        tags: ["agile", "scrum"],
+      };
+
+      // Gọi theo kiểu wrapper { docContext, onAiUpdate }
+      const res = await manager.lookup(
+        "sprint",
+        "The team conducted sprint planning.",
+        0,
+        settings,
+        {
+          docContext: docContextMeta,
+          onAiUpdate,
+        } as any
+      );
+
+      // Trả về base result ngay lập tức
+      expect(res.aiLoading).toBe(true);
+      expect(res.vietnameseTranslation).toBe("chạy nước rút");
+      expect(res.docContext).toEqual(docContextMeta);
+
+      // Chờ microtask AI chạy ngầm xong
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(translateSpy).toHaveBeenCalledWith(
+        "sprint",
+        expect.any(String),
+        "valid-key",
+        docContextMeta,
+        expect.any(String),
+        "vi"
+      );
+      expect(onAiUpdate).toHaveBeenCalledTimes(1);
+      const updated = onAiUpdate.mock.calls[0][0];
+      expect(updated.aiLoading).toBe(false);
+      expect(updated.aiTranslation).toBe("Giai đoạn nước rút trong Agile.");
+    });
+
     it("should only call translateContext when enableAiTranslation is true and enableAiGrammar is false", async () => {
       vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValueOnce(null);
       vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValueOnce({

@@ -13,11 +13,13 @@ export class GeminiService extends BaseProvider {
   private buildContextHint(docContext?: DocumentContextMeta): string {
     if (!docContext) return "";
     const parts: string[] = [];
-    if (docContext.noteTitle) {
-      parts.push(`Chủ đề tài liệu: "${docContext.noteTitle}".`);
+    const title = docContext.noteTitle || docContext.fileTitle;
+    if (title) {
+      parts.push(`Chủ đề tài liệu: "${title}".`);
     }
-    if (docContext.heading) {
-      parts.push(`Mục/tiêu đề: "${docContext.heading}".`);
+    const heading = docContext.heading || docContext.headingContext;
+    if (heading) {
+      parts.push(`Mục/tiêu đề: "${heading}".`);
     }
     if (docContext.tags && docContext.tags.length > 0) {
       parts.push(`Lĩnh vực/Tags: ${docContext.tags.join(", ")}.`);

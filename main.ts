@@ -381,7 +381,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     try {
       const activeFile = this.app.workspace.getActiveFile();
       if (activeFile) {
-        meta.fileTitle = activeFile.basename || activeFile.name;
+        const title = activeFile.basename || activeFile.name;
+        meta.noteTitle = title;
+        meta.fileTitle = title;
         if (activeFile.parent && activeFile.parent.path && activeFile.parent.path !== "/") {
           meta.folderPath = activeFile.parent.path;
         }
@@ -404,9 +406,34 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         for (let line = cursor.line; line >= 0; line--) {
           const lineText = editor.getLine(line);
           if (lineText && /^#{1,6}\s+/.test(lineText.trim())) {
-            meta.headingContext = lineText.trim().replace(/^#{1,6}\s+/, "");
+            const heading = lineText.trim().replace(/^#{1,6}\s+/, "");
+            meta.heading = heading;
+            meta.headingContext = heading;
             break;
           }
+        }
+      } else {
+        // Fallback cho Reading Mode: tìm heading gần nhất trong DOM preview
+        try {
+          const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+          const previewEl = activeView?.previewMode?.containerEl;
+          const sel = activeView?.containerEl?.ownerDocument?.defaultView?.getSelection?.();
+          const anchorNode = sel?.anchorNode;
+          if (previewEl && anchorNode) {
+            const headings = Array.from(previewEl.querySelectorAll("h1,h2,h3,h4,h5,h6"));
+            let nearestHeading = "";
+            for (const h of headings) {
+              if (h.compareDocumentPosition(anchorNode) & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */) {
+                nearestHeading = h.textContent?.trim() || "";
+              }
+            }
+            if (nearestHeading) {
+              meta.heading = nearestHeading;
+              meta.headingContext = nearestHeading;
+            }
+          }
+        } catch {
+          // fallback an toàn
         }
       }
     } catch {
@@ -447,22 +474,20 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         paragraph,
         cursorOffset,
         this.settings,
-        {
-          docContext,
-          onAiUpdate: (updatedResult: LookupResult) => {
-            // Bảo vệ chống race condition: Bỏ qua callback của từ cũ nếu người dùng đã tra từ mới
-            if (this.lastLookupResult && this.lastLookupResult.query !== updatedResult.query) {
-              return;
-            }
-            this.lastLookupResult = updatedResult;
-            this.floatingPopover.updateAiContent(updatedResult, {
-              enableAiGrammar: this.settings.enableAiGrammar,
-              enableAiTranslation: this.settings.enableAiTranslation,
-            });
-            if (this.sidebarView) {
-              this.sidebarView.setResult(updatedResult);
-            }
-          },
+        docContext,
+        (updatedResult: LookupResult) => {
+          // Bảo vệ chống race condition: Bỏ qua callback của từ cũ nếu người dùng đã tra từ mới
+          if (this.lastLookupResult && this.lastLookupResult.query !== updatedResult.query) {
+            return;
+          }
+          this.lastLookupResult = updatedResult;
+          this.floatingPopover.updateAiContent(updatedResult, {
+            enableAiGrammar: this.settings.enableAiGrammar,
+            enableAiTranslation: this.settings.enableAiTranslation,
+          });
+          if (this.sidebarView) {
+            this.sidebarView.setResult(updatedResult);
+          }
         }
       );
     } catch (err: any) {

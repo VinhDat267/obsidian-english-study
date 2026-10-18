@@ -12,8 +12,10 @@ export interface DictDefinition {
 
 export interface DocumentContextMeta {
   noteTitle?: string;
+  fileTitle?: string;
   folderPath?: string;
   heading?: string;
+  headingContext?: string;
   tags?: string[];
 }
 
