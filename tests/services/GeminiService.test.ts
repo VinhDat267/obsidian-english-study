@@ -27,7 +27,7 @@ describe("GeminiService", () => {
       expect(requestUrl).not.toHaveBeenCalled();
     });
 
-    it("should send POST request with default model 'gemini-2.0-flash' and extract analysis text", async () => {
+    it("should send POST request with default model 'gemini-flash-latest' and extract analysis text", async () => {
       const mockGeminiResponse = {
         candidates: [
           {
@@ -64,7 +64,7 @@ describe("GeminiService", () => {
 
       expect(requestUrl).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=my-gemini-key",
+          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=my-gemini-key",
           method: "POST",
           throw: false,
         })
@@ -164,7 +164,7 @@ describe("GeminiService", () => {
       expect(result).toBe(true);
       expect(requestUrl).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=valid-api-key",
+          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=valid-api-key",
           method: "POST",
           throw: false,
         })
@@ -202,6 +202,37 @@ describe("GeminiService", () => {
 
       const result = await service.testConnection("any-key");
       expect(result).toBe(false);
+    });
+
+    it("should auto-upgrade deprecated gemini-2.0-flash to gemini-flash-latest", async () => {
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: { candidates: [{ content: { parts: [{ text: "Analysis" }] } }] },
+        text: "{}",
+      });
+
+      await service.analyzeContext("target", "sentence", "key", "gemini-2.0-flash");
+      expect(requestUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=key",
+        })
+      );
+    });
+
+    it("should return detailed error message with testConnectionDetailed on 400", async () => {
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 400,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: { error: { message: "API key not valid" } },
+        text: JSON.stringify({ error: { message: "API key not valid" } }),
+      });
+
+      const res = await service.testConnectionDetailed("bad-key");
+      expect(res.ok).toBe(false);
+      expect(res.error).toContain("API key not valid");
     });
   });
 });

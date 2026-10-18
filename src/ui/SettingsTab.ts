@@ -12,6 +12,7 @@ export interface PluginWithSettings {
   saveSettings(): Promise<void>;
   geminiService?: {
     testConnection(apiKey: string): Promise<boolean>;
+    testConnectionDetailed?(apiKey: string): Promise<{ ok: boolean; error?: string }>;
   };
 }
 
@@ -276,19 +277,27 @@ export class EnglishStudySettingTab extends PluginSettingTab {
 
             button.setButtonText("Đang kiểm tra...");
             try {
-              const ok = await this.pluginInstance.geminiService?.testConnection(
-                apiKey
-              );
+              let ok = false;
+              let errorMsg: string | undefined;
+
+              if (this.pluginInstance.geminiService?.testConnectionDetailed) {
+                const res = await this.pluginInstance.geminiService.testConnectionDetailed(apiKey);
+                ok = res.ok;
+                errorMsg = res.error;
+              } else if (this.pluginInstance.geminiService?.testConnection) {
+                ok = await this.pluginInstance.geminiService.testConnection(apiKey);
+              }
+
               if (ok) {
-                new Notice("✅ Kết nối Gemini API thành công!");
+                new Notice("✅ Kết nối Gemini API thành công! (Mô hình: gemini-flash-latest)");
               } else {
                 new Notice(
-                  "❌ Kết nối Gemini API thất bại! Vui lòng kiểm tra lại API Key."
+                  `❌ Kết nối Gemini API thất bại! ${errorMsg || "Vui lòng kiểm tra lại API Key."}`
                 );
               }
-            } catch {
+            } catch (err: any) {
               new Notice(
-                "❌ Kết nối Gemini API thất bại! Vui lòng kiểm tra lại API Key."
+                `❌ Kết nối Gemini API thất bại! ${err?.message || "Vui lòng kiểm tra lại API Key."}`
               );
             } finally {
               button.setButtonText("Kiểm tra kết nối");
