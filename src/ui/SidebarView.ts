@@ -126,6 +126,13 @@ export class EnglishStudySidebar extends ItemView {
       const emptyState = deepDiveContainer.createDiv({
         cls: "empty-state sidebar-empty-state",
       });
+      const iconEl = emptyState.createDiv({ cls: "empty-state-icon" });
+      try {
+        setIcon(iconEl, "book-open");
+      } catch {}
+      if (!iconEl.innerHTML.trim()) {
+        iconEl.setText("📖");
+      }
       emptyState.createEl("p", {
         text: "Chưa có dữ liệu tra cứu. Hãy bôi đen text trong ghi chú để tra từ hoặc dịch câu.",
       });
@@ -184,10 +191,11 @@ export class EnglishStudySidebar extends ItemView {
         const item = defsList.createDiv({ cls: "vocab-def-item" });
 
         if (def.partOfSpeech) {
-          item.createSpan({
+          const pos = item.createSpan({
             cls: "vocab-pos-tag",
             text: def.partOfSpeech,
           });
+          pos.setAttribute("data-pos", def.partOfSpeech.toLowerCase().trim());
         }
 
         item.createSpan({
@@ -207,10 +215,23 @@ export class EnglishStudySidebar extends ItemView {
     // AI Grammar Note
     if (result.aiGrammarNote) {
       const aiNote = deepDiveContainer.createDiv({ cls: "vocab-ai-note" });
-      aiNote.createDiv({
-        cls: "vocab-ai-badge",
-        text: "🤖 Phân tích ngữ pháp AI",
+      const aiBadge = aiNote.createDiv({ cls: "vocab-ai-badge" });
+
+      const aiIcon = aiBadge.createSpan({ cls: "vocab-ai-icon" });
+      try {
+        setIcon(aiIcon, "sparkles");
+      } catch {
+        // fallback
+      }
+      if (!aiIcon.innerHTML.trim()) {
+        aiIcon.setText("✨");
+      }
+
+      aiBadge.createSpan({
+        cls: "vocab-ai-title",
+        text: "Phân tích ngữ pháp AI",
       });
+
       aiNote.createDiv({
         cls: "vocab-ai-content",
         text: result.aiGrammarNote,
@@ -236,7 +257,22 @@ export class EnglishStudySidebar extends ItemView {
 
     const saveBtn = actions.createEl("button", {
       cls: "vocab-btn-save",
-      text: "💾 Lưu vào sổ từ vựng",
+      attr: { type: "button" },
+    });
+
+    const saveIcon = saveBtn.createSpan({ cls: "btn-icon" });
+    try {
+      setIcon(saveIcon, "bookmark");
+    } catch {
+      // fallback
+    }
+    if (!saveIcon.innerHTML.trim()) {
+      saveIcon.setText("💾");
+    }
+
+    const saveText = saveBtn.createSpan({
+      cls: "btn-text",
+      text: "Lưu vào sổ từ vựng",
     });
 
     saveBtn.addEventListener("click", async (e: MouseEvent) => {
@@ -246,26 +282,43 @@ export class EnglishStudySidebar extends ItemView {
 
       saveBtn.setAttribute("disabled", "true");
       (saveBtn as any).disabled = true;
-      const originalText = saveBtn.textContent;
-      saveBtn.setText("Đang lưu...");
+      saveText.setText("Đang lưu...");
 
       try {
         await this.onSaveCallback(result);
-        saveBtn.setText("Đã lưu ✓");
+        saveText.setText("Đã lưu ✓");
         saveBtn.addClass("saved");
+        try {
+          setIcon(saveIcon, "check");
+        } catch {}
       } catch (err) {
-        saveBtn.setText("Lỗi khi lưu ✕");
+        saveText.setText("Lỗi khi lưu ✕");
         saveBtn.removeAttribute("disabled");
         (saveBtn as any).disabled = false;
         setTimeout(() => {
-          saveBtn.setText(originalText || "💾 Lưu vào sổ từ vựng");
+          saveText.setText("Lưu vào sổ từ vựng");
         }, 2000);
       }
     });
 
     const copyBtn = actions.createEl("button", {
       cls: "vocab-btn-copy",
-      text: "📋 Copy nghĩa",
+      attr: { type: "button" },
+    });
+
+    const copyIcon = copyBtn.createSpan({ cls: "btn-icon" });
+    try {
+      setIcon(copyIcon, "copy");
+    } catch {
+      // fallback
+    }
+    if (!copyIcon.innerHTML.trim()) {
+      copyIcon.setText("📋");
+    }
+
+    const copyText = copyBtn.createSpan({
+      cls: "btn-text",
+      text: "Sao chép",
     });
 
     copyBtn.addEventListener("click", (e: MouseEvent) => {
@@ -280,9 +333,15 @@ export class EnglishStudySidebar extends ItemView {
       if (typeof navigator !== "undefined" && navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(textToCopy);
       }
-      copyBtn.setText("Đã copy ✓");
+      copyText.setText("Đã copy ✓");
+      try {
+        setIcon(copyIcon, "check");
+      } catch {}
       setTimeout(() => {
-        copyBtn.setText("📋 Copy nghĩa");
+        copyText.setText("Sao chép");
+        try {
+          setIcon(copyIcon, "copy");
+        } catch {}
       }, 2000);
     });
   }

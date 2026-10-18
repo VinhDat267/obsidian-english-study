@@ -18,15 +18,18 @@ export class FloatingTrigger {
     trigger.setAttribute("title", "Tra từ (English Study)");
     trigger.setAttribute("tabindex", "0");
 
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "trigger-icon";
     try {
-      setIcon(trigger, "book-open");
+      setIcon(iconSpan, "book-open");
     } catch {
       // In mock environment or if setIcon fails
     }
 
-    if (!trigger.innerHTML.trim()) {
-      trigger.textContent = "📖";
+    if (!iconSpan.innerHTML.trim()) {
+      iconSpan.textContent = "📖";
     }
+    trigger.appendChild(iconSpan);
 
     const triggerSize = 24;
     const margin = 4;

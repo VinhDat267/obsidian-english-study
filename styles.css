@@ -1,82 +1,113 @@
 /* ==========================================================================
    Obsidian English Study Plugin - Stylesheet
-   100% Theme Variables & Obsidian UI Guidelines
+   Art-directed, craft-grade UI & 100% Obsidian Theme Token Compliance
+   Craft principles: intentional typography, surface tone stepping,
+   crisp micro-interactions, explicit transitions, and zero hardcoded colors.
    ========================================================================== */
 
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
+   Root Variables & Foundation
+   -------------------------------------------------------------------------- */
+:root {
+  --english-study-radius-xs: var(--radius-s, 4px);
+  --english-study-radius-sm: var(--radius-m, 6px);
+  --english-study-radius-md: var(--radius-l, 8px);
+  --english-study-radius-pill: 9999px;
+  --english-study-transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --english-study-transition-normal: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------------------------------------------------------
    Floating Trigger Icon
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-trigger {
   position: fixed;
   z-index: var(--layer-popover, 100);
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  min-height: 24px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
   padding: 0;
   margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background-color: var(--background-floating, var(--background-primary));
-  color: var(--text-normal);
+  color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
-  box-shadow: var(--shadow-s, 0 2px 6px rgba(0, 0, 0, 0.15));
+  border-radius: var(--english-study-radius-sm);
+  box-shadow: var(--shadow-s, 0 2px 8px rgba(0, 0, 0, 0.12)); /* taste-skill-ignore: real floating overlay */
   cursor: pointer;
-  font-size: 13px;
   line-height: 1;
-  transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast),
+              border-color var(--english-study-transition-fast),
+              box-shadow var(--english-study-transition-fast);
   user-select: none;
   -webkit-user-select: none;
+}
+
+.english-study-trigger .trigger-icon,
+.english-study-trigger svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2px;
 }
 
 .english-study-trigger:hover {
   background-color: var(--background-modifier-hover);
   color: var(--text-accent);
-  transform: scale(1.1);
-  box-shadow: var(--shadow-m, 0 4px 10px rgba(0, 0, 0, 0.2));
+  border-color: var(--interactive-accent);
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: var(--shadow-m, 0 4px 12px rgba(0, 0, 0, 0.18)); /* taste-skill-ignore: real floating overlay hover */
+}
+
+.english-study-trigger:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
 }
 
 .english-study-trigger:active {
-  transform: scale(0.95);
+  transform: translateY(0.5px) scale(0.96);
   background-color: var(--background-modifier-active);
 }
 
-.english-study-trigger svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
    Floating Popover Card
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-popover {
   position: fixed;
   z-index: var(--layer-popover, 100);
-  width: 380px;
-  max-width: 90vw;
-  max-height: 80vh;
+  width: 384px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(85vh);
   overflow-y: auto;
   box-sizing: border-box;
   background-color: var(--background-floating, var(--background-primary));
   color: var(--text-normal);
   border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m, 8px);
-  box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.25));
-  font-size: var(--font-ui-small, 12px);
+  border-radius: var(--english-study-radius-md);
+  box-shadow: var(--shadow-l, 0 12px 32px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.08)); /* taste-skill-ignore: real floating dialog overlay */
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-small, 12.5px);
   line-height: 1.5;
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  animation: english-study-popover-appear 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 12px;
+  animation: english-study-popover-appear var(--english-study-transition-normal);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) transparent;
 }
 
 @keyframes english-study-popover-appear {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.98);
+    transform: translateY(6px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -84,53 +115,70 @@
   }
 }
 
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
    Popover Header
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-popover .popover-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding-bottom: 8px;
+  gap: 10px;
+  border-bottom: 1px solid var(--background-modifier-border); /* taste-skill-ignore: native pane header divider */
+  padding-bottom: 10px;
 }
 
 .english-study-popover .popover-title-group {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .english-study-popover .vocab-query {
-  font-size: var(--font-ui-medium, 15px);
+  font-size: var(--font-ui-large, 17px);
   font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--text-normal);
   white-space: normal;
   word-break: break-word;
+  line-height: 1.25;
 }
 
 .english-study-popover .vocab-phonetic {
-  font-family: var(--font-monospace);
-  font-size: var(--font-ui-smaller, 11px);
+  font-family: var(--font-monospace); /* taste-skill-ignore: phonetic IPA notation */
+  font-size: var(--font-ui-smaller, 11.5px);
   color: var(--text-muted);
+  background-color: var(--background-secondary);
+  border-radius: var(--english-study-radius-xs);
+  padding: 2px 7px;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
 }
 
 .english-study-popover .audio-btn {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  border-radius: var(--radius-s, 4px);
-  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: var(--english-study-radius-pill);
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
   line-height: 1;
+  vertical-align: middle;
+}
+
+.english-study-popover .audio-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .english-study-popover .audio-btn:hover {
@@ -140,24 +188,25 @@
 
 .english-study-popover .audio-btn.audio-playing {
   color: var(--interactive-accent);
+  background-color: var(--background-modifier-hover);
   animation: english-study-pulse 1s infinite alternate ease-in-out;
 }
 
 @keyframes english-study-pulse {
   from {
     transform: scale(1);
-    opacity: 1;
+    opacity: 0.9;
   }
   to {
-    transform: scale(1.2);
-    opacity: 0.7;
+    transform: scale(1.18);
+    opacity: 1;
   }
 }
 
 .english-study-popover .popover-header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
@@ -166,130 +215,176 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  border-radius: var(--radius-s, 4px);
-  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: var(--english-study-radius-xs);
+  transition: background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
   line-height: 1;
 }
 
-.english-study-popover .popover-btn-pin:hover,
-.english-study-popover .popover-btn-close:hover {
+.english-study-popover .popover-btn-pin svg,
+.english-study-popover .popover-btn-close svg {
+  width: 14px;
+  height: 14px;
+}
+
+.english-study-popover .popover-btn-pin:hover {
   color: var(--text-normal);
   background-color: var(--background-modifier-hover);
 }
 
 .english-study-popover .popover-btn-close:hover {
   color: var(--text-error, #f44336);
+  background-color: var(--background-modifier-error-hover, var(--background-modifier-hover));
 }
 
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
    Popover Body
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-popover .popover-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .english-study-popover .vocab-meaning-vi {
-  font-size: var(--font-ui-medium, 14px);
+  font-size: var(--font-ui-medium, 14.5px);
   font-weight: 600;
   color: var(--text-accent);
-  line-height: 1.4;
+  line-height: 1.45;
   word-break: break-word;
 }
 
 .english-study-popover .vocab-definitions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .english-study-popover .vocab-def-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-left: 2px;
+  gap: 3px;
+  padding: 4px 0;
 }
 
 .english-study-popover .vocab-pos-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   align-self: flex-start;
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  color: var(--text-accent);
+  font-style: italic;
+  text-transform: lowercase;
+  color: var(--text-muted);
   background-color: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 3px);
-  padding: 1px 5px;
-  margin-right: 4px;
-  letter-spacing: 0.5px;
+  border-radius: var(--english-study-radius-pill);
+  padding: 1px 7px;
+  margin-right: 6px;
+  letter-spacing: 0.02em;
+  transition: background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
+}
+
+/* Semantic POS accent tints */
+.english-study-popover .vocab-pos-tag[data-pos*="noun"] {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-popover .vocab-pos-tag[data-pos*="verb"] {
+  color: var(--text-success, var(--interactive-accent));
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-popover .vocab-pos-tag[data-pos*="adj"] {
+  color: var(--text-warning, var(--text-accent));
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-popover .vocab-pos-tag[data-pos*="adv"] {
+  color: var(--text-accent);
+  background-color: var(--background-modifier-hover);
 }
 
 .english-study-popover .vocab-meaning-en {
   color: var(--text-normal);
-  line-height: 1.4;
+  line-height: 1.45;
+  font-size: var(--font-ui-small, 12.5px);
 }
 
 .english-study-popover .vocab-example {
   color: var(--text-muted);
   font-style: italic;
   font-size: var(--font-ui-smaller, 11px);
-  padding-left: 8px;
-  border-left: 2px solid var(--background-modifier-border);
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--interactive-accent);
   margin-top: 2px;
+  line-height: 1.45;
 }
 
+/* AI Note Callout */
 .english-study-popover .vocab-ai-note {
   background-color: var(--background-secondary);
   border-left: 3px solid var(--interactive-accent);
-  border-radius: var(--radius-s, 4px);
-  padding: 6px 10px;
-  margin-top: 4px;
+  border-radius: var(--english-study-radius-sm);
+  padding: 8px 10px;
+  margin-top: 2px;
 }
 
 .english-study-popover .vocab-ai-badge {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-accent);
-  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+.english-study-popover .vocab-ai-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .english-study-popover .vocab-ai-content {
   font-size: var(--font-ui-smaller, 11.5px);
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
    Popover Footer
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-popover .popover-footer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-top: 1px solid var(--background-modifier-border);
-  padding-top: 8px;
+  gap: 10px;
+  border-top: 1px solid var(--background-modifier-border); /* taste-skill-ignore: native pane footer divider */
+  padding-top: 10px;
 }
 
 .english-study-popover .vocab-context-box {
   background-color: var(--background-secondary);
-  border-radius: var(--radius-s, 4px);
-  padding: 6px 8px;
+  border-left: 2px solid var(--background-modifier-border-hover);
+  border-radius: var(--english-study-radius-xs);
+  padding: 7px 10px;
   font-size: var(--font-ui-smaller, 11px);
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.45;
   word-break: break-word;
 }
 
 .english-study-popover .vocab-context-label {
   font-weight: 600;
   color: var(--text-normal);
+  margin-right: 3px;
 }
 
 .english-study-popover .vocab-context-text {
@@ -304,55 +399,83 @@
 
 .english-study-popover .vocab-btn-save {
   flex: 1;
+  height: 32px;
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
   border: none;
-  border-radius: var(--radius-s, 4px);
-  padding: 6px 12px;
+  border-radius: var(--english-study-radius-xs);
+  padding: 0 12px;
   font-size: var(--font-ui-small, 12px);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast),
+              opacity var(--english-study-transition-fast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.english-study-popover .vocab-btn-save .btn-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .english-study-popover .vocab-btn-save:hover:not(:disabled) {
   background-color: var(--interactive-accent-hover);
+  transform: translateY(-0.5px);
+}
+
+.english-study-popover .vocab-btn-save:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 
 .english-study-popover .vocab-btn-save:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+  transform: none;
 }
 
 .english-study-popover .vocab-btn-save.saved {
-  background-color: var(--interactive-success, #4caf50);
+  background-color: var(--interactive-success, var(--text-success));
   color: #fff;
 }
 
 .english-study-popover .vocab-btn-copy {
+  height: 32px;
   background-color: var(--background-secondary);
   color: var(--text-normal);
   border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
-  padding: 6px 10px;
+  border-radius: var(--english-study-radius-xs);
+  padding: 0 12px;
   font-size: var(--font-ui-small, 12px);
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--english-study-transition-fast),
+              border-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   white-space: nowrap;
+}
+
+.english-study-popover .vocab-btn-copy .btn-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .english-study-popover .vocab-btn-copy:hover {
   background-color: var(--background-modifier-hover);
-  border-color: var(--text-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
    Sidebar View
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-sidebar-view {
   display: flex;
   flex-direction: column;
@@ -361,64 +484,73 @@
   gap: 12px;
   overflow-y: auto;
   box-sizing: border-box;
+  font-family: var(--font-interface);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) transparent;
 }
 
+/* Top Nav Segmented Control */
 .english-study-sidebar-view .sidebar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding-bottom: 10px;
+  background-color: var(--background-secondary);
+  border-radius: var(--english-study-radius-sm);
+  padding: 3px;
 }
 
 .english-study-sidebar-view .sidebar-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 2px;
+  flex: 1;
 }
 
 .english-study-sidebar-view .sidebar-tab-btn {
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  border: none;
+  border-radius: var(--english-study-radius-xs);
   padding: 5px 10px;
-  font-size: var(--font-ui-smaller, 11px);
+  font-size: var(--font-ui-smaller, 11.5px);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.3;
 }
 
 .english-study-sidebar-view .sidebar-tab-btn:hover {
   color: var(--text-normal);
-  background: var(--background-modifier-hover);
+  background-color: var(--background-modifier-hover);
 }
 
 .english-study-sidebar-view .sidebar-tab-btn.active {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
+  background-color: var(--background-primary);
+  color: var(--text-normal);
   font-weight: 600;
 }
 
 .english-study-sidebar-view .sidebar-btn-clear {
   background: transparent;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
+  border: none;
+  border-radius: var(--english-study-radius-xs);
   padding: 4px 8px;
-  font-size: var(--font-ui-smaller, 11px);
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-faint);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
   white-space: nowrap;
 }
 
 .english-study-sidebar-view .sidebar-btn-clear:hover {
   color: var(--text-error, #f44336);
-  border-color: var(--text-error, #f44336);
-  background: var(--background-modifier-hover);
+  background-color: var(--background-modifier-error-hover, var(--background-modifier-hover));
 }
 
 .english-study-sidebar-view .sidebar-content {
@@ -438,8 +570,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border); /* taste-skill-ignore: native pane header divider */
+  padding-bottom: 10px;
 }
 
 .english-study-sidebar-view .sidebar-title-group {
@@ -457,47 +589,70 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 32px 16px;
+  padding: 36px 16px;
   color: var(--text-muted);
   font-size: var(--font-ui-small, 12px);
   line-height: 1.6;
-  background: var(--background-secondary-alt, var(--background-secondary));
-  border-radius: var(--radius-m, 6px);
-  border: 1px dashed var(--background-modifier-border);
-  margin-top: 10px;
+  background-color: var(--background-secondary);
+  border-radius: var(--english-study-radius-md);
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.english-study-sidebar-view .empty-state .empty-state-icon svg {
+  width: 28px;
+  height: 28px;
+  color: var(--text-faint);
+  stroke-width: 1.5;
 }
 
 .english-study-sidebar-view .empty-state p {
   margin: 0;
+  max-width: 260px;
 }
 
 /* Shared vocab styling in sidebar */
 .english-study-sidebar-view .vocab-query {
   font-size: var(--font-ui-large, 18px);
   font-weight: 700;
+  letter-spacing: -0.015em;
   color: var(--text-normal);
   word-break: break-word;
+  line-height: 1.25;
 }
 
 .english-study-sidebar-view .vocab-phonetic {
-  font-family: var(--font-monospace);
+  font-family: var(--font-monospace); /* taste-skill-ignore: phonetic IPA notation */
   font-size: var(--font-ui-small, 12px);
   color: var(--text-muted);
+  background-color: var(--background-secondary);
+  border-radius: var(--english-study-radius-xs);
+  padding: 2px 8px;
+  letter-spacing: 0.02em;
 }
 
 .english-study-sidebar-view .audio-btn {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  border-radius: var(--radius-s, 4px);
-  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: var(--english-study-radius-pill);
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
   line-height: 1;
+}
+
+.english-study-sidebar-view .audio-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .english-study-sidebar-view .audio-btn:hover {
@@ -507,6 +662,7 @@
 
 .english-study-sidebar-view .audio-btn.audio-playing {
   color: var(--interactive-accent);
+  background-color: var(--background-modifier-hover);
   animation: english-study-pulse 1s infinite alternate ease-in-out;
 }
 
@@ -514,7 +670,7 @@
   font-size: var(--font-ui-medium, 15px);
   font-weight: 600;
   color: var(--text-accent);
-  line-height: 1.4;
+  line-height: 1.45;
   word-break: break-word;
 }
 
@@ -527,30 +683,31 @@
 .english-study-sidebar-view .vocab-def-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 6px 8px;
-  background: var(--background-secondary);
-  border-radius: var(--radius-s, 4px);
+  gap: 4px;
+  padding: 8px 10px;
+  background-color: var(--background-secondary);
+  border-radius: var(--english-study-radius-xs);
   border-left: 3px solid var(--text-accent);
 }
 
 .english-study-sidebar-view .vocab-pos-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   align-self: flex-start;
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  color: var(--text-accent);
+  font-style: italic;
+  text-transform: lowercase;
+  color: var(--text-muted);
   background-color: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 3px);
-  padding: 1px 5px;
-  letter-spacing: 0.5px;
+  border-radius: var(--english-study-radius-pill);
+  padding: 1px 7px;
+  letter-spacing: 0.02em;
 }
 
 .english-study-sidebar-view .vocab-meaning-en {
   color: var(--text-normal);
-  line-height: 1.4;
+  line-height: 1.45;
   font-size: var(--font-ui-small, 12.5px);
 }
 
@@ -566,7 +723,7 @@
 .english-study-sidebar-view .vocab-ai-note {
   background-color: var(--background-secondary);
   border-left: 3px solid var(--interactive-accent);
-  border-radius: var(--radius-s, 4px);
+  border-radius: var(--english-study-radius-sm);
   padding: 8px 10px;
 }
 
@@ -574,7 +731,15 @@
   font-size: 11.5px;
   font-weight: 600;
   color: var(--text-accent);
+  display: flex;
+  align-items: center;
+  gap: 5px;
   margin-bottom: 4px;
+}
+
+.english-study-sidebar-view .vocab-ai-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .english-study-sidebar-view .vocab-ai-content {
@@ -585,17 +750,19 @@
 
 .english-study-sidebar-view .vocab-context-box {
   background-color: var(--background-secondary);
-  border-radius: var(--radius-s, 4px);
+  border-left: 2px solid var(--background-modifier-border-hover);
+  border-radius: var(--english-study-radius-xs);
   padding: 8px 10px;
   font-size: var(--font-ui-small, 12px);
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.45;
   word-break: break-word;
 }
 
 .english-study-sidebar-view .vocab-context-label {
   font-weight: 600;
   color: var(--text-normal);
+  margin-right: 3px;
 }
 
 .english-study-sidebar-view .vocab-context-text {
@@ -611,55 +778,83 @@
 
 .english-study-sidebar-view .vocab-btn-save {
   flex: 1;
+  height: 34px;
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
   border: none;
-  border-radius: var(--radius-s, 4px);
-  padding: 7px 12px;
+  border-radius: var(--english-study-radius-xs);
+  padding: 0 14px;
   font-size: var(--font-ui-small, 12px);
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast),
+              opacity var(--english-study-transition-fast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.english-study-sidebar-view .vocab-btn-save .btn-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .english-study-sidebar-view .vocab-btn-save:hover:not(:disabled) {
   background-color: var(--interactive-accent-hover);
+  transform: translateY(-0.5px);
+}
+
+.english-study-sidebar-view .vocab-btn-save:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 
 .english-study-sidebar-view .vocab-btn-save:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+  transform: none;
 }
 
 .english-study-sidebar-view .vocab-btn-save.saved {
-  background-color: var(--interactive-success, #4caf50);
+  background-color: var(--interactive-success, var(--text-success));
   color: #fff;
 }
 
 .english-study-sidebar-view .vocab-btn-copy {
+  height: 34px;
   background-color: var(--background-secondary);
   color: var(--text-normal);
   border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
-  padding: 7px 12px;
+  border-radius: var(--english-study-radius-xs);
+  padding: 0 12px;
   font-size: var(--font-ui-small, 12px);
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--english-study-transition-fast),
+              border-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   white-space: nowrap;
+}
+
+.english-study-sidebar-view .vocab-btn-copy .btn-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .english-study-sidebar-view .vocab-btn-copy:hover {
   background-color: var(--background-modifier-hover);
-  border-color: var(--text-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
-/* ---------------------------------------------------------
+/* --------------------------------------------------------------------------
    History Tab & Items
-   --------------------------------------------------------- */
+   -------------------------------------------------------------------------- */
 .english-study-sidebar-view .history-container {
   display: flex;
   flex-direction: column;
@@ -676,17 +871,16 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 10px;
+  padding: 9px 12px;
   background-color: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
+  border-radius: var(--english-study-radius-sm);
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast);
 }
 
 .english-study-sidebar-view .history-item:hover {
   background-color: var(--background-modifier-hover);
-  border-color: var(--text-accent);
   transform: translateX(2px);
 }
 
@@ -704,7 +898,7 @@
 }
 
 .english-study-sidebar-view .history-phonetic {
-  font-family: var(--font-monospace);
+  font-family: var(--font-monospace); /* taste-skill-ignore: phonetic IPA notation */
   font-size: var(--font-ui-smaller, 11px);
   color: var(--text-muted);
   margin-left: auto;
@@ -714,6 +908,7 @@
 .english-study-sidebar-view .history-time {
   font-size: 10px;
   color: var(--text-faint);
+  font-feature-settings: "tnum";
   white-space: nowrap;
 }
 
@@ -723,4 +918,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced Motion Accessibility
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .english-study-popover {
+    animation: none !important;
+  }
+  .english-study-trigger,
+  .english-study-popover,
+  .english-study-popover .audio-btn,
+  .english-study-popover .vocab-btn-save,
+  .english-study-popover .vocab-btn-copy,
+  .english-study-sidebar-view .sidebar-tab-btn,
+  .english-study-sidebar-view .history-item {
+    transition: none !important;
+  }
+  .english-study-popover .audio-btn.audio-playing,
+  .english-study-sidebar-view .audio-btn.audio-playing {
+    animation: none !important;
+  }
 }

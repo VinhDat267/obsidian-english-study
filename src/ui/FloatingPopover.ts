@@ -178,6 +178,7 @@ export class FloatingPopover {
         if (def.partOfSpeech) {
           const pos = document.createElement("span");
           pos.className = "vocab-pos-tag";
+          pos.setAttribute("data-pos", def.partOfSpeech.toLowerCase().trim());
           pos.textContent = def.partOfSpeech;
           item.appendChild(pos);
         }
@@ -207,7 +208,24 @@ export class FloatingPopover {
 
       const aiBadge = document.createElement("div");
       aiBadge.className = "vocab-ai-badge";
-      aiBadge.textContent = "🤖 Phân tích ngữ pháp AI";
+
+      const aiIcon = document.createElement("span");
+      aiIcon.className = "vocab-ai-icon";
+      try {
+        setIcon(aiIcon, "sparkles");
+      } catch {
+        // fallback
+      }
+      if (!aiIcon.innerHTML.trim()) {
+        aiIcon.textContent = "✨";
+      }
+      aiBadge.appendChild(aiIcon);
+
+      const aiTitle = document.createElement("span");
+      aiTitle.className = "vocab-ai-title";
+      aiTitle.textContent = "Phân tích ngữ pháp AI";
+      aiBadge.appendChild(aiTitle);
+
       aiNote.appendChild(aiBadge);
 
       const aiContent = document.createElement("div");
@@ -250,23 +268,42 @@ export class FloatingPopover {
     // Save button
     const saveBtn = document.createElement("button");
     saveBtn.className = "vocab-btn-save";
-    saveBtn.textContent = "💾 Lưu vào sổ từ vựng";
+    saveBtn.setAttribute("type", "button");
+
+    const saveIcon = document.createElement("span");
+    saveIcon.className = "btn-icon";
+    try {
+      setIcon(saveIcon, "bookmark");
+    } catch {
+      // fallback
+    }
+    if (!saveIcon.innerHTML.trim()) {
+      saveIcon.textContent = "💾";
+    }
+    saveBtn.appendChild(saveIcon);
+
+    const saveText = document.createElement("span");
+    saveText.className = "btn-text";
+    saveText.textContent = "Lưu vào sổ từ vựng";
+    saveBtn.appendChild(saveText);
 
     saveBtn.addEventListener("click", async (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       saveBtn.disabled = true;
-      const originalText = saveBtn.textContent;
-      saveBtn.textContent = "Đang lưu...";
+      saveText.textContent = "Đang lưu...";
       try {
         await callbacks.onSave(result);
-        saveBtn.textContent = "Đã lưu ✓";
+        saveText.textContent = "Đã lưu ✓";
         saveBtn.classList.add("saved");
+        try {
+          setIcon(saveIcon, "check");
+        } catch {}
       } catch (err) {
-        saveBtn.textContent = "Lỗi khi lưu ✕";
+        saveText.textContent = "Lỗi khi lưu ✕";
         saveBtn.disabled = false;
         setTimeout(() => {
-          saveBtn.textContent = originalText;
+          saveText.textContent = "Lưu vào sổ từ vựng";
         }, 2000);
       }
     });
@@ -275,7 +312,24 @@ export class FloatingPopover {
     // Copy button
     const copyBtn = document.createElement("button");
     copyBtn.className = "vocab-btn-copy";
-    copyBtn.textContent = "📋 Copy nghĩa";
+    copyBtn.setAttribute("type", "button");
+
+    const copyIcon = document.createElement("span");
+    copyIcon.className = "btn-icon";
+    try {
+      setIcon(copyIcon, "copy");
+    } catch {
+      // fallback
+    }
+    if (!copyIcon.innerHTML.trim()) {
+      copyIcon.textContent = "📋";
+    }
+    copyBtn.appendChild(copyIcon);
+
+    const copyText = document.createElement("span");
+    copyText.className = "btn-text";
+    copyText.textContent = "Sao chép";
+    copyBtn.appendChild(copyText);
 
     copyBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
@@ -289,9 +343,15 @@ export class FloatingPopover {
       if (navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(textToCopy);
       }
-      copyBtn.textContent = "Đã copy ✓";
+      copyText.textContent = "Đã copy ✓";
+      try {
+        setIcon(copyIcon, "check");
+      } catch {}
       setTimeout(() => {
-        if (copyBtn) copyBtn.textContent = "📋 Copy nghĩa";
+        if (copyText) copyText.textContent = "Sao chép";
+        try {
+          setIcon(copyIcon, "copy");
+        } catch {}
       }, 2000);
     });
     actions.appendChild(copyBtn);
