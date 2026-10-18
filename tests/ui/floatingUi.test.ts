@@ -585,5 +585,52 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       popover.hide();
     });
+
+    it("should render compact loading card with query title, spinner, and drag handle via showLoading()", () => {
+      const popover = new FloatingPopover();
+      popover.showLoading(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        "serendipity",
+        { onClose: vi.fn() }
+      );
+
+      const el = popover.getElement();
+      expect(el).not.toBeNull();
+      expect(el?.classList.contains("popover-loading")).toBe(true);
+
+      const queryEl = el?.querySelector(".vocab-query");
+      expect(queryEl?.textContent).toContain("serendipity");
+
+      const spinner = el?.querySelector(".popover-loading-spinner");
+      expect(spinner).not.toBeNull();
+
+      const dragHandle = el?.querySelector(".popover-drag-handle");
+      expect(dragHandle).not.toBeNull();
+
+      popover.hide();
+    });
+
+    it("should cancel loading and invoke onClose callback when close button clicked in loading state", () => {
+      const popover = new FloatingPopover();
+      const onClose = vi.fn();
+      popover.showLoading(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        "serendipity",
+        { onClose }
+      );
+
+      const el = popover.getElement()!;
+      const closeBtn = el.querySelector(".popover-btn-close");
+      expect(closeBtn).not.toBeNull();
+
+      closeBtn?.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(popover.isVisible()).toBe(false);
+    });
   });
 });

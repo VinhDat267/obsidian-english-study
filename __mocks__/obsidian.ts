@@ -363,6 +363,8 @@ export class Setting {
   public toggleComponents: any[] = [];
   public buttonComponents: any[] = [];
 
+  public disabled: boolean = false;
+
   constructor(containerEl: any) {
     this.containerEl = containerEl;
     Setting.instances.push(this);
@@ -392,6 +394,7 @@ export class Setting {
   }
 
   setDisabled(disabled: boolean): this {
+    this.disabled = disabled;
     return this;
   }
 

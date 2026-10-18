@@ -279,6 +279,15 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.floatingTrigger.hide();
     }
 
+    const rect = this.getSelectionBoundingRect();
+
+    // Hiển thị ngay trạng thái Loading tại vị trí vùng chọn
+    this.floatingPopover.showLoading(rect, selectedText, {
+      onClose: () => {
+        this.providerManager.cancelPending();
+      },
+    });
+
     let result: LookupResult;
     try {
       result = await this.providerManager.lookup(
@@ -288,6 +297,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         this.settings
       );
     } catch (err: any) {
+      this.floatingPopover.hide();
       if (err?.name === "AbortError") {
         return null;
       }
@@ -296,7 +306,6 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     this.lastLookupResult = result;
 
-    const rect = this.getSelectionBoundingRect();
     this.floatingPopover.show(rect, result, {
       onSave: async (res: LookupResult) => {
         await this.vocabService.saveVocab(res, this.settings);
@@ -406,7 +415,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       }
     };
 
-    if (this.settings.triggerMode === "auto-popup") {
+    const isAutoTranslate =
+      Boolean(this.settings.autoTranslateOnSelection) ||
+      this.settings.triggerMode === "auto-popup";
+
+    if (isAutoTranslate) {
       this.dismissFloatingTrigger();
       performFn();
       return;

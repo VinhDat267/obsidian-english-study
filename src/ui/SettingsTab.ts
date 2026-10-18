@@ -37,20 +37,57 @@ export class EnglishStudySettingTab extends PluginSettingTab {
       .setName("TƯƠNG TÁC ĐỌC (TRIGGER & DISPLAY)")
       .setHeading();
 
+    const isAutoTranslate =
+      Boolean(this.pluginInstance.settings.autoTranslateOnSelection) ||
+      this.pluginInstance.settings.triggerMode === "auto-popup";
+
     new Setting(containerEl)
+      .setName("Tự động dịch khi bôi đen")
+      .setDesc(
+        "Tự động tra từ và mở bảng dịch ngay khi thả chuột bôi đen văn bản mà không cần click vào icon hay bấm phím tắt."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(isAutoTranslate)
+          .onChange(async (value: boolean) => {
+            this.pluginInstance.settings.autoTranslateOnSelection = value;
+            if (value) {
+              this.pluginInstance.settings.triggerMode = "auto-popup";
+            } else {
+              this.pluginInstance.settings.triggerMode = "icon";
+            }
+            await this.pluginInstance.saveSettings();
+            this.display();
+          })
+      );
+
+    const manualSetting = new Setting(containerEl)
       .setName("Chế độ kích hoạt")
-      .setDesc("Chọn cách hiển thị popup tra từ khi bôi đen văn bản trong ghi chú.")
+      .setDesc(
+        "Chọn cách hiển thị popup tra từ khi bôi đen văn bản trong ghi chú (áp dụng khi tắt tự động dịch)."
+      )
+      .setDisabled(isAutoTranslate)
       .addDropdown((dropdown) =>
         dropdown
           .addOption("icon", "Icon nổi khi bôi đen (Mặc định)")
           .addOption("hotkey-only", "Chỉ dùng phím tắt")
-          .addOption("auto-popup", "Tự động hiện Popover")
-          .setValue(this.pluginInstance.settings.triggerMode)
+          .setValue(
+            this.pluginInstance.settings.triggerMode === "auto-popup"
+              ? "icon"
+              : this.pluginInstance.settings.triggerMode
+          )
           .onChange(async (value: string) => {
             this.pluginInstance.settings.triggerMode = value as TriggerMode;
+            if (value !== "auto-popup") {
+              this.pluginInstance.settings.autoTranslateOnSelection = false;
+            }
             await this.pluginInstance.saveSettings();
           })
       );
+
+    if (isAutoTranslate) {
+      manualSetting.setClass("setting-item-disabled");
+    }
 
     new Setting(containerEl)
       .setName("Phím tắt tra từ")

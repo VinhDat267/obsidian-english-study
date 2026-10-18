@@ -24,6 +24,7 @@ export interface LookupResult {
 
 export interface PluginSettings {
   // Nhóm 1: Tương tác đọc
+  autoTranslateOnSelection: boolean;
   triggerMode: TriggerMode;
 
   // Nhóm 2: Sổ từ vựng
@@ -43,6 +44,7 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
+  autoTranslateOnSelection: false,
   triggerMode: "icon",
   vocabFilePath: "Vocabulary.md",
   vocabFormat: "table",

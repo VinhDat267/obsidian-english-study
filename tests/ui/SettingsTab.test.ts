@@ -56,6 +56,43 @@ describe("EnglishStudySettingTab", () => {
       expect(pluginMock.settings.triggerMode).toBe("hotkey-only");
       expect(pluginMock.saveSettings).toHaveBeenCalled();
     });
+
+    it("should toggle autoTranslateOnSelection switch and sync triggerMode", async () => {
+      settingsTab.display();
+
+      const autoToggleSetting = Setting.instances.find(
+        (s) => s.name === "Tự động dịch khi bôi đen" || s.name.includes("Tự động dịch")
+      );
+      expect(autoToggleSetting).toBeDefined();
+
+      const toggle = autoToggleSetting!.toggleComponents[0];
+      expect(toggle).toBeDefined();
+
+      // Turn ON auto translate
+      await toggle._onChange(true);
+      expect(pluginMock.settings.autoTranslateOnSelection).toBe(true);
+      expect(pluginMock.settings.triggerMode).toBe("auto-popup");
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+
+      // Turn OFF auto translate
+      await toggle._onChange(false);
+      expect(pluginMock.settings.autoTranslateOnSelection).toBe(false);
+      expect(pluginMock.settings.triggerMode).toBe("icon");
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
+
+    it("should disable or hide manual trigger mode dropdown when autoTranslateOnSelection is true", async () => {
+      pluginMock.settings.autoTranslateOnSelection = true;
+      pluginMock.settings.triggerMode = "auto-popup";
+      settingsTab.display();
+
+      const manualSetting = Setting.instances.find(
+        (s) =>
+          s.name === "Chế độ thủ công khi tắt tự động dịch" ||
+          s.name === "Chế độ kích hoạt"
+      );
+      expect(manualSetting ? (manualSetting as any).disabled : true).toBe(true);
+    });
   });
 
   describe("Group 2: Vocabulary Vault", () => {

@@ -433,6 +433,141 @@ export class FloatingPopover {
     }
   }
 
+  /**
+   * Hiển thị Card Loading nhỏ gọn trong khi chờ API tra cứu / dịch
+   */
+  showLoading(
+    rect: RectLike,
+    query: string,
+    callbacks: { onClose?: () => void }
+  ): void {
+    this.hide();
+
+    const popover = document.createElement("div");
+    popover.className = "english-study-popover popover-loading";
+    popover.setAttribute("role", "status");
+    popover.setAttribute("aria-live", "polite");
+    popover.setAttribute("aria-label", `Đang tra cứu ${query}`);
+
+    popover.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "popover-header";
+
+    const dragHandle = document.createElement("div");
+    dragHandle.className = "popover-drag-handle";
+    dragHandle.setAttribute("aria-hidden", "true");
+    dragHandle.setAttribute("title", "Kéo để di chuyển");
+    try {
+      setIcon(dragHandle, "grip-horizontal");
+    } catch {
+      // fallback
+    }
+    if (!dragHandle.innerHTML.trim()) {
+      dragHandle.textContent = "⋮⋮";
+    }
+    header.appendChild(dragHandle);
+
+    const titleGroup = document.createElement("div");
+    titleGroup.className = "popover-title-group";
+
+    const spinner = document.createElement("span");
+    spinner.className = "popover-loading-spinner";
+    try {
+      setIcon(spinner, "loader-2");
+    } catch {
+      // fallback
+    }
+    if (!spinner.innerHTML.trim()) {
+      spinner.textContent = "⏳";
+    }
+    titleGroup.appendChild(spinner);
+
+    const queryEl = document.createElement("span");
+    queryEl.className = "vocab-query";
+    queryEl.textContent = `Đang tra cứu "${query}"...`;
+    titleGroup.appendChild(queryEl);
+
+    header.appendChild(titleGroup);
+
+    const headerActions = document.createElement("div");
+    headerActions.className = "popover-header-actions";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "popover-btn-close";
+    closeBtn.setAttribute("aria-label", "Đóng");
+    closeBtn.setAttribute("title", "Hủy tra cứu");
+    try {
+      setIcon(closeBtn, "x");
+    } catch {
+      // fallback
+    }
+    if (!closeBtn.innerHTML.trim()) {
+      closeBtn.textContent = "✕";
+    }
+
+    closeBtn.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
+    closeBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.hide();
+      callbacks.onClose?.();
+    });
+    headerActions.appendChild(closeBtn);
+    header.appendChild(headerActions);
+
+    this.setupDraggable(header, popover);
+    popover.appendChild(header);
+
+    // Measure and position
+    popover.style.position = "fixed";
+    popover.style.visibility = "hidden";
+    document.body.appendChild(popover);
+
+    const rectBounds = popover.getBoundingClientRect();
+    const popoverWidth = rectBounds.width || 320;
+    const popoverHeight = rectBounds.height || 64;
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+
+    const pos = calculatePosition(rect, popoverWidth, popoverHeight, vw, vh, 8);
+    popover.style.top = `${pos.top}px`;
+    popover.style.left = `${pos.left}px`;
+    popover.style.visibility = "visible";
+
+    this.element = popover;
+
+    // Outside click event listener
+    this.outsideClickHandler = (e: MouseEvent) => {
+      if (this.element && !this.element.contains(e.target as Node)) {
+        this.hide();
+        callbacks.onClose?.();
+      }
+    };
+    this.outsideTimeout = setTimeout(() => {
+      if (this.outsideClickHandler && typeof document !== "undefined") {
+        document.addEventListener("mousedown", this.outsideClickHandler);
+      }
+    }, 0);
+
+    // Escape key listener
+    this.keydownHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        this.hide();
+        callbacks.onClose?.();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("keydown", this.keydownHandler);
+    }
+  }
+
   hide(): void {
     this.cleanUpDragListeners();
     this.stopAudio();

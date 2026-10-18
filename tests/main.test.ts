@@ -400,6 +400,53 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(performLookupSpy).toHaveBeenCalledWith(editor);
     });
 
+    it("auto-translate mode: should immediately show loading popover at selection rect before lookup finishes", async () => {
+      plugin.settings.autoTranslateOnSelection = true;
+      plugin.settings.triggerMode = "auto-popup";
+      editor.setSelectionText("breakthrough");
+
+      const showLoadingSpy = vi.spyOn(plugin.floatingPopover, "showLoading");
+      const showSpy = vi.spyOn(plugin.floatingPopover, "show");
+
+      let resolveLookup: any;
+      const lookupPromise = new Promise<LookupResult>((resolve) => {
+        resolveLookup = resolve;
+      });
+      vi.spyOn(plugin.providerManager, "lookup").mockReturnValue(lookupPromise);
+
+      // Trigger selection debounce
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      // showLoading must have been called immediately with selection rect and query
+      expect(showLoadingSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        "breakthrough",
+        expect.objectContaining({
+          onClose: expect.any(Function),
+        })
+      );
+      expect(showSpy).not.toHaveBeenCalled();
+
+      // Resolve the lookup
+      resolveLookup({
+        query: "breakthrough",
+        type: "word",
+        contextSentence: "A major breakthrough.",
+        contextSentenceClean: "A major breakthrough.",
+        vietnameseTranslation: "Bước đột phá",
+        timestamp: Date.now(),
+      });
+      await vi.runAllTimersAsync();
+
+      // Now show has been called with result
+      expect(showSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ query: "breakthrough" }),
+        expect.any(Object)
+      );
+    });
+
     it("mode 'icon': should show floatingTrigger with onClick callback to performLookup", () => {
       plugin.settings.triggerMode = "icon";
       editor.setSelectionText("Obsidian");
