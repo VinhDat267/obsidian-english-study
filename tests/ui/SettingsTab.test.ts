@@ -25,11 +25,11 @@ describe("EnglishStudySettingTab", () => {
     settingsTab = new EnglishStudySettingTab(app, pluginMock);
   });
 
-  it("should render all 6 setting groups and headings", () => {
+  it("should render all 7 setting groups and headings", () => {
     settingsTab.display();
 
     const headings = Setting.instances.filter((s) => s.isHeading);
-    expect(headings.length).toBe(6);
+    expect(headings.length).toBe(7);
 
     const headingNames = headings.map((h) => h.name);
     expect(headingNames).toContain("TƯƠNG TÁC ĐỌC (TRIGGER & DISPLAY)");
@@ -55,6 +55,19 @@ describe("EnglishStudySettingTab", () => {
       expect(pluginMock.settings.bilingualTranslationStyle).toBe("colored");
       expect(pluginMock.saveSettings).toHaveBeenCalled();
     });
+  });
+
+  it("changes_the_reading_engine_independently_of_grammar_and_file_export", async () => {
+    settingsTab.display();
+    const setting = Setting.instances.find(s => s.name === "Công cụ dịch khi đọc");
+    expect(setting).toBeDefined();
+    const dropdown = setting!.dropdownComponents[0];
+    expect(dropdown._value).toBe("google");
+    await dropdown._onChange("gemini");
+    expect(pluginMock.settings.readingTranslationEngine).toBe("gemini");
+    expect(pluginMock.settings.enableAiGrammar).toBe(false);
+    expect(pluginMock.settings.bilingualTranslationStyle).toBe("blockquote");
+    expect(pluginMock.saveSettings).toHaveBeenCalledOnce();
   });
 
   describe("Group: Multilingual Settings", () => {

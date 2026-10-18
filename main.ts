@@ -10,8 +10,11 @@ import { GeminiService } from "./src/services/provider/GeminiService";
 import { BilingualTranslationService } from "./src/services/translation/BilingualTranslationService";
 import { BilingualTranslationModal } from "./src/ui/BilingualTranslationModal";
 import { RectLike } from "./src/utils/domHelper";
+import { registerReadingTranslation } from "./src/reading/registerReadingTranslation";
+import type { ReadingTranslationController } from "./src/reading/ReadingTranslationController";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
+  readingTranslationController?: ReadingTranslationController;
   settings: PluginSettings = DEFAULT_SETTINGS;
   providerManager!: ProviderManager;
   vocabService!: VocabService;
@@ -32,6 +35,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.vocabService = new VocabService(this.app, this.settings);
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
+    this.readingTranslationController = registerReadingTranslation(this, () => this.settings);
 
     // 1. Đăng ký View thanh bên (Sidebar View)
     this.registerView(VIEW_TYPE_ENGLISH_STUDY, (leaf: WorkspaceLeaf) => {
@@ -242,6 +246,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   async onunload(): Promise<void> {
+    this.readingTranslationController?.unload();
     this.dismissFloatingUi();
     if (this.selectionDebounceTimer) {
       clearTimeout(this.selectionDebounceTimer);
@@ -257,6 +262,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    this.readingTranslationController?.updateSettings();
     if (this.vocabService) {
       this.vocabService.updateSettings(this.settings);
     }
