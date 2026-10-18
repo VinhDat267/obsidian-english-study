@@ -13,3 +13,7 @@
 Scan result: Clean. No structural or interface conflicts detected.
 
 ## Progress
+- Task 1: complete (commits 2356791..124f880, review clean)
+- Task 2: complete (commit 1aa8f82, review clean)
+- Task 2: minor (deferred): Clean up cosmetic logical OR assertion in textParser.test.ts line 204
+- Task 2: complete (commits 124f880..1aa8f82, review clean)

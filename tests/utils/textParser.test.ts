@@ -201,7 +201,7 @@ describe("extractContextSentence", () => {
         "Apples are rich in fiber. He ate an apple for breakfast. Apple orchards are common in the north.";
 
       const firstRes = extractContextSentence(paragraph, "apple", 5);
-      expect(firstRes.cleanContext).toBe("Apples are rich in fiber." || "He ate an apple for breakfast.");
+      expect(firstRes.cleanContext).toBe("Apples are rich in fiber.");
 
       const secondRes = extractContextSentence(paragraph, "apple", 35);
       expect(secondRes.cleanContext).toBe("He ate an apple for breakfast.");
