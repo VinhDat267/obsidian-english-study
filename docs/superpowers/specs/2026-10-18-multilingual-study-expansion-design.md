@@ -159,9 +159,20 @@ export class GoogleTranslate extends BaseProvider {
 ### 3.4. Nâng Cấp Điều Phối Trung Tâm: `src/services/provider/ProviderManager.ts`
 - **Bypass FreeDict khi không phải tiếng Anh**:
   - Dùng `detectScript(cleanText)` để kiểm tra nhanh. Nếu phát hiện ký tự CJK hoặc mã nguồn chọn trước không phải `"en"`, bỏ qua `FreeDictService` hoàn toàn để tránh request thừa và lỗi 404.
+- **Thuật toán Phân loại 3 cấp độ thích ứng CJK (CJK-Aware Classification)**:
+  - Do tiếng Trung (`zh`) và tiếng Nhật (`ja`) không có dấu khoảng trắng (`\s+`) giữa các từ, việc chỉ đếm số từ theo khoảng trắng sẽ nhận diện sai cả một câu dài thành `word` (1 từ)!
+  - **Quy tắc thích ứng**:
+    - Dấu câu kết thúc câu: Hỗ trợ cả dấu câu Latin và CJK: `/[.!?。！？…]/`.
+    - Đối với tiếng Trung/Nhật:
+      - $\le 2$ ký tự CJK $\rightarrow$ `word`.
+      - $3 - 6$ ký tự CJK (không có dấu ngắt câu) $\rightarrow$ `phrase`.
+      - $> 6$ ký tự CJK hoặc có dấu ngắt câu (`。！？…`) $\rightarrow$ `sentence`.
+    - Đối với các ngôn ngữ có dấu cách (Tiếng Anh, Pháp, Đức, Nga, Hàn, Việt): Giữ nguyên phân loại theo số từ tách bởi khoảng trắng ($\le 1$: word, $\le 4$: phrase, $> 4$: sentence).
+- **Cache Key phân biệt ngôn ngữ (Language-Aware Cache)**:
+  - Cấu trúc khóa Cache: `${targetLang}:${cleanText.toLowerCase()}` để đảm bảo khi người dùng đổi ngôn ngữ đích (ví dụ từ `"vi"` sang `"en"`), cache không trả về kết quả dịch của ngôn ngữ cũ.
 - **Tùy biến Prompt Gemini theo ngôn ngữ nguồn**:
-  - Với tiếng Nhật (`ja`): Yêu cầu giải thích Kanji, cách đọc Furigana/Romaji và ngữ pháp.
-  - Với tiếng Trung (`zh`): Yêu cầu phân tích Pinyin, từ loại và thành ngữ Hán Việt tương đương.
+  - Với tiếng Nhật (`ja`): Yêu cầu giải thích Kanji, cách đọc Furigana/Romaji và ngữ pháp bằng ngôn ngữ đích (`targetLang`).
+  - Với tiếng Trung (`zh`): Yêu cầu phân tích Pinyin, từ loại và thành ngữ tương đương.
   - Với tiếng Hàn (`ko`): Yêu cầu giải thích kính ngữ, gốc từ và ngữ pháp.
 
 ---
