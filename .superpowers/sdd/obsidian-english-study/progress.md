@@ -17,3 +17,5 @@ Scan result: Clean. No structural or interface conflicts detected.
 - Task 2: complete (commit 1aa8f82, review clean)
 - Task 2: minor (deferred): Clean up cosmetic logical OR assertion in textParser.test.ts line 204
 - Task 2: complete (commits 124f880..1aa8f82, review clean)
+- Task 3: complete (commits 1aa8f82..51702cf, review clean)
+- Task 4: ready for review (all 26 service tests passed, 120 total)
