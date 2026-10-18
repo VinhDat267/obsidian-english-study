@@ -99,17 +99,32 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("save-to-vocabulary");
       expect(commandIds).toContain("open-sidebar-view");
 
-      // DOM events (mouseup, keyup)
-      expect(plugin.domEvents.length).toBe(2);
+      // DOM events (mouseup, keyup, scroll)
+      expect(plugin.domEvents.length).toBe(3);
       const eventTypes = plugin.domEvents.map((e) => e.type);
       expect(eventTypes).toContain("mouseup");
       expect(eventTypes).toContain("keyup");
+      expect(eventTypes).toContain("scroll");
+
+      const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
+      expect(scrollEvent?.options).toBe(true);
 
       // Workspace event (active-leaf-change)
       expect(plugin.events.length).toBe(1);
 
       // Settings tab
       expect(plugin.settingTabs.length).toBe(1);
+    });
+
+    it("should dismiss floating UI on scroll event", async () => {
+      await plugin.onload();
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+
+      const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
+      expect(scrollEvent).toBeDefined();
+
+      scrollEvent!.callback();
+      expect(dismissSpy).toHaveBeenCalled();
     });
 
     it("should clean up timers and hide UI on onunload()", async () => {
@@ -292,6 +307,46 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       await capturedCallbacks.onSave(mockResult);
 
       expect(saveVocabSpy).toHaveBeenCalledWith(mockResult, plugin.settings);
+    });
+
+    it("should return null gracefully if lookup is aborted (AbortError)", async () => {
+      editor.setSelectionText("canceled");
+      const abortError = new Error("The user aborted a request.");
+      abortError.name = "AbortError";
+      vi.spyOn(plugin.providerManager, "lookup").mockRejectedValue(abortError);
+
+      const result = await plugin.performLookup(editor);
+
+      expect(result).toBeNull();
+    });
+
+    it("popover onPinToSidebar callback should dismiss floating UI and activate sidebar", async () => {
+      editor.setSelectionText("developer");
+      const mockResult: LookupResult = {
+        query: "developer",
+        type: "word",
+        contextSentence: "It boosts developer velocity.",
+        contextSentenceClean: "It boosts developer velocity.",
+        vietnameseTranslation: "Lập trình viên",
+        timestamp: Date.now(),
+      };
+
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+      let capturedCallbacks: any = null;
+      vi.spyOn(plugin.floatingPopover, "show").mockImplementation((rect, res, cb) => {
+        capturedCallbacks = cb;
+      });
+
+      await plugin.performLookup(editor);
+
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+      const activateSpy = vi.spyOn(plugin, "activateSidebarView").mockResolvedValue();
+
+      expect(capturedCallbacks).toBeDefined();
+      capturedCallbacks.onPinToSidebar(mockResult);
+
+      expect(dismissSpy).toHaveBeenCalled();
+      expect(activateSpy).toHaveBeenCalled();
     });
   });
 

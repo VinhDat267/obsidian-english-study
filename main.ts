@@ -106,6 +106,15 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           this.handleSelectionDebounced();
         }
       });
+
+      this.registerDomEvent(
+        document,
+        "scroll",
+        () => {
+          this.dismissFloatingUi();
+        },
+        true
+      );
     }
 
     // 5. Tự động ẩn UI nổi khi active leaf thay đổi
@@ -226,12 +235,20 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       paragraph = selectedText;
     }
 
-    const result = await this.providerManager.lookup(
-      selectedText,
-      paragraph,
-      cursorOffset,
-      this.settings
-    );
+    let result: LookupResult;
+    try {
+      result = await this.providerManager.lookup(
+        selectedText,
+        paragraph,
+        cursorOffset,
+        this.settings
+      );
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        return null;
+      }
+      throw err;
+    }
 
     this.lastLookupResult = result;
 
@@ -241,6 +258,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         await this.vocabService.saveVocab(res, this.settings);
       },
       onPinToSidebar: (res: LookupResult) => {
+        this.dismissFloatingUi();
         this.activateSidebarView().then(() => {
           if (this.sidebarView) {
             this.sidebarView.setResult(res);

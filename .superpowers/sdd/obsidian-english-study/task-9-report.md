@@ -14,14 +14,21 @@ Successfully implemented the complete entry point for the Obsidian English Study
        - `lookup-selected-text`: Uses `editorCheckCallback` to validate active selection and execute `performLookup(editor)`.
        - `save-to-vocabulary`: Uses `checkCallback` to validate presence of `lastLookupResult` and save to `vocabService`.
        - `open-sidebar-view`: Invokes `activateSidebarView()`.
-     - Registers DOM event listeners safely (`mouseup`, `keyup` on Shift+Arrows/Home/End) triggering `handleSelectionDebounced()`.
+     - Registers DOM event listeners safely:
+       - `mouseup` -> `handleSelectionDebounced()`
+       - `keyup` (on Shift+Arrows/Home/End) -> `handleSelectionDebounced()`
+       - `scroll` (with `capture: true`) -> `dismissFloatingUi()`
      - Registers workspace event `active-leaf-change` triggering `dismissFloatingUi()`.
      - Adds `EnglishStudySettingTab` to plugin settings.
-   - `onunload()`: Cleans up debounce timers and dismisses all floating UI elements.
+   - `onunload()`: Cleans up debounce timers, dismisses all floating UI elements, and resets references.
 
-2. **Core Interactions**:
+2. **Core Interactions & Fix Round 1 Enhancements**:
    - `activateSidebarView()`: Re-uses existing right sidebar leaf or creates one with `VIEW_TYPE_ENGLISH_STUDY`.
-   - `performLookup(editor: Editor)`: Extracts selection, cursor position, surrounding paragraph context, calls `providerManager.lookup`, caches `lastLookupResult`, renders `FloatingPopover`, and updates `sidebarView` if open.
+   - `performLookup(editor: Editor)`:
+     - Extracts selection, cursor position, surrounding paragraph context.
+     - Calls `providerManager.lookup`, catching `AbortError` gracefully and returning `null`.
+     - Caches `lastLookupResult`, renders `FloatingPopover`, and updates `sidebarView` if open.
+     - `onPinToSidebar` cleanly dismisses floating popover before opening/focusing sidebar.
    - `handleSelectionDebounced()`: 150ms debounced selection handler supporting 3 trigger modes (`icon`, `auto-popup`, `hotkey-only`).
    - `dismissFloatingUi()`: Hides `FloatingTrigger` and `FloatingPopover`.
 
@@ -30,13 +37,14 @@ Successfully implemented the complete entry point for the Obsidian English Study
    - Enhanced `WorkspaceLeaf` (`setViewState`), `Workspace` (`getActiveViewOfType`), and `Plugin` registration tracking for full fidelity unit & integration tests.
 
 ## Verification & Test Results
-- **TDD Red Phase**: `tests/main.test.ts` created with 19 test cases; verified failure against initial stub.
-- **TDD Green Phase**: `main.ts` implemented; all 19 test cases passed.
+- **TDD Red Phase**: `tests/main.test.ts` created; verified failure against initial stub.
+- **TDD Green Phase**: `main.ts` implemented; all tests passed.
+- **Fix Round 1**: Added scroll capture event, `AbortError` catch, popover dismiss on pin, and corresponding tests.
 - **Full Project Test Suite**: Ran `npx vitest run`:
   - 16 test files passed (100%).
-  - 221 tests passed (0 failed).
+  - 224 tests passed (0 failed).
 - **Production Compilation**: Ran `npm run build`:
-  - Successfully produced bundled `main.js` (336,688 bytes).
+  - Successfully produced bundled `main.js` (336,838 bytes).
 
 ## Status
 DONE
