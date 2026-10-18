@@ -125,6 +125,39 @@
   gap: 10px;
   border-bottom: 1px solid var(--background-modifier-border); /* taste-skill-ignore: native pane header divider */
   padding-bottom: 10px;
+  cursor: grab;
+  user-select: none;
+}
+
+.english-study-popover.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  transition: none !important;
+}
+
+.english-study-popover.is-dragging .popover-header {
+  cursor: grabbing;
+}
+
+.english-study-popover .popover-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  cursor: grab;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: color var(--english-study-transition-fast);
+}
+
+.english-study-popover .popover-drag-handle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.english-study-popover .popover-header:hover .popover-drag-handle {
+  color: var(--text-muted);
 }
 
 .english-study-popover .popover-title-group {

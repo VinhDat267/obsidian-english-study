@@ -16,6 +16,10 @@ export class FloatingPopover {
   private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
   private outsideTimeout: any = null;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private dragMouseDownHandler: ((e: MouseEvent) => void) | null = null;
+  private dragMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+  private dragMouseUpHandler: ((e: MouseEvent) => void) | null = null;
+  private isDragging: boolean = false;
 
   /**
    * Hiển thị Card Popover:
@@ -64,6 +68,20 @@ export class FloatingPopover {
     const header = document.createElement("div");
     header.className = "popover-header";
 
+    const dragHandle = document.createElement("div");
+    dragHandle.className = "popover-drag-handle";
+    dragHandle.setAttribute("aria-hidden", "true");
+    dragHandle.setAttribute("title", "Kéo để di chuyển");
+    try {
+      setIcon(dragHandle, "grip-horizontal");
+    } catch {
+      // fallback
+    }
+    if (!dragHandle.innerHTML.trim()) {
+      dragHandle.textContent = "⋮⋮";
+    }
+    header.appendChild(dragHandle);
+
     const titleGroup = document.createElement("div");
     titleGroup.className = "popover-title-group";
 
@@ -95,6 +113,10 @@ export class FloatingPopover {
       audioBtn.textContent = "🔊";
     }
 
+    audioBtn.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
     audioBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -122,6 +144,10 @@ export class FloatingPopover {
         pinBtn.textContent = "📌";
       }
 
+      pinBtn.addEventListener("mousedown", (e: MouseEvent) => {
+        e.stopPropagation();
+      });
+
       pinBtn.addEventListener("click", (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -143,6 +169,10 @@ export class FloatingPopover {
       closeBtn.textContent = "✕";
     }
 
+    closeBtn.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
     closeBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -152,6 +182,7 @@ export class FloatingPopover {
     headerActions.appendChild(closeBtn);
 
     header.appendChild(headerActions);
+    this.setupDraggable(header, popover);
     popover.appendChild(header);
 
     // 2. Body
@@ -403,6 +434,7 @@ export class FloatingPopover {
   }
 
   hide(): void {
+    this.cleanUpDragListeners();
     this.stopAudio();
 
     if (this.outsideTimeout) {
@@ -542,5 +574,93 @@ export class FloatingPopover {
         btn.classList.remove("audio-playing");
       }
     }
+  }
+
+  private setupDraggable(header: HTMLElement, popover: HTMLElement): void {
+    this.dragMouseDownHandler = (e: MouseEvent) => {
+      // Only drag on primary left click
+      if (e.button !== 0) return;
+
+      // Ignore drag if clicking on buttons or interactive inputs in header
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "BUTTON" ||
+          (typeof target.closest === "function" &&
+            target.closest("button, input, select, textarea, a")))
+      ) {
+        return;
+      }
+
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      this.isDragging = true;
+      popover.classList.add("is-dragging");
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const initialLeft = parseFloat(popover.style.left) || 0;
+      const initialTop = parseFloat(popover.style.top) || 0;
+
+      this.dragMouseMoveHandler = (moveEvent: MouseEvent) => {
+        if (!this.isDragging) return;
+
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+
+        let newLeft = initialLeft + deltaX;
+        let newTop = initialTop + deltaY;
+
+        // Viewport boundary clamping
+        const rect = popover.getBoundingClientRect();
+        const width = rect.width || 380;
+        const height = rect.height || 280;
+        const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+        const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+        const padding = 8;
+
+        const maxLeft = Math.max(padding, vw - width - padding);
+        const maxTop = Math.max(padding, vh - height - padding);
+
+        newLeft = Math.max(padding, Math.min(newLeft, maxLeft));
+        newTop = Math.max(padding, Math.min(newTop, maxTop));
+
+        popover.style.left = `${newLeft}px`;
+        popover.style.top = `${newTop}px`;
+      };
+
+      this.dragMouseUpHandler = () => {
+        this.isDragging = false;
+        popover.classList.remove("is-dragging");
+        this.removeDragWindowListeners();
+      };
+
+      if (typeof window !== "undefined") {
+        window.addEventListener("mousemove", this.dragMouseMoveHandler);
+        window.addEventListener("mouseup", this.dragMouseUpHandler);
+      }
+    };
+
+    header.addEventListener("mousedown", this.dragMouseDownHandler);
+  }
+
+  private removeDragWindowListeners(): void {
+    if (typeof window !== "undefined") {
+      if (this.dragMouseMoveHandler) {
+        window.removeEventListener("mousemove", this.dragMouseMoveHandler);
+        this.dragMouseMoveHandler = null;
+      }
+      if (this.dragMouseUpHandler) {
+        window.removeEventListener("mouseup", this.dragMouseUpHandler);
+        this.dragMouseUpHandler = null;
+      }
+    }
+  }
+
+  private cleanUpDragListeners(): void {
+    this.isDragging = false;
+    this.removeDragWindowListeners();
+    this.dragMouseDownHandler = null;
   }
 }

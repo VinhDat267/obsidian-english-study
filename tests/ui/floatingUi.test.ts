@@ -79,9 +79,20 @@ function createMockElement(tag: string = "div"): any {
         listeners[event] = listeners[event].filter((h) => h !== handler);
       }
     },
+    _getListeners: (event: string) => listeners[event] || [],
     dispatchEvent: (eventObj: { type: string; [key: string]: any }) => {
-      const handlers = listeners[eventObj.type] || [];
-      handlers.forEach((h) => h(eventObj));
+      let current: any = el;
+      let stopped = false;
+      const originalStop = eventObj.stopPropagation;
+      eventObj.stopPropagation = () => {
+        stopped = true;
+        if (originalStop) originalStop.call(eventObj);
+      };
+      while (current && !stopped) {
+        const handlers = current._getListeners ? current._getListeners(eventObj.type) : [];
+        handlers.forEach((h: any) => h(eventObj));
+        current = current.parentElement;
+      }
     },
     contains: (target: any) => {
       if (target === el) return true;
@@ -119,6 +130,19 @@ function createMockElement(tag: string = "div"): any {
       }
       return results;
     },
+    closest: (selector: string) => {
+      let cur: any = el;
+      while (cur) {
+        if (selector.startsWith(".") && cur.classList?.contains(selector.slice(1))) {
+          return cur;
+        }
+        if (cur.tagName && cur.tagName.toLowerCase() === selector.toLowerCase()) {
+          return cur;
+        }
+        cur = cur.parentElement;
+      }
+      return null;
+    },
     children,
     get childNodes() {
       return children;
@@ -135,12 +159,14 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
   let originalNavigator: any;
   let mockBody: any;
   let docListeners: Record<string, ((...args: any[]) => void)[]>;
+  let winListeners: Record<string, ((...args: any[]) => void)[]>;
 
   beforeEach(() => {
     originalDocument = (global as any).document;
     originalWindow = (global as any).window;
 
     docListeners = {};
+    winListeners = {};
     mockBody = createMockElement("body");
 
     (global as any).document = {
@@ -164,6 +190,19 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
     (global as any).window = {
       innerWidth: 1024,
       innerHeight: 768,
+      addEventListener: (event: string, handler: any) => {
+        if (!winListeners[event]) winListeners[event] = [];
+        winListeners[event].push(handler);
+      },
+      removeEventListener: (event: string, handler: any) => {
+        if (winListeners[event]) {
+          winListeners[event] = winListeners[event].filter((h) => h !== handler);
+        }
+      },
+      dispatchEvent: (eventObj: { type: string; [key: string]: any }) => {
+        const handlers = winListeners[eventObj.type] || [];
+        handlers.forEach((h) => h(eventObj));
+      },
       speechSynthesis: {
         speak: vi.fn(),
         cancel: vi.fn(),
@@ -392,6 +431,158 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       });
 
       expect(navigator.clipboard.writeText).toHaveBeenCalled();
+      popover.hide();
+    });
+
+    it("should render drag handle affordance in popover header", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = popover.getElement();
+      const dragHandle = el?.querySelector(".popover-drag-handle");
+      expect(dragHandle).not.toBeNull();
+      popover.hide();
+    });
+
+    it("should update popover position when dragging header", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = popover.getElement()!;
+      const header = el.querySelector(".popover-header");
+      expect(header).not.toBeNull();
+
+      const initialLeft = parseInt(el.style.left, 10);
+      const initialTop = parseInt(el.style.top, 10);
+
+      // Start drag at (300, 200)
+      header.dispatchEvent({
+        type: "mousedown",
+        clientX: 300,
+        clientY: 200,
+        button: 0,
+        target: header,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      // Move mouse by (+50, +30)
+      window.dispatchEvent({
+        type: "mousemove",
+        clientX: 350,
+        clientY: 230,
+      });
+
+      // Popover coordinates should have shifted
+      expect(parseInt(el.style.left, 10)).toBe(initialLeft + 50);
+      expect(parseInt(el.style.top, 10)).toBe(initialTop + 30);
+      expect(el.classList.contains("is-dragging")).toBe(true);
+
+      // Mouse up to end drag
+      window.dispatchEvent({
+        type: "mouseup",
+        clientX: 350,
+        clientY: 230,
+      });
+
+      expect(el.classList.contains("is-dragging")).toBe(false);
+      popover.hide();
+    });
+
+    it("should clamp popover position within viewport boundaries when dragged too far", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = popover.getElement()!;
+      const header = el.querySelector(".popover-header");
+
+      // Start drag
+      header.dispatchEvent({
+        type: "mousedown",
+        clientX: 300,
+        clientY: 200,
+        button: 0,
+        target: header,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      // Move way beyond top-left (negative coordinates)
+      window.dispatchEvent({
+        type: "mousemove",
+        clientX: -500,
+        clientY: -500,
+      });
+
+      // Left and top should be clamped to minimum 8px
+      expect(parseInt(el.style.left, 10)).toBe(8);
+      expect(parseInt(el.style.top, 10)).toBe(8);
+
+      // Move way beyond bottom-right
+      window.dispatchEvent({
+        type: "mousemove",
+        clientX: 2000,
+        clientY: 2000,
+      });
+
+      // Should be clamped to window width/height minus element dimensions and padding
+      expect(parseInt(el.style.left, 10)).toBeLessThanOrEqual(window.innerWidth - 380 - 8);
+      expect(parseInt(el.style.top, 10)).toBeLessThanOrEqual(window.innerHeight - 280 - 8);
+
+      window.dispatchEvent({ type: "mouseup" });
+      popover.hide();
+    });
+
+    it("should NOT initiate drag when mousedown occurs on action buttons inside header", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = popover.getElement()!;
+      const audioBtn = el.querySelector(".audio-btn");
+      expect(audioBtn).not.toBeNull();
+
+      const initialLeft = el.style.left;
+      const initialTop = el.style.top;
+
+      // Mouse down on audio button
+      audioBtn.dispatchEvent({
+        type: "mousedown",
+        clientX: 300,
+        clientY: 200,
+        button: 0,
+        target: audioBtn,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      // Mouse move
+      window.dispatchEvent({
+        type: "mousemove",
+        clientX: 400,
+        clientY: 300,
+      });
+
+      // Position should not have moved
+      expect(el.style.left).toBe(initialLeft);
+      expect(el.style.top).toBe(initialTop);
+      expect(el.classList.contains("is-dragging")).toBe(false);
+
       popover.hide();
     });
   });
