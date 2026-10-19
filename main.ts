@@ -1,5 +1,5 @@
 import { Plugin, Editor, MarkdownView, WorkspaceLeaf, Notice, TFile } from "obsidian";
-import { PluginSettings, DEFAULT_SETTINGS, LookupResult, DocumentContextMeta } from "./src/types";
+import { PluginSettings, DEFAULT_SETTINGS, LookupResult, DocumentContextMeta, TutorSession } from "./src/types";
 import { ProviderManager } from "./src/services/provider/ProviderManager";
 import { VocabService } from "./src/services/storage/VocabService";
 import { FloatingTrigger } from "./src/ui/FloatingTrigger";
@@ -32,6 +32,7 @@ import {
   unwrapAllHighlights,
 } from "./src/utils/domHighlightHelper";
 import { RightClickPenHandler } from "./src/reading/RightClickPenHandler";
+import { AiTutorChatService } from "./src/services/ai/AiTutorChatService";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
   readingTranslationController?: ReadingTranslationController;
@@ -40,6 +41,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   providerManager!: ProviderManager;
   vocabService!: VocabService;
   geminiService!: GeminiService;
+  private aiTutorChatService!: AiTutorChatService;
   bilingualTranslationService!: BilingualTranslationService;
   floatingTrigger!: FloatingTrigger;
   floatingPopover!: FloatingPopover;
@@ -63,6 +65,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.geminiService = new GeminiService();
     this.bilingualTranslationService = new BilingualTranslationService(undefined, this.geminiService);
     this.providerManager = new ProviderManager(this.settings);
+    this.aiTutorChatService = new AiTutorChatService();
     this.vocabService = new VocabService(this.app, this.settings);
     this.readingHighlightService = new ReadingHighlightService(
       this.settings.readingHighlights || {},
@@ -104,6 +107,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       sidebar.setSaveCallback(async (result: LookupResult) => {
         await this.vocabService.saveVocab(result, this.settings);
       });
+      sidebar.setTutorDependencies(
+        this.aiTutorChatService,
+        this.providerManager.getGeminiService(),
+        this.settings.geminiApiKey
+      );
       this.sidebarView = sidebar;
       return sidebar;
     });
@@ -450,6 +458,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (this.vocabService) {
       this.vocabService.updateSettings(this.settings);
     }
+    if (this.sidebarView) {
+      this.sidebarView.setTutorDependencies(
+        this.aiTutorChatService,
+        this.providerManager.getGeminiService(),
+        this.settings.geminiApiKey
+      );
+    }
   }
 
   /**
@@ -476,6 +491,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       workspace.revealLeaf(leaf);
       if (leaf.view instanceof EnglishStudySidebar) {
         this.sidebarView = leaf.view;
+        this.sidebarView.setTutorDependencies(
+          this.aiTutorChatService,
+          this.providerManager.getGeminiService(),
+          this.settings.geminiApiKey
+        );
       }
     }
   }
@@ -713,6 +733,19 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
             }
           });
         },
+        onPinToSidebarChat: (session: TutorSession) => {
+          this.dismissFloatingUi(false);
+          this.activateSidebarView().then(() => {
+            if (this.sidebarView) {
+              this.sidebarView.setTutorDependencies(
+                this.aiTutorChatService,
+                this.providerManager.getGeminiService(),
+                this.settings.geminiApiKey
+              );
+              this.sidebarView.openTutorSession(session);
+            }
+          });
+        },
         onHighlight: (action: HighlightAction) => {
           if (isReadingMode) {
             this.highlightReadingSelection(action, activeView || undefined);
@@ -726,6 +759,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         enableAiGrammar: this.settings.enableAiGrammar,
         enableAiTranslation: this.settings.enableAiTranslation,
         isReadingMode,
+        chatService: this.aiTutorChatService,
+        geminiService: this.providerManager.getGeminiService(),
+        apiKey: this.settings.geminiApiKey,
       }
     );
     shown = true;

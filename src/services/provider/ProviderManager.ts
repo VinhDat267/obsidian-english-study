@@ -60,6 +60,13 @@ export class ProviderManager {
   }
 
   /**
+   * Lấy instance GeminiService
+   */
+  getGeminiService(): GeminiService {
+    return this.geminiService;
+  }
+
+  /**
    * Hủy bỏ request đang chờ (nếu có)
    */
   cancelPending(): void {

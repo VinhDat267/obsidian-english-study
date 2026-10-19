@@ -1359,4 +1359,126 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.readingHighlightService.getHighlights("notes/sample.md")).toHaveLength(0);
     });
   });
+
+  describe("AI Tutor Chat Service Integration", () => {
+    let mockEditor: Editor;
+
+    beforeEach(async () => {
+      plugin.settings.geminiApiKey = "test-gemini-key";
+      await plugin.onload();
+      mockEditor = new Editor("Mastering TypeScript requires deep practice with types.");
+      mockEditor.setSelectionText("TypeScript");
+      mockEditor.setCursor({ line: 0, ch: 10 });
+    });
+
+    it("should instantiate aiTutorChatService in onload", () => {
+      expect((plugin as any).aiTutorChatService).toBeDefined();
+    });
+
+    it("should pass tutor dependencies to sidebar on VIEW_TYPE_ENGLISH_STUDY registration", () => {
+      const viewFactory = plugin.views.get(VIEW_TYPE_ENGLISH_STUDY);
+      expect(viewFactory).toBeDefined();
+
+      const mockLeaf = new WorkspaceLeaf();
+      const sidebar = viewFactory!(mockLeaf) as any;
+      expect(sidebar).toBeDefined();
+      expect(sidebar.tutorChatService).toBe((plugin as any).aiTutorChatService);
+      expect(sidebar.geminiService).toBe(plugin.providerManager.getGeminiService());
+      expect(sidebar.geminiApiKey).toBe(plugin.settings.geminiApiKey);
+    });
+
+    it("should pass tutor options and onPinToSidebarChat to floatingPopover.show on performLookup", async () => {
+      const mockResult: LookupResult = {
+        query: "TypeScript",
+        type: "word",
+        vietnameseTranslation: "TypeScript",
+        timestamp: Date.now(),
+      };
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+      const popoverShowSpy = vi.spyOn(plugin.floatingPopover, "show");
+
+      await plugin.performLookup(mockEditor);
+
+      expect(popoverShowSpy).toHaveBeenCalledWith(
+        expect.any(Object),
+        mockResult,
+        expect.objectContaining({
+          onPinToSidebarChat: expect.any(Function),
+        }),
+        expect.objectContaining({
+          chatService: (plugin as any).aiTutorChatService,
+          geminiService: plugin.providerManager.getGeminiService(),
+          apiKey: plugin.settings.geminiApiKey,
+        })
+      );
+    });
+
+    it("should handle onPinToSidebarChat: dismiss floating UI, activate sidebar, set dependencies and open session", async () => {
+      const mockResult: LookupResult = {
+        query: "TypeScript",
+        type: "word",
+        vietnameseTranslation: "TypeScript",
+        timestamp: Date.now(),
+      };
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue(mockResult);
+
+      let capturedCallbacks: any = null;
+      vi.spyOn(plugin.floatingPopover, "show").mockImplementation((_rect, _res, callbacks) => {
+        capturedCallbacks = callbacks;
+      });
+
+      await plugin.performLookup(mockEditor);
+      expect(capturedCallbacks).toBeDefined();
+      expect(capturedCallbacks.onPinToSidebarChat).toBeDefined();
+
+      const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+      const activateSpy = vi.spyOn(plugin, "activateSidebarView").mockResolvedValue(undefined);
+
+      // Mock sidebarView
+      const mockSidebar: any = {
+        setTutorDependencies: vi.fn(),
+        openTutorSession: vi.fn(),
+      };
+      plugin.sidebarView = mockSidebar;
+
+      const mockSession: any = {
+        id: "session-123",
+        query: "TypeScript",
+        contextSentence: "Mastering TypeScript requires practice.",
+        messages: [],
+      };
+
+      capturedCallbacks.onPinToSidebarChat(mockSession);
+
+      expect(dismissSpy).toHaveBeenCalledWith(false);
+      expect(activateSpy).toHaveBeenCalled();
+
+      // Wait for promise microtask
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockSidebar.setTutorDependencies).toHaveBeenCalledWith(
+        (plugin as any).aiTutorChatService,
+        plugin.providerManager.getGeminiService(),
+        plugin.settings.geminiApiKey
+      );
+      expect(mockSidebar.openTutorSession).toHaveBeenCalledWith(mockSession);
+    });
+
+    it("should update sidebar tutor dependencies on saveSettings", async () => {
+      const mockSidebar: any = {
+        setTutorDependencies: vi.fn(),
+      };
+      plugin.sidebarView = mockSidebar;
+
+      plugin.settings.geminiApiKey = "updated-new-key-123";
+      await plugin.saveSettings();
+
+      expect(mockSidebar.setTutorDependencies).toHaveBeenCalledWith(
+        (plugin as any).aiTutorChatService,
+        plugin.providerManager.getGeminiService(),
+        "updated-new-key-123"
+      );
+    });
+  });
 });
+

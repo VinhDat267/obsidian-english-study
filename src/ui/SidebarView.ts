@@ -491,7 +491,9 @@ export class EnglishStudySidebar extends ItemView {
   }
 
   private renderAiTutorTab(parent: HTMLElement): void {
-    const tutorContainer = parent.createDiv({ cls: "sidebar-tutor-container" });
+    const tutorContainer = parent.createDiv({
+      cls: "sidebar-tutor-container sidebar-ai-tutor-container",
+    });
 
     if (!this.activeTutorSession) {
       const emptyState = tutorContainer.createDiv({
