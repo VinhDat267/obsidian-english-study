@@ -9,6 +9,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
   let plugin: EnglishStudyPlugin;
   let originalDocument: any;
   let originalWindow: any;
+  let originalNode: any;
+  let originalMouseEvent: any;
   let mockBody: any;
   let docListeners: Record<string, ((...args: any[]) => void)[]>;
 
@@ -16,12 +18,48 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
     vi.useFakeTimers();
     originalDocument = (global as any).document;
     originalWindow = (global as any).window;
+    originalNode = (global as any).Node;
+    originalMouseEvent = (global as any).MouseEvent;
+
+    class MockNode {
+      static TEXT_NODE = 3;
+      static ELEMENT_NODE = 1;
+      static DOCUMENT_POSITION_FOLLOWING = 4;
+    }
+    (global as any).Node = MockNode;
+
+    class MockMouseEvent {
+      public button: number = 0;
+      public buttons: number = 0;
+      public clientX: number = 0;
+      public clientY: number = 0;
+      public target: any = null;
+      constructor(public type: string, init: any = {}) {
+        Object.assign(this, init);
+      }
+      preventDefault = vi.fn();
+      stopPropagation = vi.fn();
+    }
+    (global as any).MouseEvent = MockMouseEvent;
 
     docListeners = {};
     mockBody = createMockObsidianElement("body");
 
     (global as any).document = {
       createElement: vi.fn((tag: string) => createMockObsidianElement(tag)),
+      createRange: vi.fn(() => ({
+        setStart: vi.fn(),
+        setEnd: vi.fn(),
+        cloneRange: vi.fn(() => ({} as Range)),
+        getBoundingClientRect: () => ({
+          top: 100,
+          bottom: 120,
+          left: 100,
+          right: 200,
+          width: 100,
+          height: 20,
+        }),
+      })),
       body: mockBody,
       addEventListener: vi.fn((event: string, handler: any) => {
         if (!docListeners[event]) docListeners[event] = [];
@@ -66,6 +104,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
     vi.useRealTimers();
     (global as any).document = originalDocument;
     (global as any).window = originalWindow;
+    (global as any).Node = originalNode;
+    (global as any).MouseEvent = originalMouseEvent;
   });
 
   describe("Lifecycle & Registrations (onload / onunload)", () => {
@@ -110,9 +150,12 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("clear-highlight-selection");
       expect(commandIds).toContain("clear-all-reading-highlights");
 
-      // DOM events (mouseup, keyup, keydown, scroll)
-      expect(plugin.domEvents.length).toBe(4);
+      // DOM events (mousedown, mousemove, contextmenu, mouseup, keyup, keydown, scroll)
+      expect(plugin.domEvents.length).toBe(7);
       const eventTypes = plugin.domEvents.map((e) => e.type);
+      expect(eventTypes).toContain("mousedown");
+      expect(eventTypes).toContain("mousemove");
+      expect(eventTypes).toContain("contextmenu");
       expect(eventTypes).toContain("mouseup");
       expect(eventTypes).toContain("keyup");
       expect(eventTypes).toContain("keydown");
@@ -1171,16 +1214,20 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(pillHideSpy).toHaveBeenCalled();
     });
 
-    it("should automatically apply highlight on selection when pen mode is active", () => {
-      plugin.settings.highlighterPenColor = "green";
+    it("should NOT auto-highlight on left-click selection in pen mode, but allow translation trigger", () => {
       plugin.togglePenMode(true);
+      plugin.settings.highlighterPenColor = "green";
+      plugin.currentPenAction = "green";
 
-      const removeAllRangesSpy = vi.fn();
+      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
+      const triggerShowSpy = vi.spyOn(plugin.floatingTrigger, "show");
+      const toolbarShowSpy = vi.spyOn(plugin.floatingHighlightToolbar, "show");
+
       (global as any).window.getSelection = vi.fn(() => ({
         rangeCount: 1,
         toString: () => "essential concept",
         anchorNode: mockView.contentEl,
-        removeAllRanges: removeAllRangesSpy,
+        removeAllRanges: vi.fn(),
         getRangeAt: () => ({
           commonAncestorContainer: {
             nodeType: 1,
@@ -1201,61 +1248,83 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         }),
       }));
 
-      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
-      const toolbarShowSpy = vi.spyOn(plugin.floatingHighlightToolbar, "show");
-
       plugin.handleSelectionDebounced();
       vi.advanceTimersByTime(150);
 
-      expect(highlightSpy).toHaveBeenCalledWith(
-        "green",
-        "essential concept",
-        expect.anything(),
-        mockView
-      );
+      // Left click should NOT highlight
+      expect(highlightSpy).not.toHaveBeenCalled();
       expect(toolbarShowSpy).not.toHaveBeenCalled();
-      expect(removeAllRangesSpy).toHaveBeenCalled();
+      // Should show translation trigger instead
+      expect(triggerShowSpy).toHaveBeenCalled();
     });
 
-    it("should automatically clear highlight on selection when pen mode is set to eraser (clear)", () => {
+    it("should automatically highlight on right-click drag when pen mode is active", () => {
+      plugin.togglePenMode(true);
+      plugin.settings.highlighterPenColor = "green";
+      plugin.currentPenAction = "green";
+
+      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
+
+      const p = document.createElement("p");
+      p.textContent = "Right drag to highlight text";
+      mockView.contentEl.appendChild(p);
+
+      (document as any).caretRangeFromPoint = vi.fn(() => document.createRange());
+
+      const downEvent = new MouseEvent("mousedown", { button: 2, clientX: 10, clientY: 10 });
+      Object.defineProperty(downEvent, "target", { value: p });
+      plugin.rightClickPenHandler.handleMouseDown(downEvent);
+
+      const moveEvent = new MouseEvent("mousemove", { buttons: 2, clientX: 90, clientY: 10 });
+      plugin.rightClickPenHandler.handleMouseMove(moveEvent);
+
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "Right drag to highlight",
+        getRangeAt: () => document.createRange(),
+        removeAllRanges: vi.fn(),
+        addRange: vi.fn(),
+      }));
+
+      const upEvent = new MouseEvent("mouseup", { button: 2, clientX: 90, clientY: 10 });
+      Object.defineProperty(upEvent, "target", { value: p });
+      plugin.rightClickPenHandler.handleMouseUp(upEvent);
+
+      expect(highlightSpy).toHaveBeenCalledWith("green", "Right drag to highlight", expect.anything(), mockView);
+    });
+
+    it("should automatically clear highlight on right-click drag when pen mode is set to eraser (clear)", () => {
       plugin.togglePenMode(true);
       plugin.currentPenAction = "clear";
 
-      const removeAllRangesSpy = vi.fn();
+      const clearSpy = vi.spyOn(plugin, "clearLiveReadingHighlight");
+
+      const p = document.createElement("p");
+      p.textContent = "Right drag to clear";
+      mockView.contentEl.appendChild(p);
+
+      (document as any).caretRangeFromPoint = vi.fn(() => document.createRange());
+
+      const downEvent = new MouseEvent("mousedown", { button: 2, clientX: 10, clientY: 10 });
+      Object.defineProperty(downEvent, "target", { value: p });
+      plugin.rightClickPenHandler.handleMouseDown(downEvent);
+
+      const moveEvent = new MouseEvent("mousemove", { buttons: 2, clientX: 90, clientY: 10 });
+      plugin.rightClickPenHandler.handleMouseMove(moveEvent);
+
       (global as any).window.getSelection = vi.fn(() => ({
         rangeCount: 1,
-        toString: () => "essential concept",
-        anchorNode: mockView.contentEl,
-        removeAllRanges: removeAllRangesSpy,
-        getRangeAt: () => ({
-          commonAncestorContainer: {
-            nodeType: 1,
-            parentElement: mockView.contentEl,
-            closest: vi.fn(() => ({
-              textContent: "An essential concept to learn.",
-            })),
-          },
-          getBoundingClientRect: () => ({
-            top: 150,
-            bottom: 170,
-            left: 100,
-            right: 200,
-            width: 100,
-            height: 20,
-          }),
-          cloneRange: vi.fn(() => ({} as Range)),
-        }),
+        toString: () => "Right drag to clear",
+        getRangeAt: () => document.createRange(),
+        removeAllRanges: vi.fn(),
+        addRange: vi.fn(),
       }));
 
-      const clearSpy = vi.spyOn(plugin, "clearLiveReadingHighlight");
-      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
+      const upEvent = new MouseEvent("mouseup", { button: 2, clientX: 90, clientY: 10 });
+      Object.defineProperty(upEvent, "target", { value: p });
+      plugin.rightClickPenHandler.handleMouseUp(upEvent);
 
-      plugin.handleSelectionDebounced();
-      vi.advanceTimersByTime(150);
-
-      expect(clearSpy).toHaveBeenCalledWith("essential concept", mockView);
-      expect(highlightSpy).not.toHaveBeenCalled();
-      expect(removeAllRangesSpy).toHaveBeenCalled();
+      expect(clearSpy).toHaveBeenCalledWith("Right drag to clear", mockView);
     });
 
     it("should exit pen mode when Escape key is pressed", () => {

@@ -757,6 +757,7 @@ export class MarkdownView extends View {
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
     this.editor = new Editor();
+    this.contentEl = createMockObsidianElement("div");
   }
 
   getViewType(): string {

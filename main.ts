@@ -30,6 +30,7 @@ import {
   unwrapHighlightsByText,
   unwrapAllHighlights,
 } from "./src/utils/domHighlightHelper";
+import { RightClickPenHandler } from "./src/reading/RightClickPenHandler";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
   readingTranslationController?: ReadingTranslationController;
@@ -43,6 +44,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   floatingPopover!: FloatingPopover;
   floatingHighlightToolbar!: FloatingHighlightToolbar;
   penPill!: HighlighterPenPill;
+  rightClickPenHandler!: RightClickPenHandler;
   isPenModeActive: boolean = false;
   currentPenAction: HighlightAction = "yellow";
   ribbonPenIconEl: HTMLElement | null = null;
@@ -65,6 +67,19 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.floatingPopover = new FloatingPopover();
     this.floatingHighlightToolbar = new FloatingHighlightToolbar();
     this.penPill = new HighlighterPenPill();
+    this.rightClickPenHandler = new RightClickPenHandler({
+      isPenActive: () => this.isPenModeActive,
+      getPenAction: () =>
+        this.currentPenAction || this.settings.highlighterPenColor || "yellow",
+      onHighlight: (action, text, range, view) => {
+        if (action === "clear") {
+          this.clearLiveReadingHighlight(text, view);
+        } else {
+          this.applyLiveReadingHighlight(action, text, range, view);
+        }
+      },
+      getActiveView: () => this.app.workspace.getActiveViewOfType(MarkdownView),
+    });
     this.readingTranslationController = registerReadingTranslation(this, () => this.settings);
     this.registerMarkdownPostProcessor(
       createReadingHighlightPostProcessor(this.readingHighlightService)
@@ -307,8 +322,29 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     // 5. Đăng ký DOM events an toàn
     if (typeof document !== "undefined") {
-      this.registerDomEvent(document, "mouseup", () => {
-        this.handleSelectionDebounced();
+      this.registerDomEvent(document, "mousedown", (e: MouseEvent) => {
+        this.rightClickPenHandler?.handleMouseDown(e);
+      });
+
+      this.registerDomEvent(document, "mousemove", (e: MouseEvent) => {
+        this.rightClickPenHandler?.handleMouseMove(e);
+      });
+
+      this.registerDomEvent(
+        document,
+        "contextmenu",
+        (e: MouseEvent) => {
+          this.rightClickPenHandler?.handleContextMenu(e);
+        },
+        true
+      );
+
+      this.registerDomEvent(document, "mouseup", (e: MouseEvent) => {
+        if (e && e.button === 2) {
+          this.rightClickPenHandler?.handleMouseUp(e);
+        } else {
+          this.handleSelectionDebounced();
+        }
       });
 
       this.registerDomEvent(document, "keyup", (e: KeyboardEvent) => {
@@ -764,8 +800,8 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           ? "Tẩy xóa"
           : HIGHLIGHT_COLORS[this.currentPenAction]?.label || "Vàng";
       new Notice(
-        `Đã BẬT chế độ bút dạ quang (${modeLabel}). Bôi đen để tự động tô/tẩy highlight! (Nhấn Esc để tắt)`,
-        3000
+        `Đã BẬT chế độ bút dạ quang (${modeLabel}). Quét CHUỘT PHẢI để tô/tẩy highlight, Chuột trái bôi đen để tra từ dịch! (Nhấn Esc để tắt)`,
+        4000
       );
     } else {
       this.penPill?.hide();
@@ -928,50 +964,37 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.dismissFloatingTrigger();
 
       // 4.1. Nếu Chế độ Bút dạ quang (Continuous Highlighter Pen Mode) đang BẬT:
+      // Chuột trái được giải phóng hoàn toàn: KHÔNG tự động tô màu hay tẩy!
+      // Thao tác bôi đen bằng chuột trái dùng để đọc, copy hoặc hiển thị trigger/popover dịch:
       if (this.isPenModeActive) {
         this.floatingHighlightToolbar?.hide();
-        // Bỏ qua các click nhầm 1 ký tự trong chế độ bút dạ quang
-        if (selectedText.length < 2) return;
-
-        if (this.currentPenAction === "clear") {
-          this.clearLiveReadingHighlight(selectedText, activeView);
-        } else {
-          const activeColor = this.currentPenAction || this.settings.highlighterPenColor || "yellow";
-          this.applyLiveReadingHighlight(activeColor, selectedText, readingRange, activeView);
-        }
-        // Xóa selection ngay lập tức để vệt dạ quang / vệt tẩy lộ rõ mồn một, sẵn sàng cho lần bôi tiếp theo
-        if (typeof window !== "undefined" && window.getSelection) {
-          try {
-            window.getSelection()?.removeAllRanges();
-          } catch {}
-        }
+        // Không return, cho phép tiếp tục chạy xuống logic hiển thị trigger / popup dịch thuật bên dưới
+      } else {
+        // 4.2. Chế độ thông thường -> hiển thị thanh FloatingHighlightToolbar độc lập tức thì (0ms, không chờ dịch)
+        const rect = this.getSelectionBoundingRect();
+        this.floatingHighlightToolbar.show(
+          rect,
+          selectedText,
+          readingRange,
+          {
+            onHighlight: (color) => {
+              this.applyLiveReadingHighlight(color, selectedText, readingRange, activeView);
+            },
+            onClear: () => {
+              this.clearLiveReadingHighlight(selectedText, activeView);
+            },
+            onLookup: () => {
+              this.floatingHighlightToolbar.hide();
+              this.performLookupFromReading(
+                selectedText,
+                readingContext?.paragraph || selectedText,
+                readingContext?.cursorOffset || 0
+              );
+            },
+          }
+        );
         return;
       }
-
-      // 4.2. Chế độ thông thường -> hiển thị thanh FloatingHighlightToolbar độc lập tức thì (0ms, không chờ dịch)
-      const rect = this.getSelectionBoundingRect();
-      this.floatingHighlightToolbar.show(
-        rect,
-        selectedText,
-        readingRange,
-        {
-          onHighlight: (color) => {
-            this.applyLiveReadingHighlight(color, selectedText, readingRange, activeView);
-          },
-          onClear: () => {
-            this.clearLiveReadingHighlight(selectedText, activeView);
-          },
-          onLookup: () => {
-            this.floatingHighlightToolbar.hide();
-            this.performLookupFromReading(
-              selectedText,
-              readingContext?.paragraph || selectedText,
-              readingContext?.cursorOffset || 0
-            );
-          },
-        }
-      );
-      return;
     }
 
     const performFn = () => {
