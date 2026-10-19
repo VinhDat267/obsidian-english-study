@@ -709,6 +709,17 @@ export class Editor {
     return this.selection;
   }
 
+  replaceSelection(replacement: string): void {
+    if (this.selection && this.content.includes(this.selection)) {
+      this.content = this.content.replace(this.selection, replacement);
+      this.lines = this.content.split("\n");
+    } else {
+      this.content += replacement;
+      this.lines = this.content.split("\n");
+    }
+    this.selection = replacement;
+  }
+
   setSelection(anchor: any, head?: any): void {
     // mock
   }

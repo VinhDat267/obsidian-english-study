@@ -93,8 +93,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.ribbonIcons[0].icon).toBe("book-open");
       expect(plugin.ribbonIcons[0].title).toBe("Mở Polyglot Study Panel");
 
-      // Commands (7 commands: lookup-selected-text, save-to-vocabulary, open-sidebar-view, toggle-ai-grammar, toggle-ai-translation, toggle-auto-translate, bilingual-translate-file)
-      expect(plugin.commands.length).toBe(8);
+      // Commands (10 commands)
+      expect(plugin.commands.length).toBe(10);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");
@@ -103,6 +103,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("toggle-ai-translation");
       expect(commandIds).toContain("toggle-auto-translate");
       expect(commandIds).toContain("bilingual-translate-file");
+      expect(commandIds).toContain("highlight-selection-yellow");
+      expect(commandIds).toContain("clear-highlight-selection");
 
       // DOM events (mouseup, keyup, scroll)
       expect(plugin.domEvents.length).toBe(3);
@@ -620,6 +622,38 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const activateSpy = vi.spyOn(plugin, "activateSidebarView").mockResolvedValue();
       openCmd!.callback!();
       expect(activateSpy).toHaveBeenCalled();
+    });
+
+    it("highlight-selection-yellow command: wraps selection in ==...== or toggles", () => {
+      const highlightCmd = plugin.commands.find((c) => c.id === "highlight-selection-yellow");
+      expect(highlightCmd).toBeDefined();
+
+      editor.setSelectionText("important phrase");
+      highlightCmd!.editorCallback!(editor);
+      expect(editor.getValue()).toContain("==important phrase==");
+
+      // Toggle off when re-run on the same highlighted text
+      editor.setSelectionText("==important phrase==");
+      highlightCmd!.editorCallback!(editor);
+      expect(editor.getValue()).toContain("important phrase");
+      expect(editor.getValue()).not.toContain("==important phrase==");
+    });
+
+    it("clear-highlight-selection command: strips existing highlights", () => {
+      const clearCmd = plugin.commands.find((c) => c.id === "clear-highlight-selection");
+      expect(clearCmd).toBeDefined();
+
+      editor.setSelectionText("==highlighted text==");
+      clearCmd!.editorCallback!(editor);
+      expect(editor.getValue()).toContain("highlighted text");
+      expect(editor.getValue()).not.toContain("==");
+    });
+
+    it("highlightSelection: supports custom colors with mark tags", () => {
+      editor.setSelectionText("green text");
+      plugin.highlightSelection("green", editor);
+      expect(editor.getValue()).toContain("<mark style=");
+      expect(editor.getValue()).toContain("green text");
     });
   });
 

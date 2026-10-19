@@ -1049,6 +1049,114 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       popover.hide();
     });
+
+    it("should render popover-btn-highlight and toggle palette when onHighlight callback is provided", () => {
+      const popover = new FloatingPopover();
+      const onHighlight = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onHighlight }
+      );
+
+      const el = popover.getElement()!;
+      const highlightBtn = el.querySelector(".popover-btn-highlight");
+      expect(highlightBtn).not.toBeNull();
+
+      const palette = el.querySelector(".popover-highlight-palette");
+      expect(palette).not.toBeNull();
+      expect(palette?.style.display).toBe("none");
+
+      // Click highlight button to open palette
+      highlightBtn?.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+      expect(palette?.style.display).toBe("flex");
+
+      // Click again to close palette
+      highlightBtn?.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+      expect(palette?.style.display).toBe("none");
+
+      popover.hide();
+    });
+
+    it("should invoke onHighlight with color and close palette when color dot is clicked", () => {
+      const popover = new FloatingPopover();
+      const onHighlight = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onHighlight }
+      );
+
+      const el = popover.getElement()!;
+      const palette = el.querySelector(".popover-highlight-palette")!;
+      const greenDot = el.querySelector(".dot-green");
+      expect(greenDot).not.toBeNull();
+
+      greenDot?.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(onHighlight).toHaveBeenCalledWith("green");
+      expect(palette.style.display).toBe("none");
+
+      // Click clear dot
+      const clearDot = el.querySelector(".dot-clear");
+      expect(clearDot).not.toBeNull();
+
+      clearDot?.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(onHighlight).toHaveBeenCalledWith("clear");
+
+      popover.hide();
+    });
+
+    it("should call preventDefault on mousedown for highlight button and color dots to preserve editor focus", () => {
+      const popover = new FloatingPopover();
+      const onHighlight = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onHighlight }
+      );
+
+      const el = popover.getElement()!;
+      const highlightBtn = el.querySelector(".popover-btn-highlight")!;
+      const preventDefaultMock = vi.fn();
+
+      highlightBtn.dispatchEvent({
+        type: "mousedown",
+        preventDefault: preventDefaultMock,
+        stopPropagation: vi.fn(),
+      });
+
+      expect(preventDefaultMock).toHaveBeenCalled();
+
+      const yellowDot = el.querySelector(".dot-yellow")!;
+      const preventDefaultDotMock = vi.fn();
+      yellowDot.dispatchEvent({
+        type: "mousedown",
+        preventDefault: preventDefaultDotMock,
+        stopPropagation: vi.fn(),
+      });
+
+      expect(preventDefaultDotMock).toHaveBeenCalled();
+
+      popover.hide();
+    });
   });
 });
 

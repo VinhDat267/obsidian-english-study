@@ -12,6 +12,7 @@ import { BilingualTranslationModal } from "./src/ui/BilingualTranslationModal";
 import { RectLike } from "./src/utils/domHelper";
 import { registerReadingTranslation } from "./src/reading/registerReadingTranslation";
 import type { ReadingTranslationController } from "./src/reading/ReadingTranslationController";
+import { applyHighlight, HighlightAction } from "./src/utils/textHighlighter";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
   readingTranslationController?: ReadingTranslationController;
@@ -170,9 +171,39 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
+    // 3.8. Highlight văn bản đang chọn (Màu vàng / Toggle)
+    this.addCommand({
+      id: "highlight-selection-yellow",
+      name: "Highlight văn bản đang chọn (Màu vàng / Toggle)",
+      editorCallback: (editor: Editor) => {
+        this.highlightSelection("yellow", editor);
+      },
+    });
+
+    // 3.9. Xóa highlight văn bản đang chọn
+    this.addCommand({
+      id: "clear-highlight-selection",
+      name: "Xóa highlight văn bản đang chọn",
+      editorCallback: (editor: Editor) => {
+        this.highlightSelection("clear", editor);
+      },
+    });
+
     // 4. Đăng ký Context Menus cho Editor và File Explorer
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view: MarkdownView) => {
+        const selection = editor.getSelection ? editor.getSelection() : "";
+        if (selection && selection.trim().length > 0) {
+          menu.addItem((item: any) => {
+            item
+              .setTitle("Highlight văn bản (Vàng)")
+              .setIcon("highlighter")
+              .onClick(() => {
+                this.highlightSelection("yellow", editor);
+              });
+          });
+        }
+
         menu.addItem((item: any) => {
           item
             .setTitle("Dịch song ngữ toàn bộ file")
@@ -515,6 +546,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
             }
           });
         },
+        onHighlight: (action: HighlightAction) => {
+          this.highlightSelection(action, editor);
+        },
         onClose: () => {
           // Popover closed
         },
@@ -530,6 +564,27 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
 
     return result;
+  }
+
+  /**
+   * Bôi màu highlight hoặc gỡ highlight vùng văn bản đang chọn trong Editor
+   */
+  highlightSelection(action: HighlightAction = "yellow", editor?: Editor): boolean {
+    const activeEditor =
+      editor ||
+      this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+
+    if (!activeEditor) return false;
+
+    const selectedText = activeEditor.getSelection ? activeEditor.getSelection() : "";
+    if (!selectedText || !selectedText.trim()) return false;
+
+    const highlighted = applyHighlight(selectedText, action);
+    if (highlighted !== selectedText) {
+      activeEditor.replaceSelection(highlighted);
+      return true;
+    }
+    return false;
   }
 
   /**

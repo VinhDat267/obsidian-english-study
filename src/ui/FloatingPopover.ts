@@ -3,10 +3,16 @@ import { LookupResult } from "../types";
 import { calculatePosition, RectLike } from "../utils/domHelper";
 import { getLanguageMeta } from "../utils/languageHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
+import {
+  HighlightAction,
+  HighlightColorKey,
+  HIGHLIGHT_COLORS,
+} from "../utils/textHighlighter";
 
 export interface PopoverCallbacks {
   onSave: (result: LookupResult) => Promise<void> | void;
   onPinToSidebar?: (result: LookupResult) => void;
+  onHighlight?: (action: HighlightAction) => void;
   onClose?: () => void;
 }
 
@@ -155,9 +161,99 @@ export class FloatingPopover {
 
     header.appendChild(titleGroup);
 
-    // Header Actions (Pin & Close)
+    // Header Actions (Highlight, Pin, Close)
     const headerActions = document.createElement("div");
     headerActions.className = "popover-header-actions";
+
+    if (callbacks.onHighlight) {
+      const highlightBtn = document.createElement("button");
+      highlightBtn.className = "popover-btn-highlight";
+      highlightBtn.setAttribute("aria-label", "Highlight màu văn bản");
+      highlightBtn.setAttribute("title", "Highlight màu văn bản");
+      try {
+        setIcon(highlightBtn, "highlighter");
+      } catch {}
+      if (!highlightBtn.innerHTML.trim()) {
+        highlightBtn.textContent = "🖍️";
+      }
+
+      highlightBtn.addEventListener("mousedown", (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      const palette = document.createElement("div");
+      palette.className = "popover-highlight-palette";
+      palette.style.display = "none";
+
+      const colorKeys: HighlightColorKey[] = [
+        "yellow",
+        "green",
+        "blue",
+        "pink",
+        "purple",
+        "orange",
+      ];
+
+      colorKeys.forEach((ck) => {
+        const dot = document.createElement("button");
+        dot.className = `popover-color-dot dot-${ck}`;
+        dot.setAttribute("data-color", ck);
+        dot.setAttribute("title", HIGHLIGHT_COLORS[ck].label);
+        dot.setAttribute("aria-label", HIGHLIGHT_COLORS[ck].label);
+        dot.style.backgroundColor = HIGHLIGHT_COLORS[ck].dotColor;
+
+        dot.addEventListener("mousedown", (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+
+        dot.addEventListener("click", (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          palette.style.display = "none";
+          callbacks.onHighlight?.(ck);
+        });
+
+        palette.appendChild(dot);
+      });
+
+      const clearDot = document.createElement("button");
+      clearDot.className = "popover-color-dot dot-clear";
+      clearDot.setAttribute("data-color", "clear");
+      clearDot.setAttribute("title", "Xóa highlight");
+      clearDot.setAttribute("aria-label", "Xóa highlight");
+      try {
+        setIcon(clearDot, "eraser");
+      } catch {}
+      if (!clearDot.innerHTML.trim()) {
+        clearDot.textContent = "✕";
+      }
+
+      clearDot.addEventListener("mousedown", (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      clearDot.addEventListener("click", (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        palette.style.display = "none";
+        callbacks.onHighlight?.("clear");
+      });
+
+      palette.appendChild(clearDot);
+
+      highlightBtn.addEventListener("click", (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isOpen = palette.style.display !== "none";
+        palette.style.display = isOpen ? "none" : "flex";
+      });
+
+      headerActions.appendChild(highlightBtn);
+      headerActions.appendChild(palette);
+    }
 
     if (callbacks.onPinToSidebar) {
       const pinBtn = document.createElement("button");
