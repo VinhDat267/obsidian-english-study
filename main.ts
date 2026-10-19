@@ -704,10 +704,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           await this.vocabService.saveVocab(res, this.settings);
         },
         onPinToSidebar: (res: LookupResult) => {
+          if (!isCurrent()) return;
           this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
+            if (!isCurrent()) return;
             if (this.sidebarView) {
-              this.sidebarView.setResult(isCurrent() ? latestAiResult ?? res : res);
+              this.sidebarView.setResult(latestAiResult ?? res);
             }
           });
         },

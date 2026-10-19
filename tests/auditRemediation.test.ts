@@ -128,6 +128,24 @@ function prepareLookup() {
 }
 
 describe("lookup UI operation ownership", () => {
+  it("stale_pin_activation_cannot_overwrite_a_newer_sidebar_lookup", async () => {
+    prepareLookup();
+    vi.spyOn(plugin.providerManager, "lookup").mockImplementation(async text => ({
+      query: text, type: "word", contextSentence: text, contextSentenceClean: text,
+      vietnameseTranslation: text, timestamp: Date.now(),
+    }));
+    plugin.sidebarView = { setResult: vi.fn() } as any;
+    const activation = deferred<void>();
+    vi.spyOn(plugin, "activateSidebarView").mockReturnValue(activation.promise);
+    await plugin.performLookupFromReading("First", "First");
+    const [, result, callbacks] = vi.mocked(plugin.floatingPopover.show).mock.calls[0];
+    callbacks.onPinToSidebar!(result);
+    await plugin.performLookupFromReading("Second", "Second");
+    expect(plugin.sidebarView!.setResult).toHaveBeenLastCalledWith(expect.objectContaining({ query: "Second" }));
+    activation.resolve(); await flushPromises();
+    expect(plugin.sidebarView!.setResult).toHaveBeenLastCalledWith(expect.objectContaining({ query: "Second" }));
+  });
+
   it("pinning_keeps_background_ai_alive_without_reopening_the_popover", async () => {
     prepareLookup(); let update: any;
     const base = { query: "Pinned", type: "word" as const, contextSentence: "Pinned", contextSentenceClean: "Pinned",
@@ -175,6 +193,18 @@ describe("lookup UI operation ownership", () => {
 });
 
 describe("highlight integration boundary", () => {
+  it("no_range_fallback_only_wraps_readable_note_text", () => {
+    const view = makeReadingView(app,
+      '<p id="readable">Shared text</p><div contenteditable="true"><p>Shared text</p></div>' +
+      '<div class="cm-editor"><p>Shared text</p></div><p contenteditable="false">Shared text</p>', "A.md");
+    const originalText = view.contentEl.textContent;
+    expect(plugin.applyLiveReadingHighlight("yellow", "Shared text", null, view)).toBe(true);
+    expect(view.contentEl.querySelector("#readable mark")?.textContent).toBe("Shared text");
+    expect(view.contentEl.querySelector('[contenteditable="true"] mark, .cm-editor mark')).toBeNull();
+    expect(view.contentEl.querySelector('[contenteditable="false"] mark')?.textContent).toBe("Shared text");
+    expect(view.contentEl.textContent).toBe(originalText);
+  });
+
   it("does_not_persist_or_wrap_an_editable_preview_widget", () => {
     const view = makeReadingView(app, '<p contenteditable="true">Editable widget text</p>', "A.md");
     const range = document.createRange(); range.selectNodeContents(view.contentEl.firstElementChild);

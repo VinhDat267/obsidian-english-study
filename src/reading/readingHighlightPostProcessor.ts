@@ -4,15 +4,8 @@ import { HIGHLIGHT_COLORS } from "../utils/textHighlighter";
 import type { ReadingHighlightItem } from "../types";
 import { wrapRangeWithHighlight } from "../utils/domHighlightHelper";
 
-const FORBIDDEN_TAGS = new Set([
-  "SCRIPT",
-  "STYLE",
-  "PRE",
-  "CODE",
-  "TEXTAREA",
-  "INPUT",
-  "BUTTON",
-]);
+const EXCLUDED_SELECTOR =
+  'script, style, pre, code, textarea, input, button, .cm-editor, [contenteditable]:not([contenteditable="false"])';
 
 interface TextNodeInfo {
   node: Text;
@@ -109,7 +102,7 @@ function collectTextNodes(node: Node, results: Text[]): void {
 
   if (node.nodeType === Node.ELEMENT_NODE) {
     const el = node as HTMLElement;
-    if (FORBIDDEN_TAGS.has(el.tagName.toUpperCase())) return;
+    if (el.closest(EXCLUDED_SELECTOR)) return;
     if (el.classList?.contains("polyglot-reading-highlight")) return;
 
     for (let i = 0; i < el.childNodes.length; i++) {
@@ -123,7 +116,7 @@ function processBlockElement(
   highlights: ReadingHighlightItem[]
 ): void {
   if (!blockEl) return;
-  if (FORBIDDEN_TAGS.has(blockEl.tagName.toUpperCase())) return;
+  if (blockEl.closest(EXCLUDED_SELECTOR)) return;
   if (blockEl.classList?.contains("polyglot-reading-highlight")) return;
 
   const textNodes: Text[] = [];
@@ -197,6 +190,7 @@ function processBlockElement(
   if (nonOverlapping.length === 0) return;
 
   const ownerDoc = blockEl.ownerDocument || document;
+  const excludedElements = Array.from(blockEl.querySelectorAll(EXCLUDED_SELECTOR));
 
   // Process matches in REVERSE order (from end of block to start)
   // This ensures that DOM modifications at later positions do NOT invalidate node offsets of earlier matches!
@@ -221,6 +215,7 @@ function processBlockElement(
       const range = ownerDoc.createRange();
       range.setStart(startInfo.node, startOffset);
       range.setEnd(endInfo.node, endOffset);
+      if (excludedElements.some(element => range.intersectsNode(element))) continue;
 
       const colorDef = HIGHLIGHT_COLORS[match.highlight.color];
       const bg = colorDef?.bg || "rgba(250, 204, 21, 0.4)";

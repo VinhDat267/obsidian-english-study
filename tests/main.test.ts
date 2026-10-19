@@ -685,6 +685,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
 
       // In preview/reading mode
       mockView.mode = "preview";
+      mockView.contentEl.closest = vi.fn(() => null);
       const mockFile: any = { path: "Notes/Article.md" };
       mockView.file = mockFile;
       (global as any).window.getSelection = vi.fn(() => ({

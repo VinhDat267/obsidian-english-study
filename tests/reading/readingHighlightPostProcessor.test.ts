@@ -11,6 +11,36 @@ afterEach(() => {
 });
 
 describe("readingHighlightPostProcessor", () => {
+  it.each([
+    '<p contenteditable="true">token</p>',
+    '<div contenteditable="plaintext-only"><p>token</p></div>',
+    '<div class="cm-editor"><p>token</p></div>',
+  ])("restoration excludes editable regions: %s", html => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("doc.md", "token", "yellow");
+    const root = mountReadingHtml(html);
+    createReadingHighlightPostProcessor(service)(root, { sourcePath: "doc.md" } as any);
+    expect(root.querySelector("mark")).toBeNull();
+    expect(root.textContent).toBe("token");
+  });
+
+  it("excludes a postprocessor root inside an editable ancestor", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("doc.md", "token", "yellow");
+    const root = mountReadingHtml('<div contenteditable="true"><p>token</p></div>');
+    createReadingHighlightPostProcessor(service)(root.querySelector("p")!, { sourcePath: "doc.md" } as any);
+    expect(root.querySelector("mark")).toBeNull();
+  });
+
+  it("does not bridge a match across an excluded editable widget", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("doc.md", "alphabeta", "yellow");
+    const root = mountReadingHtml('<p>alpha<span contenteditable="true">widget text</span>beta</p>');
+    createReadingHighlightPostProcessor(service)(root, { sourcePath: "doc.md" } as any);
+    expect(root.querySelector("mark")).toBeNull();
+    expect(root.textContent).toBe("alphawidget textbeta");
+  });
+
   it("does nothing if context or sourcePath is missing", () => {
     const service = new ReadingHighlightService();
     service.addHighlight("doc.md", "hello", "yellow");
