@@ -72,6 +72,7 @@ export interface PluginSettings {
 
   // Nhóm 6: Highlight khi đọc (Reading Mode Non-Destructive Highlights)
   readingHighlights?: Record<string, ReadingHighlightItem[]>;
+  highlighterPenColor: "yellow" | "green" | "blue" | "pink" | "purple" | "orange";
 }
 
 export interface ReadingHighlightItem {
@@ -147,4 +148,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   autoPlayAudio: false,
   bilingualTranslationStyle: "blockquote",
   readingHighlights: {},
+  highlighterPenColor: "yellow",
 };

@@ -88,13 +88,15 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       // View registration
       expect(plugin.views.has(VIEW_TYPE_ENGLISH_STUDY)).toBe(true);
 
-      // Ribbon icon
-      expect(plugin.ribbonIcons.length).toBe(1);
+      // Ribbon icons (Sidebar & Highlighter Pen Mode)
+      expect(plugin.ribbonIcons.length).toBe(2);
       expect(plugin.ribbonIcons[0].icon).toBe("book-open");
       expect(plugin.ribbonIcons[0].title).toBe("Mở Polyglot Study Panel");
+      expect(plugin.ribbonIcons[1].icon).toBe("highlighter");
+      expect(plugin.ribbonIcons[1].title).toBe("Bật/Tắt chế độ bút dạ quang (Reading)");
 
-      // Commands (10 commands)
-      expect(plugin.commands.length).toBe(10);
+      // Commands (11 commands)
+      expect(plugin.commands.length).toBe(11);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");
@@ -102,15 +104,17 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("toggle-ai-grammar");
       expect(commandIds).toContain("toggle-ai-translation");
       expect(commandIds).toContain("toggle-auto-translate");
+      expect(commandIds).toContain("toggle-highlighter-pen-mode");
       expect(commandIds).toContain("bilingual-translate-file");
       expect(commandIds).toContain("highlight-selection-yellow");
       expect(commandIds).toContain("clear-highlight-selection");
 
-      // DOM events (mouseup, keyup, scroll)
-      expect(plugin.domEvents.length).toBe(3);
+      // DOM events (mouseup, keyup, keydown, scroll)
+      expect(plugin.domEvents.length).toBe(4);
       const eventTypes = plugin.domEvents.map((e) => e.type);
       expect(eventTypes).toContain("mouseup");
       expect(eventTypes).toContain("keyup");
+      expect(eventTypes).toContain("keydown");
       expect(eventTypes).toContain("scroll");
 
       const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
@@ -1132,6 +1136,95 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const createSpy = vi.spyOn(app.vault, "create").mockResolvedValue({ path: "Folder/Guide (Bilingual).md" } as any);
 
       await plugin.openBilingualTranslationModal(mockFile, mockEditor);
+    });
+  });
+
+  describe("Continuous Highlighter Pen Mode (Bút dạ quang)", () => {
+    let mockView: MarkdownView;
+
+    beforeEach(async () => {
+      await plugin.onload();
+      const leaf = new WorkspaceLeaf();
+      mockView = new MarkdownView(leaf);
+      mockView.editor.setValue("");
+      mockView.editor.setSelectionText("");
+      mockView.mode = "preview";
+      app.workspace.activeLeaf = leaf;
+      vi.spyOn(app.workspace, "getActiveViewOfType").mockReturnValue(mockView);
+    });
+
+    it("should toggle pen mode on toggle-highlighter-pen-mode command", async () => {
+      const cmd = plugin.commands.find((c) => c.id === "toggle-highlighter-pen-mode");
+      expect(cmd).toBeDefined();
+
+      expect(plugin.isPenModeActive).toBe(false);
+      const pillShowSpy = vi.spyOn(plugin.penPill, "show");
+      const pillHideSpy = vi.spyOn(plugin.penPill, "hide");
+
+      cmd!.callback!();
+      expect(plugin.isPenModeActive).toBe(true);
+      expect(pillShowSpy).toHaveBeenCalledWith("yellow", expect.any(Object));
+
+      cmd!.callback!();
+      expect(plugin.isPenModeActive).toBe(false);
+      expect(pillHideSpy).toHaveBeenCalled();
+    });
+
+    it("should automatically apply highlight on selection when pen mode is active", () => {
+      plugin.togglePenMode(true);
+      plugin.settings.highlighterPenColor = "green";
+
+      const removeAllRangesSpy = vi.fn();
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "essential concept",
+        anchorNode: mockView.contentEl,
+        removeAllRanges: removeAllRangesSpy,
+        getRangeAt: () => ({
+          commonAncestorContainer: {
+            nodeType: 1,
+            parentElement: mockView.contentEl,
+            closest: vi.fn(() => ({
+              textContent: "An essential concept to learn.",
+            })),
+          },
+          getBoundingClientRect: () => ({
+            top: 150,
+            bottom: 170,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+          cloneRange: vi.fn(() => ({} as Range)),
+        }),
+      }));
+
+      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
+      const toolbarShowSpy = vi.spyOn(plugin.floatingHighlightToolbar, "show");
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(highlightSpy).toHaveBeenCalledWith(
+        "green",
+        "essential concept",
+        expect.anything(),
+        mockView
+      );
+      expect(toolbarShowSpy).not.toHaveBeenCalled();
+      expect(removeAllRangesSpy).toHaveBeenCalled();
+    });
+
+    it("should exit pen mode when Escape key is pressed", () => {
+      plugin.togglePenMode(true);
+      expect(plugin.isPenModeActive).toBe(true);
+
+      const keydownEvent = plugin.domEvents.find((e) => e.type === "keydown");
+      expect(keydownEvent).toBeDefined();
+
+      keydownEvent!.callback({ key: "Escape" });
+      expect(plugin.isPenModeActive).toBe(false);
     });
   });
 });

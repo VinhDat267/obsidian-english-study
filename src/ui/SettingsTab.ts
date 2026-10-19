@@ -94,6 +94,24 @@ export class EnglishStudySettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
+      .setName("Màu bút dạ quang mặc định")
+      .setDesc("Màu sắc được sử dụng khi bật chế độ bút dạ quang (tự động highlight khi bôi đen trong Reading view).")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("yellow", "🟡 Vàng (Mặc định)")
+          .addOption("green", "🟢 Xanh lá")
+          .addOption("blue", "🔵 Xanh lam")
+          .addOption("pink", "🌸 Hồng")
+          .addOption("purple", "🟣 Tím")
+          .addOption("orange", "🟠 Cam")
+          .setValue(this.pluginInstance.settings.highlighterPenColor || "yellow")
+          .onChange(async (value: string) => {
+            this.pluginInstance.settings.highlighterPenColor = value as any;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Phím tắt tra từ")
       .setDesc(
         'Bạn có thể gán phím tắt tra từ tại menu Settings > Hotkeys (tìm "Tra từ điển / Dịch câu bôi đen").'

@@ -24,6 +24,7 @@ import {
   applyHighlightsToElement,
 } from "./src/reading/readingHighlightPostProcessor";
 import { FloatingHighlightToolbar } from "./src/ui/FloatingHighlightToolbar";
+import { HighlighterPenPill } from "./src/ui/HighlighterPenPill";
 import {
   wrapRangeWithHighlight,
   unwrapHighlightsByText,
@@ -40,6 +41,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   floatingTrigger!: FloatingTrigger;
   floatingPopover!: FloatingPopover;
   floatingHighlightToolbar!: FloatingHighlightToolbar;
+  penPill!: HighlighterPenPill;
+  isPenModeActive: boolean = false;
+  ribbonPenIconEl: HTMLElement | null = null;
   sidebarView: EnglishStudySidebar | null = null;
   private lastLookupResult: LookupResult | null = null;
   private selectionDebounceTimer: any = null;
@@ -58,6 +62,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
     this.floatingHighlightToolbar = new FloatingHighlightToolbar();
+    this.penPill = new HighlighterPenPill();
     this.readingTranslationController = registerReadingTranslation(this, () => this.settings);
     this.registerMarkdownPostProcessor(
       createReadingHighlightPostProcessor(this.readingHighlightService)
@@ -74,10 +79,18 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return sidebar;
     });
 
-    // 2. Thêm Ribbon Icon mở thanh bên
+    // 2. Thêm Ribbon Icons
     this.addRibbonIcon("book-open", "Mở Polyglot Study Panel", () => {
       this.activateSidebarView();
     });
+
+    this.ribbonPenIconEl = this.addRibbonIcon(
+      "highlighter",
+      "Bật/Tắt chế độ bút dạ quang (Reading)",
+      () => {
+        this.togglePenMode();
+      }
+    );
 
     // 3. Đăng ký các Commands
     // 3.1. Tra cứu văn bản bôi đen trong Editor
@@ -174,7 +187,16 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
-    // 3.7. Dịch song ngữ toàn bộ file Markdown (Bilingual File Translation)
+    // 3.7. Bật/tắt chế độ bút dạ quang (Continuous Highlighter Pen Mode)
+    this.addCommand({
+      id: "toggle-highlighter-pen-mode",
+      name: "Bật/Tắt chế độ bút dạ quang (Tự động highlight khi bôi đen)",
+      callback: () => {
+        this.togglePenMode();
+      },
+    });
+
+    // 3.8. Dịch song ngữ toàn bộ file Markdown (Bilingual File Translation)
     this.addCommand({
       id: "bilingual-translate-file",
       name: "Dịch song ngữ file Markdown hiện tại (Bilingual File Translation)",
@@ -279,6 +301,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         }
       });
 
+      this.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
+        if (e.key === "Escape" && this.isPenModeActive) {
+          this.togglePenMode(false);
+        }
+      });
+
       this.registerDomEvent(
         document,
         "scroll",
@@ -312,6 +340,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   async onunload(): Promise<void> {
     this.readingTranslationController?.unload();
     this.dismissFloatingUi();
+    this.penPill?.hide();
     if (this.selectionDebounceTimer) {
       clearTimeout(this.selectionDebounceTimer);
       this.selectionDebounceTimer = null;
@@ -667,6 +696,40 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   /**
+   * Bật/Tắt chế độ bút dạ quang (Highlighter Pen Mode)
+   */
+  togglePenMode(forceState?: boolean): void {
+    this.isPenModeActive = forceState !== undefined ? forceState : !this.isPenModeActive;
+    if (this.ribbonPenIconEl) {
+      if (this.isPenModeActive) {
+        this.ribbonPenIconEl.classList.add("is-pen-active");
+      } else {
+        this.ribbonPenIconEl.classList.remove("is-pen-active");
+      }
+    }
+    if (this.isPenModeActive) {
+      this.dismissFloatingUi();
+      const activeColor = this.settings.highlighterPenColor || "yellow";
+      this.penPill?.show(activeColor, {
+        onColorChange: async (color) => {
+          this.settings.highlighterPenColor = color;
+          await this.saveSettings();
+        },
+        onClose: () => {
+          this.togglePenMode(false);
+        },
+      });
+      new Notice(
+        `Đã BẬT chế độ bút dạ quang (${HIGHLIGHT_COLORS[activeColor]?.label || "Vàng"}). Bôi đen để tự động highlight! (Nhấn Esc để tắt)`,
+        3000
+      );
+    } else {
+      this.penPill?.hide();
+      new Notice("Đã TẮT chế độ bút dạ quang.", 2000);
+    }
+  }
+
+  /**
    * Bôi màu highlight hoặc gỡ highlight trực quan trong Reading Mode (Không sửa file markdown)
    */
   highlightReadingSelection(action: HighlightAction = "yellow", view?: MarkdownView): boolean {
@@ -816,9 +879,25 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return;
     }
 
-    // 4. Nếu ở Reading mode -> hiển thị thanh FloatingHighlightToolbar độc lập tức thì (0ms, không chờ dịch)
+    // 4. Nếu ở Reading mode -> xử lý Highlight
     if (!isEditorMode) {
       this.dismissFloatingTrigger();
+
+      // 4.1. Nếu Chế độ Bút dạ quang (Continuous Highlighter Pen Mode) đang BẬT:
+      if (this.isPenModeActive) {
+        this.floatingHighlightToolbar?.hide();
+        const activeColor = this.settings.highlighterPenColor || "yellow";
+        this.applyLiveReadingHighlight(activeColor, selectedText, readingRange, activeView);
+        // Xóa selection ngay lập tức để vệt dạ quang lộ rõ mồn một, sẵn sàng cho lần bôi tiếp theo
+        if (typeof window !== "undefined" && window.getSelection) {
+          try {
+            window.getSelection()?.removeAllRanges();
+          } catch {}
+        }
+        return;
+      }
+
+      // 4.2. Chế độ thông thường -> hiển thị thanh FloatingHighlightToolbar độc lập tức thì (0ms, không chờ dịch)
       const rect = this.getSelectionBoundingRect();
       this.floatingHighlightToolbar.show(
         rect,
