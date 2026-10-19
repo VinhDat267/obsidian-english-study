@@ -150,3 +150,72 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   readingHighlights: {},
   highlighterPenColor: "yellow",
 };
+
+// Mini Conversational AI Tutor Types
+export interface TutorChatMessage {
+  id: string;
+  role: "user" | "model";
+  content: string;
+  timestamp: number;
+}
+
+export interface TutorSession {
+  id: string;
+  query: string;
+  contextSentence: string;
+  sourceLang?: string;
+  targetLang?: string;
+  docContext?: DocumentContextMeta;
+  messages: TutorChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface QuickPromptChip {
+  id: string;
+  icon: string;
+  label: string;
+  promptTemplate: (query: string, contextSentence: string) => string;
+}
+
+export function isTutorChatMessage(obj: unknown): obj is TutorChatMessage {
+  if (!obj || typeof obj !== "object") return false;
+  const msg = obj as Record<string, unknown>;
+  return (
+    typeof msg.id === "string" &&
+    (msg.role === "user" || msg.role === "model") &&
+    typeof msg.content === "string" &&
+    typeof msg.timestamp === "number"
+  );
+}
+
+export function isTutorSession(obj: unknown): obj is TutorSession {
+  if (!obj || typeof obj !== "object") return false;
+  const s = obj as Record<string, unknown>;
+  return (
+    typeof s.id === "string" &&
+    typeof s.query === "string" &&
+    typeof s.contextSentence === "string" &&
+    Array.isArray(s.messages) &&
+    typeof s.createdAt === "number" &&
+    typeof s.updatedAt === "number"
+  );
+}
+
+export type HighlightColorKey =
+  | "yellow"
+  | "green"
+  | "blue"
+  | "pink"
+  | "purple"
+  | "orange";
+
+export type HighlightAction = HighlightColorKey | "clear";
+
+export interface PopoverCallbacks {
+  onSave: (result: LookupResult) => Promise<void> | void;
+  onPinToSidebar?: (result: LookupResult) => void;
+  onHighlight?: (action: HighlightAction) => void;
+  onClose?: () => void;
+  onPinToSidebarChat?: (session: TutorSession) => void;
+}

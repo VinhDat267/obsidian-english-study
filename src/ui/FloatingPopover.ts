@@ -1,5 +1,5 @@
 import { setIcon } from "obsidian";
-import { LookupResult } from "../types";
+import { LookupResult, PopoverCallbacks, TutorSession } from "../types";
 import { calculatePosition, RectLike } from "../utils/domHelper";
 import { getLanguageMeta } from "../utils/languageHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
@@ -9,12 +9,7 @@ import {
   HIGHLIGHT_COLORS,
 } from "../utils/textHighlighter";
 
-export interface PopoverCallbacks {
-  onSave: (result: LookupResult) => Promise<void> | void;
-  onPinToSidebar?: (result: LookupResult) => void;
-  onHighlight?: (action: HighlightAction) => void;
-  onClose?: () => void;
-}
+export type { PopoverCallbacks };
 
 export class FloatingPopover {
   private element: HTMLElement | null = null;
