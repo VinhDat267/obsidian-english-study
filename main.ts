@@ -13,9 +13,12 @@ import { RectLike } from "./src/utils/domHelper";
 import { registerReadingTranslation } from "./src/reading/registerReadingTranslation";
 import type { ReadingTranslationController } from "./src/reading/ReadingTranslationController";
 import { applyHighlight, HighlightAction } from "./src/utils/textHighlighter";
+import { ReadingHighlightService } from "./src/services/storage/ReadingHighlightService";
+import { createReadingHighlightPostProcessor } from "./src/reading/readingHighlightPostProcessor";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
   readingTranslationController?: ReadingTranslationController;
+  readingHighlightService!: ReadingHighlightService;
   settings: PluginSettings = DEFAULT_SETTINGS;
   providerManager!: ProviderManager;
   vocabService!: VocabService;
@@ -34,9 +37,16 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.bilingualTranslationService = new BilingualTranslationService(undefined, this.geminiService);
     this.providerManager = new ProviderManager(this.settings);
     this.vocabService = new VocabService(this.app, this.settings);
+    this.readingHighlightService = new ReadingHighlightService(
+      this.settings.readingHighlights || {},
+      () => this.saveSettings()
+    );
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
     this.readingTranslationController = registerReadingTranslation(this, () => this.settings);
+    this.registerMarkdownPostProcessor(
+      createReadingHighlightPostProcessor(this.readingHighlightService)
+    );
 
     // 1. Đăng ký View thanh bên (Sidebar View)
     this.registerView(VIEW_TYPE_ENGLISH_STUDY, (leaf: WorkspaceLeaf) => {
@@ -171,39 +181,43 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
-    // 3.8. Highlight văn bản đang chọn (Màu vàng / Toggle)
+    // 3.8. Highlight văn bản đang chọn khi đọc (Màu vàng / Toggle)
     this.addCommand({
       id: "highlight-selection-yellow",
-      name: "Highlight văn bản đang chọn (Màu vàng / Toggle)",
-      editorCallback: (editor: Editor) => {
-        this.highlightSelection("yellow", editor);
+      name: "Highlight văn bản đang chọn khi đọc (Màu vàng / Toggle)",
+      checkCallback: (checking: boolean) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const isPreview = Boolean(
+          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+        );
+        if (checking) return isPreview;
+        if (isPreview && view) {
+          this.highlightReadingSelection("yellow", view);
+        }
+        return true;
       },
     });
 
-    // 3.9. Xóa highlight văn bản đang chọn
+    // 3.9. Xóa highlight văn bản đang chọn khi đọc
     this.addCommand({
       id: "clear-highlight-selection",
-      name: "Xóa highlight văn bản đang chọn",
-      editorCallback: (editor: Editor) => {
-        this.highlightSelection("clear", editor);
+      name: "Xóa highlight văn bản đang chọn khi đọc",
+      checkCallback: (checking: boolean) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const isPreview = Boolean(
+          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+        );
+        if (checking) return isPreview;
+        if (isPreview && view) {
+          this.highlightReadingSelection("clear", view);
+        }
+        return true;
       },
     });
 
     // 4. Đăng ký Context Menus cho Editor và File Explorer
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view: MarkdownView) => {
-        const selection = editor.getSelection ? editor.getSelection() : "";
-        if (selection && selection.trim().length > 0) {
-          menu.addItem((item: any) => {
-            item
-              .setTitle("Highlight văn bản (Vàng)")
-              .setIcon("highlighter")
-              .onClick(() => {
-                this.highlightSelection("yellow", editor);
-              });
-          });
-        }
-
         menu.addItem((item: any) => {
           item
             .setTitle("Dịch song ngữ toàn bộ file")
@@ -289,9 +303,15 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
   async loadSettings(): Promise<void> {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    if (this.readingHighlightService && this.settings.readingHighlights) {
+      this.readingHighlightService.setAllHighlights(this.settings.readingHighlights);
+    }
   }
 
   async saveSettings(): Promise<void> {
+    if (this.readingHighlightService) {
+      this.settings.readingHighlights = this.readingHighlightService.getAllHighlights();
+    }
     await this.saveData(this.settings);
     this.readingTranslationController?.updateSettings();
     if (this.vocabService) {
@@ -531,6 +551,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     this.lastLookupResult = result;
 
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const isReadingMode = activeView
+      ? (activeView.getMode ? activeView.getMode() === "preview" : (activeView as any).mode === "preview")
+      : !editor;
+
     this.floatingPopover.show(
       rect,
       result,
@@ -547,7 +572,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           });
         },
         onHighlight: (action: HighlightAction) => {
-          this.highlightSelection(action, editor);
+          if (isReadingMode) {
+            this.highlightReadingSelection(action, activeView || undefined);
+          }
         },
         onClose: () => {
           // Popover closed
@@ -556,6 +583,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       {
         enableAiGrammar: this.settings.enableAiGrammar,
         enableAiTranslation: this.settings.enableAiTranslation,
+        isReadingMode,
       }
     );
 
@@ -567,22 +595,58 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   /**
-   * Bôi màu highlight hoặc gỡ highlight vùng văn bản đang chọn trong Editor
+   * Bôi màu highlight hoặc gỡ highlight trực quan trong Reading Mode (Không sửa file markdown)
+   */
+  highlightReadingSelection(action: HighlightAction = "yellow", view?: MarkdownView): boolean {
+    const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) return false;
+
+    const isPreview = activeView.getMode
+      ? activeView.getMode() === "preview"
+      : (activeView as any).mode === "preview";
+    if (!isPreview) return false;
+
+    let selectedText = "";
+    if (typeof window !== "undefined" && window.getSelection) {
+      const sel = window.getSelection();
+      selectedText =
+        sel && typeof sel.toString === "function" ? sel.toString().trim() : "";
+    }
+    if (!selectedText && this.lastLookupResult) {
+      selectedText = this.lastLookupResult.query;
+    }
+    if (!selectedText) return false;
+
+    const file = activeView.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
+    if (!file || !file.path) return false;
+
+    if (action === "clear") {
+      this.readingHighlightService.removeHighlight(file.path, selectedText);
+    } else {
+      this.readingHighlightService.addHighlight(file.path, selectedText, action);
+    }
+
+    this.saveSettings();
+    if (activeView.previewMode && typeof activeView.previewMode.rerender === "function") {
+      activeView.previewMode.rerender(true);
+    }
+    return true;
+  }
+
+  /**
+   * Phương thức highlightSelection:
+   * Chuyển hướng sang highlightReadingSelection nếu ở Reading mode,
+   * và KHÔNG sửa trực tiếp file markdown ở bất kỳ chế độ nào.
    */
   highlightSelection(action: HighlightAction = "yellow", editor?: Editor): boolean {
-    const activeEditor =
-      editor ||
-      this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-
-    if (!activeEditor) return false;
-
-    const selectedText = activeEditor.getSelection ? activeEditor.getSelection() : "";
-    if (!selectedText || !selectedText.trim()) return false;
-
-    const highlighted = applyHighlight(selectedText, action);
-    if (highlighted !== selectedText) {
-      activeEditor.replaceSelection(highlighted);
-      return true;
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const isPreview =
+      activeView &&
+      (activeView.getMode
+        ? activeView.getMode() === "preview"
+        : (activeView as any).mode === "preview");
+    if (isPreview && activeView) {
+      return this.highlightReadingSelection(action, activeView);
     }
     return false;
   }

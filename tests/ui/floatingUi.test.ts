@@ -1050,13 +1050,14 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.hide();
     });
 
-    it("should render popover-btn-highlight and toggle palette when onHighlight callback is provided", () => {
+    it("should render popover-btn-highlight and toggle palette when onHighlight is provided and isReadingMode is true", () => {
       const popover = new FloatingPopover();
       const onHighlight = vi.fn();
       popover.show(
         { top: 100, bottom: 120, left: 200, right: 280 },
         mockResult,
-        { onSave: vi.fn(), onHighlight }
+        { onSave: vi.fn(), onHighlight },
+        { isReadingMode: true }
       );
 
       const el = popover.getElement()!;
@@ -1086,13 +1087,37 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.hide();
     });
 
+    it("should NOT render popover-btn-highlight when isReadingMode is false or omitted (Edit Mode)", () => {
+      const popover = new FloatingPopover();
+      const onHighlight = vi.fn();
+      // Omitted options
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onHighlight }
+      );
+      expect(popover.getElement()!.querySelector(".popover-btn-highlight")).toBeNull();
+      popover.hide();
+
+      // Explicit isReadingMode: false
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onHighlight },
+        { isReadingMode: false }
+      );
+      expect(popover.getElement()!.querySelector(".popover-btn-highlight")).toBeNull();
+      popover.hide();
+    });
+
     it("should invoke onHighlight with color and close palette when color dot is clicked", () => {
       const popover = new FloatingPopover();
       const onHighlight = vi.fn();
       popover.show(
         { top: 100, bottom: 120, left: 200, right: 280 },
         mockResult,
-        { onSave: vi.fn(), onHighlight }
+        { onSave: vi.fn(), onHighlight },
+        { isReadingMode: true }
       );
 
       const el = popover.getElement()!;
@@ -1130,7 +1155,8 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.show(
         { top: 100, bottom: 120, left: 200, right: 280 },
         mockResult,
-        { onSave: vi.fn(), onHighlight }
+        { onSave: vi.fn(), onHighlight },
+        { isReadingMode: true }
       );
 
       const el = popover.getElement()!;

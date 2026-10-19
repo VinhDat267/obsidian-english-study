@@ -63,6 +63,7 @@ export class FloatingPopover {
     options?: {
       enableAiGrammar?: boolean;
       enableAiTranslation?: boolean;
+      isReadingMode?: boolean;
     }
   ): void {
     const preservedPosition = this.customPosition;
@@ -165,7 +166,7 @@ export class FloatingPopover {
     const headerActions = document.createElement("div");
     headerActions.className = "popover-header-actions";
 
-    if (callbacks.onHighlight) {
+    if (callbacks.onHighlight && options?.isReadingMode) {
       const highlightBtn = document.createElement("button");
       highlightBtn.className = "popover-btn-highlight";
       highlightBtn.setAttribute("aria-label", "Highlight màu văn bản");

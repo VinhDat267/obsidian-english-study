@@ -567,6 +567,9 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       await plugin.onload();
       const leaf = new WorkspaceLeaf();
       mockView = new MarkdownView(leaf);
+      leaf.view = mockView;
+      app.workspace.activeLeaf = leaf;
+      vi.spyOn(app.workspace, "getActiveViewOfType").mockReturnValue(mockView);
       editor = mockView.editor;
       editor.setValue("Exploring vocabulary integration.");
     });
@@ -624,36 +627,69 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(activateSpy).toHaveBeenCalled();
     });
 
-    it("highlight-selection-yellow command: wraps selection in ==...== or toggles", () => {
+    it("highlight-selection-yellow command: checks for preview mode and applies non-destructive reading highlight", () => {
       const highlightCmd = plugin.commands.find((c) => c.id === "highlight-selection-yellow");
       expect(highlightCmd).toBeDefined();
 
-      editor.setSelectionText("important phrase");
-      highlightCmd!.editorCallback!(editor);
-      expect(editor.getValue()).toContain("==important phrase==");
+      // In source/editor mode -> checkCallback returns false
+      mockView.mode = "source";
+      expect(highlightCmd!.checkCallback!(true)).toBe(false);
 
-      // Toggle off when re-run on the same highlighted text
-      editor.setSelectionText("==important phrase==");
-      highlightCmd!.editorCallback!(editor);
-      expect(editor.getValue()).toContain("important phrase");
-      expect(editor.getValue()).not.toContain("==important phrase==");
-    });
+      // In preview/reading mode
+      mockView.mode = "preview";
+      const mockFile: any = { path: "Notes/Article.md" };
+      mockView.file = mockFile;
+      (global as any).window.getSelection = vi.fn(() => ({
+        toString: () => "important phrase",
+      }));
 
-    it("clear-highlight-selection command: strips existing highlights", () => {
-      const clearCmd = plugin.commands.find((c) => c.id === "clear-highlight-selection");
-      expect(clearCmd).toBeDefined();
+      expect(highlightCmd!.checkCallback!(true)).toBe(true);
 
-      editor.setSelectionText("==highlighted text==");
-      clearCmd!.editorCallback!(editor);
-      expect(editor.getValue()).toContain("highlighted text");
+      const rerenderSpy = vi.spyOn(mockView.previewMode, "rerender");
+      highlightCmd!.checkCallback!(false);
+
+      // Highlight was saved in readingHighlightService
+      const highlights = plugin.readingHighlightService.getHighlights("Notes/Article.md");
+      expect(highlights).toHaveLength(1);
+      expect(highlights[0].text).toBe("important phrase");
+      expect(highlights[0].color).toBe("yellow");
+      expect(rerenderSpy).toHaveBeenCalledWith(true);
+
+      // Editor was NEVER modified (0 edits to markdown file)
       expect(editor.getValue()).not.toContain("==");
     });
 
-    it("highlightSelection: supports custom colors with mark tags", () => {
+    it("clear-highlight-selection command: checks for preview mode and removes reading highlight", () => {
+      const clearCmd = plugin.commands.find((c) => c.id === "clear-highlight-selection");
+      expect(clearCmd).toBeDefined();
+
+      mockView.mode = "preview";
+      const mockFile: any = { path: "Notes/Article.md" };
+      mockView.file = mockFile;
+
+      // Seed highlight
+      plugin.readingHighlightService.addHighlight("Notes/Article.md", "important phrase", "yellow");
+      expect(plugin.readingHighlightService.getHighlights("Notes/Article.md")).toHaveLength(1);
+
+      (global as any).window.getSelection = vi.fn(() => ({
+        toString: () => "important phrase",
+      }));
+
+      const rerenderSpy = vi.spyOn(mockView.previewMode, "rerender");
+      clearCmd!.checkCallback!(false);
+
+      // Highlight removed
+      expect(plugin.readingHighlightService.getHighlights("Notes/Article.md")).toHaveLength(0);
+      expect(rerenderSpy).toHaveBeenCalledWith(true);
+      expect(editor.getValue()).not.toContain("==");
+    });
+
+    it("highlightSelection: does NOT modify markdown in edit mode", () => {
+      mockView.mode = "source";
       editor.setSelectionText("green text");
-      plugin.highlightSelection("green", editor);
-      expect(editor.getValue()).toContain("<mark style=");
-      expect(editor.getValue()).toContain("green text");
+      const result = plugin.highlightSelection("green", editor);
+      expect(result).toBe(false);
+      expect(editor.getValue()).not.toContain("<mark");
     });
   });
 

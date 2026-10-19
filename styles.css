@@ -1343,3 +1343,17 @@
   outline-offset: 3px;
 }
 
+/* Non-destructive visual reading highlights: the source markdown remains 100% untouched */
+mark.polyglot-reading-highlight {
+  border-radius: 3px;
+  padding: 1px 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: pointer;
+  transition: opacity var(--english-study-transition-fast), filter var(--english-study-transition-fast);
+}
+
+mark.polyglot-reading-highlight:hover {
+  filter: brightness(0.92);
+}
+

@@ -69,6 +69,16 @@ export interface PluginSettings {
 
   // Nhóm 5: Dịch song ngữ toàn bộ file (Bilingual File Translation)
   bilingualTranslationStyle: BilingualStyle;
+
+  // Nhóm 6: Highlight khi đọc (Reading Mode Non-Destructive Highlights)
+  readingHighlights?: Record<string, ReadingHighlightItem[]>;
+}
+
+export interface ReadingHighlightItem {
+  id: string;
+  text: string;
+  color: "yellow" | "green" | "blue" | "pink" | "purple" | "orange";
+  timestamp: number;
 }
 
 export type BilingualStyle = "blockquote" | "colored" | "highlight" | "bold_prefix";
@@ -136,4 +146,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   preferredAccent: "us",
   autoPlayAudio: false,
   bilingualTranslationStyle: "blockquote",
+  readingHighlights: {},
 };
