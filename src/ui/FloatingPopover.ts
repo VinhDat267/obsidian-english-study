@@ -1,4 +1,6 @@
 import { setIcon } from "obsidian";
+import { AiTutorChatService } from "../services/ai/AiTutorChatService";
+import { GeminiService } from "../services/provider/GeminiService";
 import { LookupResult, PopoverCallbacks, TutorSession } from "../types";
 import { calculatePosition, RectLike } from "../utils/domHelper";
 import { getLanguageMeta } from "../utils/languageHelper";
@@ -8,6 +10,16 @@ import {
   HighlightColorKey,
   HIGHLIGHT_COLORS,
 } from "../utils/textHighlighter";
+import { PopoverChatDrawer } from "./PopoverChatDrawer";
+
+export interface FloatingPopoverOptions {
+  enableAiGrammar?: boolean;
+  enableAiTranslation?: boolean;
+  isReadingMode?: boolean;
+  chatService?: AiTutorChatService;
+  geminiService?: GeminiService;
+  apiKey?: string;
+}
 
 export type { PopoverCallbacks };
 
@@ -18,6 +30,10 @@ export class FloatingPopover {
   private customPosition: { left: number; top: number } | null = null;
   private isPlayingAudio: boolean = false;
   private currentAudio: HTMLAudioElement | null = null;
+  private chatService?: AiTutorChatService;
+  private geminiService?: GeminiService;
+  private apiKey?: string;
+  private chatDrawer: PopoverChatDrawer | null = null;
   private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
   private outsideTimeout: any = null;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -55,11 +71,7 @@ export class FloatingPopover {
     rect: RectLike,
     result: LookupResult,
     callbacks: PopoverCallbacks,
-    options?: {
-      enableAiGrammar?: boolean;
-      enableAiTranslation?: boolean;
-      isReadingMode?: boolean;
-    }
+    options?: FloatingPopoverOptions
   ): void {
     const preservedPosition = this.customPosition;
     this.hide();
@@ -582,6 +594,38 @@ export class FloatingPopover {
     footer.appendChild(actions);
     popover.appendChild(footer);
 
+    // AI Tutor Chat Drawer
+    const chatService = options?.chatService || this.chatService;
+    const geminiService = options?.geminiService || this.geminiService;
+    const apiKey = options?.apiKey || this.apiKey;
+
+    if (chatService && geminiService && apiKey) {
+      const session = chatService.createSession({
+        query: result.query,
+        contextSentence:
+          result.contextSentence || result.contextSentenceClean || "",
+        docContext: result.docContext,
+        sourceLang: result.sourceLang,
+        targetLang: result.targetLang,
+      });
+
+      this.chatDrawer = new PopoverChatDrawer(
+        chatService,
+        geminiService,
+        apiKey,
+        {
+          onResize: () => {
+            this.adjustBounds();
+          },
+          onPinToSidebar: (session) => {
+            callbacks.onPinToSidebarChat?.(session);
+          },
+        }
+      );
+      this.chatDrawer.setSession(session);
+      popover.appendChild(this.chatDrawer.render());
+    }
+
     // Measure and position
     popover.style.position = "fixed";
     popover.style.visibility = "hidden";
@@ -936,6 +980,15 @@ export class FloatingPopover {
   }
 
   hide(): void {
+    if (this.chatDrawer) {
+      try {
+        this.chatDrawer.destroy();
+      } catch {
+        // fallback
+      }
+      this.chatDrawer = null;
+    }
+
     this.cleanUpDragListeners();
     this.stopAudio();
 
@@ -968,6 +1021,33 @@ export class FloatingPopover {
     this.currentResult = null;
     this.currentQuery = null;
     this.customPosition = null;
+  }
+
+  setTutorDependencies(
+    chatService: AiTutorChatService,
+    geminiService: GeminiService,
+    apiKey: string
+  ): void {
+    this.chatService = chatService;
+    this.geminiService = geminiService;
+    this.apiKey = apiKey;
+  }
+
+  getChatDrawer(): PopoverChatDrawer | null {
+    return this.chatDrawer;
+  }
+
+  adjustBounds(): void {
+    if (!this.element) return;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+    const currentTop =
+      parseFloat(this.element.style.top) ||
+      (typeof this.element.getBoundingClientRect === "function"
+        ? this.element.getBoundingClientRect().top
+        : 0) ||
+      0;
+    const maxHeight = Math.max(240, vh - currentTop - 16);
+    this.element.style.maxHeight = `${maxHeight}px`;
   }
 
   isVisible(): boolean {
