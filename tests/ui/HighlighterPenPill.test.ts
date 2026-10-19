@@ -204,18 +204,68 @@ describe("HighlighterPenPill", () => {
     expect(pill.isVisible()).toBe(false);
   });
 
-  it("should properly clean up on hide()", () => {
+  it("should switch to eraser mode when clicking eraser button and invoke onColorChange('clear')", () => {
+    const onColorChange = vi.fn();
     const pill = new HighlighterPenPill();
     pill.show("yellow", {
-      onColorChange: vi.fn(),
+      onColorChange,
       onClose: vi.fn(),
     });
 
-    expect(pill.isVisible()).toBe(true);
-    pill.hide();
+    const el = pill.getElement()!;
+    const eraserBtn = el.querySelector(".pen-pill-eraser-btn");
+    expect(eraserBtn).not.toBeNull();
 
-    expect(pill.isVisible()).toBe(false);
-    expect(pill.getElement()).toBeNull();
-    expect(mockBody.children.length).toBe(0);
+    eraserBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+
+    expect(onColorChange).toHaveBeenCalledWith("clear");
+    expect(pill.getAction()).toBe("clear");
+    expect(pill.isEraser()).toBe(true);
+    expect(eraserBtn.classList.contains("is-active")).toBe(true);
+  });
+
+  it("should switch to eraser mode when picking clear dot from palette", () => {
+    const onColorChange = vi.fn();
+    const pill = new HighlighterPenPill();
+    pill.show("yellow", {
+      onColorChange,
+      onClose: vi.fn(),
+    });
+
+    const el = pill.getElement()!;
+    const colorBtn = el.querySelector(".pen-pill-color-btn");
+    colorBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+
+    const clearDot = el.querySelector(".palette-dot-clear");
+    expect(clearDot).not.toBeNull();
+    clearDot.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+
+    expect(onColorChange).toHaveBeenCalledWith("clear");
+    expect(pill.getAction()).toBe("clear");
+    expect(pill.isEraser()).toBe(true);
+  });
+
+  it("should switch back to color mode when a color dot is selected after eraser mode", () => {
+    const onColorChange = vi.fn();
+    const pill = new HighlighterPenPill();
+    pill.show("yellow", {
+      onColorChange,
+      onClose: vi.fn(),
+    });
+
+    pill.setAction("clear");
+    expect(pill.isEraser()).toBe(true);
+
+    const el = pill.getElement()!;
+    const colorBtn = el.querySelector(".pen-pill-color-btn");
+    colorBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+
+    const greenDot = el.querySelector(".palette-dot-green");
+    greenDot.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+
+    expect(onColorChange).toHaveBeenCalledWith("green");
+    expect(pill.getAction()).toBe("green");
+    expect(pill.getColor()).toBe("green");
+    expect(pill.isEraser()).toBe(false);
   });
 });

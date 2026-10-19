@@ -43,6 +43,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   floatingHighlightToolbar!: FloatingHighlightToolbar;
   penPill!: HighlighterPenPill;
   isPenModeActive: boolean = false;
+  currentPenAction: HighlightAction = "yellow";
   ribbonPenIconEl: HTMLElement | null = null;
   sidebarView: EnglishStudySidebar | null = null;
   private lastLookupResult: LookupResult | null = null;
@@ -709,18 +710,25 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
     if (this.isPenModeActive) {
       this.dismissFloatingUi();
-      const activeColor = this.settings.highlighterPenColor || "yellow";
-      this.penPill?.show(activeColor, {
-        onColorChange: async (color) => {
-          this.settings.highlighterPenColor = color;
-          await this.saveSettings();
+      this.currentPenAction = this.settings.highlighterPenColor || "yellow";
+      this.penPill?.show(this.currentPenAction, {
+        onColorChange: async (action) => {
+          this.currentPenAction = action;
+          if (action !== "clear") {
+            this.settings.highlighterPenColor = action;
+            await this.saveSettings();
+          }
         },
         onClose: () => {
           this.togglePenMode(false);
         },
       });
+      const modeLabel =
+        this.currentPenAction === "clear"
+          ? "Tẩy xóa"
+          : HIGHLIGHT_COLORS[this.currentPenAction]?.label || "Vàng";
       new Notice(
-        `Đã BẬT chế độ bút dạ quang (${HIGHLIGHT_COLORS[activeColor]?.label || "Vàng"}). Bôi đen để tự động highlight! (Nhấn Esc để tắt)`,
+        `Đã BẬT chế độ bút dạ quang (${modeLabel}). Bôi đen để tự động tô/tẩy highlight! (Nhấn Esc để tắt)`,
         3000
       );
     } else {
@@ -886,9 +894,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       // 4.1. Nếu Chế độ Bút dạ quang (Continuous Highlighter Pen Mode) đang BẬT:
       if (this.isPenModeActive) {
         this.floatingHighlightToolbar?.hide();
-        const activeColor = this.settings.highlighterPenColor || "yellow";
-        this.applyLiveReadingHighlight(activeColor, selectedText, readingRange, activeView);
-        // Xóa selection ngay lập tức để vệt dạ quang lộ rõ mồn một, sẵn sàng cho lần bôi tiếp theo
+        if (this.currentPenAction === "clear") {
+          this.clearLiveReadingHighlight(selectedText, activeView);
+        } else {
+          const activeColor = this.currentPenAction || this.settings.highlighterPenColor || "yellow";
+          this.applyLiveReadingHighlight(activeColor, selectedText, readingRange, activeView);
+        }
+        // Xóa selection ngay lập tức để vệt dạ quang / vệt tẩy lộ rõ mồn một, sẵn sàng cho lần bôi tiếp theo
         if (typeof window !== "undefined" && window.getSelection) {
           try {
             window.getSelection()?.removeAllRanges();

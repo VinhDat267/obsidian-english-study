@@ -1171,8 +1171,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
     });
 
     it("should automatically apply highlight on selection when pen mode is active", () => {
-      plugin.togglePenMode(true);
       plugin.settings.highlighterPenColor = "green";
+      plugin.togglePenMode(true);
 
       const removeAllRangesSpy = vi.fn();
       (global as any).window.getSelection = vi.fn(() => ({
@@ -1213,6 +1213,47 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         mockView
       );
       expect(toolbarShowSpy).not.toHaveBeenCalled();
+      expect(removeAllRangesSpy).toHaveBeenCalled();
+    });
+
+    it("should automatically clear highlight on selection when pen mode is set to eraser (clear)", () => {
+      plugin.togglePenMode(true);
+      plugin.currentPenAction = "clear";
+
+      const removeAllRangesSpy = vi.fn();
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "essential concept",
+        anchorNode: mockView.contentEl,
+        removeAllRanges: removeAllRangesSpy,
+        getRangeAt: () => ({
+          commonAncestorContainer: {
+            nodeType: 1,
+            parentElement: mockView.contentEl,
+            closest: vi.fn(() => ({
+              textContent: "An essential concept to learn.",
+            })),
+          },
+          getBoundingClientRect: () => ({
+            top: 150,
+            bottom: 170,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+          cloneRange: vi.fn(() => ({} as Range)),
+        }),
+      }));
+
+      const clearSpy = vi.spyOn(plugin, "clearLiveReadingHighlight");
+      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(clearSpy).toHaveBeenCalledWith("essential concept", mockView);
+      expect(highlightSpy).not.toHaveBeenCalled();
       expect(removeAllRangesSpy).toHaveBeenCalled();
     });
 
