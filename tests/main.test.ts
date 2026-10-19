@@ -1391,6 +1391,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const mockResult: LookupResult = {
         query: "TypeScript",
         type: "word",
+        contextSentence: "Mastering TypeScript requires practice.",
+        contextSentenceClean: "Mastering TypeScript requires practice.",
         vietnameseTranslation: "TypeScript",
         timestamp: Date.now(),
       };
@@ -1417,6 +1419,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const mockResult: LookupResult = {
         query: "TypeScript",
         type: "word",
+        contextSentence: "Mastering TypeScript requires practice.",
+        contextSentenceClean: "Mastering TypeScript requires practice.",
         vietnameseTranslation: "TypeScript",
         timestamp: Date.now(),
       };
