@@ -310,4 +310,60 @@ describe("AiTutorChatService", () => {
       expect(instruction).toContain("Tiếng Anh");
     });
   });
+
+  describe("Session Synchronization (getOrCreateSession, getLatestSession, getSessionForQuery)", () => {
+    it("should retrieve existing session if query matches case-insensitively, preserving messages", () => {
+      const session1 = service.getOrCreateSession({
+        query: "Photosynthesis",
+        contextSentence: "Plants use photosynthesis to make food.",
+      });
+
+      service.addMessage(session1.id, "user", "Giải thích cơ chế?");
+      service.addMessage(session1.id, "model", "Quang hợp gồm pha sáng và pha tối.");
+
+      const session2 = service.getOrCreateSession({
+        query: "photosynthesis",
+        contextSentence: "Plants use photosynthesis to make food.",
+      });
+
+      expect(session2.id).toBe(session1.id);
+      expect(session2.messages.length).toBe(2);
+      expect(session2.messages[0].content).toBe("Giải thích cơ chế?");
+    });
+
+    it("should create new session if query is different", () => {
+      const session1 = service.getOrCreateSession({
+        query: "mitochondria",
+        contextSentence: "Powerhouse of the cell.",
+      });
+
+      const session2 = service.getOrCreateSession({
+        query: "ribosome",
+        contextSentence: "Protein factory of the cell.",
+      });
+
+      expect(session1.id).not.toBe(session2.id);
+      expect(service.getLatestSession()?.id).toBe(session2.id);
+    });
+
+    it("should return the latest active session via getLatestSession()", () => {
+      expect(service.getLatestSession()).toBeNull();
+
+      const sessionA = service.createSession({ query: "wordA", contextSentence: "Sentence A" });
+      expect(service.getLatestSession()?.id).toBe(sessionA.id);
+
+      const sessionB = service.createSession({ query: "wordB", contextSentence: "Sentence B" });
+      expect(service.getLatestSession()?.id).toBe(sessionB.id);
+    });
+
+    it("should lookup session by query via getSessionForQuery()", () => {
+      service.createSession({ query: "Epiphany", contextSentence: "He had an epiphany." });
+
+      const found = service.getSessionForQuery("epiphany");
+      expect(found).not.toBeNull();
+      expect(found?.query).toBe("Epiphany");
+
+      expect(service.getSessionForQuery("unknown")).toBeNull();
+    });
+  });
 });

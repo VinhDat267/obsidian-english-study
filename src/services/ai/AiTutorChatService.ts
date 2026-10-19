@@ -8,6 +8,8 @@ import { getLanguageMeta } from "../../utils/languageHelper";
 
 export class AiTutorChatService {
   private sessions: Map<string, TutorSession> = new Map();
+  private querySessionMap: Map<string, string> = new Map();
+  private latestSessionId: string | null = null;
 
   /**
    * Creates and registers a new multi-turn tutor session.
@@ -38,7 +40,64 @@ export class AiTutorChatService {
     };
 
     this.sessions.set(id, session);
+    this.latestSessionId = id;
+    if (params.query) {
+      this.querySessionMap.set(params.query.trim().toLowerCase(), id);
+    }
     return session;
+  }
+
+  /**
+   * Retrieves or creates a session for the specified query.
+   * If a session already exists for this query, returns it so Popover and Sidebar share the same conversation.
+   */
+  getOrCreateSession(params: {
+    query: string;
+    contextSentence: string;
+    docContext?: DocumentContextMeta;
+    sourceLang?: string;
+    targetLang?: string;
+    id?: string;
+  }): TutorSession {
+    const cleanKey = (params.query || "").trim().toLowerCase();
+    if (cleanKey) {
+      const existingId = this.querySessionMap.get(cleanKey);
+      if (existingId) {
+        const existing = this.sessions.get(existingId);
+        if (existing) {
+          if (params.contextSentence && !existing.contextSentence) {
+            existing.contextSentence = params.contextSentence;
+          }
+          if (params.docContext && !existing.docContext) {
+            existing.docContext = params.docContext;
+          }
+          this.latestSessionId = existing.id;
+          return existing;
+        }
+      }
+    }
+    return this.createSession(params);
+  }
+
+  /**
+   * Gets the latest active tutor session.
+   */
+  getLatestSession(): TutorSession | null {
+    if (!this.latestSessionId) {
+      const values = Array.from(this.sessions.values());
+      return values.length > 0 ? values[values.length - 1] : null;
+    }
+    return this.sessions.get(this.latestSessionId) ?? null;
+  }
+
+  /**
+   * Gets a session associated with a specific query string.
+   */
+  getSessionForQuery(query?: string): TutorSession | null {
+    if (!query) return null;
+    const cleanKey = query.trim().toLowerCase();
+    const id = this.querySessionMap.get(cleanKey);
+    return id ? (this.sessions.get(id) ?? null) : null;
   }
 
   /**
@@ -88,6 +147,13 @@ export class AiTutorChatService {
    * Deletes a session completely from the internal store.
    */
   deleteSession(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (session?.query) {
+      this.querySessionMap.delete(session.query.trim().toLowerCase());
+    }
+    if (this.latestSessionId === sessionId) {
+      this.latestSessionId = null;
+    }
     return this.sessions.delete(sessionId);
   }
 
@@ -96,6 +162,8 @@ export class AiTutorChatService {
    */
   clearAllSessions(): void {
     this.sessions.clear();
+    this.querySessionMap.clear();
+    this.latestSessionId = null;
   }
 
   /**

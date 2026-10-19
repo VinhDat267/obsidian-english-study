@@ -496,6 +496,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           this.providerManager.getGeminiService(),
           this.settings.geminiApiKey
         );
+        if (!this.sidebarView.getCurrentResult() && this.lastLookupResult) {
+          this.sidebarView.setResult(this.lastLookupResult);
+        }
+        const latestSession = this.aiTutorChatService.getLatestSession();
+        if (latestSession && !this.sidebarView.getActiveTutorSession()) {
+          this.sidebarView.setActiveTutorSession(latestSession);
+        }
       }
     }
   }

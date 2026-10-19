@@ -284,6 +284,17 @@ export class FloatingPopover {
       pinBtn.addEventListener("click", (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        if (
+          callbacks.onPinToSidebarChat &&
+          this.chatDrawer &&
+          (this.chatDrawer.isExpanded() || this.chatDrawer.hasMessages())
+        ) {
+          const sess = this.chatDrawer.getSession();
+          if (sess) {
+            callbacks.onPinToSidebarChat(sess);
+            return;
+          }
+        }
         callbacks.onPinToSidebar?.(result);
       });
       headerActions.appendChild(pinBtn);
@@ -600,14 +611,24 @@ export class FloatingPopover {
     const apiKey = options?.apiKey || this.apiKey;
 
     if (chatService && geminiService && apiKey) {
-      const session = chatService.createSession({
-        query: result.query,
-        contextSentence:
-          result.contextSentence || result.contextSentenceClean || "",
-        docContext: result.docContext,
-        sourceLang: result.sourceLang,
-        targetLang: result.targetLang,
-      });
+      const session =
+        typeof chatService.getOrCreateSession === "function"
+          ? chatService.getOrCreateSession({
+              query: result.query,
+              contextSentence:
+                result.contextSentence || result.contextSentenceClean || "",
+              docContext: result.docContext,
+              sourceLang: result.sourceLang,
+              targetLang: result.targetLang,
+            })
+          : chatService.createSession({
+              query: result.query,
+              contextSentence:
+                result.contextSentence || result.contextSentenceClean || "",
+              docContext: result.docContext,
+              sourceLang: result.sourceLang,
+              targetLang: result.targetLang,
+            });
 
       this.chatDrawer = new PopoverChatDrawer(
         chatService,

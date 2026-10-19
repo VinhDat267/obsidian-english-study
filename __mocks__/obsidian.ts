@@ -328,6 +328,14 @@ export function createMockObsidianElement(tag: string = "div"): any {
       bottom: 600,
     }),
     querySelector: (selector: string): any => {
+      if (selector.includes(",")) {
+        const parts = selector.split(",").map((s) => s.trim()).filter(Boolean);
+        for (const part of parts) {
+          const found = el.querySelector(part);
+          if (found) return found;
+        }
+        return null;
+      }
       if (selector.startsWith(".")) {
         const className = selector.slice(1);
         if (classListSet.has(className)) return el;
@@ -345,6 +353,19 @@ export function createMockObsidianElement(tag: string = "div"): any {
       return null;
     },
     querySelectorAll: (selector: string): any[] => {
+      if (selector.includes(",")) {
+        const parts = selector.split(",").map((s) => s.trim()).filter(Boolean);
+        const results: any[] = [];
+        for (const part of parts) {
+          const subResults = el.querySelectorAll(part);
+          for (const item of subResults) {
+            if (!results.includes(item)) {
+              results.push(item);
+            }
+          }
+        }
+        return results;
+      }
       const results: any[] = [];
       for (const child of children) {
         if (selector.startsWith(".")) {

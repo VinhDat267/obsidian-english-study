@@ -203,4 +203,62 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
     const sessionHistory = chatService.getSession(session.id);
     expect(sessionHistory?.messages.length).toBe(0);
   });
+
+  it("7. automatically synchronizes active tutor session when setResult is called or query was already looked up", () => {
+    // Simulate user looking up a word in popover and chatting with AI
+    const result = {
+      query: "ubiquitous",
+      type: "word" as const,
+      contextSentence: "Smartphones are ubiquitous in modern life.",
+      contextSentenceClean: "Smartphones are ubiquitous in modern life.",
+      vietnameseTranslation: "phổ biến, có mặt khắp nơi",
+      timestamp: Date.now(),
+    };
+
+    // User chats in popover (which uses getOrCreateSession)
+    const popoverSession = chatService.getOrCreateSession({
+      query: result.query,
+      contextSentence: result.contextSentence,
+    });
+    chatService.addMessage(popoverSession.id, "user", "Tại sao lại dùng từ này?");
+    chatService.addMessage(popoverSession.id, "model", "Vì nó mang sắc thái phổ biến ở khắp mọi nơi.");
+
+    // Sidebar receives setResult
+    sidebar.setResult(result);
+
+    // User now switches to 'ai-tutor' tab in the sidebar
+    const tutorBtn = sidebar.contentEl.querySelector(".tab-btn-ai-tutor");
+    clickElement(tutorBtn);
+
+    // Sidebar should NOT show empty state; it should show the conversation from popover!
+    const emptyState = sidebar.contentEl.querySelector(".sidebar-tutor-empty");
+    expect(emptyState).toBeNull();
+
+    const queryEl = sidebar.contentEl.querySelector(".sidebar-tutor-query");
+    expect(queryEl?.textContent).toBe("ubiquitous");
+
+    const messages = sidebar.contentEl.querySelectorAll(".tutor-message-user, .tutor-message-model");
+    expect(messages.length).toBe(2);
+    expect(messages[0].textContent).toContain("Tại sao lại dùng từ này?");
+  });
+
+  it("8. automatically falls back to latest active session when switching to 'ai-tutor' tab even if currentResult was not set", () => {
+    // New sidebar without currentResult
+    const newSidebar = new EnglishStudySidebar(leaf);
+    newSidebar.setTutorDependencies(chatService, geminiService, apiKey);
+    newSidebar.render();
+
+    // Latest session exists in chatService (session 'ephemeral')
+    chatService.addMessage(session.id, "user", "Giải thích giúp tôi");
+
+    // Click 'ai-tutor' tab
+    const tutorBtn = newSidebar.contentEl.querySelector(".tab-btn-ai-tutor");
+    clickElement(tutorBtn);
+
+    const emptyState = newSidebar.contentEl.querySelector(".sidebar-tutor-empty");
+    expect(emptyState).toBeNull();
+
+    const queryEl = newSidebar.contentEl.querySelector(".sidebar-tutor-query");
+    expect(queryEl?.textContent).toBe("ephemeral");
+  });
 });

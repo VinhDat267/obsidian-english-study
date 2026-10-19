@@ -49,6 +49,18 @@ export class EnglishStudySidebar extends ItemView {
     this.tutorChatService = chatService;
     this.geminiService = geminiService;
     this.geminiApiKey = apiKey;
+    if (this.currentResult?.query) {
+      this.activeTutorSession = chatService.getOrCreateSession({
+        query: this.currentResult.query,
+        contextSentence:
+          this.currentResult.contextSentence ||
+          this.currentResult.contextSentenceClean ||
+          "",
+        docContext: this.currentResult.docContext,
+        sourceLang: this.currentResult.sourceLang,
+        targetLang: this.currentResult.targetLang,
+      });
+    }
   }
 
   openTutorSession(session: TutorSession): void {
@@ -59,6 +71,14 @@ export class EnglishStudySidebar extends ItemView {
 
   getActiveTutorSession(): TutorSession | null {
     return this.activeTutorSession;
+  }
+
+  setActiveTutorSession(session: TutorSession): void {
+    this.activeTutorSession = session;
+  }
+
+  getCurrentResult(): LookupResult | null {
+    return this.currentResult;
   }
 
   getViewType(): string {
@@ -75,6 +95,16 @@ export class EnglishStudySidebar extends ItemView {
 
   setResult(result: LookupResult): void {
     this.currentResult = result;
+    if (this.tutorChatService) {
+      this.activeTutorSession = this.tutorChatService.getOrCreateSession({
+        query: result.query,
+        contextSentence:
+          result.contextSentence || result.contextSentenceClean || "",
+        docContext: result.docContext,
+        sourceLang: result.sourceLang,
+        targetLang: result.targetLang,
+      });
+    }
     this.activeTab = "deep-dive";
     this.render();
   }
@@ -494,6 +524,43 @@ export class EnglishStudySidebar extends ItemView {
     const tutorContainer = parent.createDiv({
       cls: "sidebar-tutor-container sidebar-ai-tutor-container",
     });
+
+    if (!this.activeTutorSession && this.tutorChatService) {
+      if (this.currentResult?.query) {
+        this.activeTutorSession = this.tutorChatService.getOrCreateSession({
+          query: this.currentResult.query,
+          contextSentence:
+            this.currentResult.contextSentence ||
+            this.currentResult.contextSentenceClean ||
+            "",
+          docContext: this.currentResult.docContext,
+          sourceLang: this.currentResult.sourceLang,
+          targetLang: this.currentResult.targetLang,
+        });
+      } else {
+        const latest = this.tutorChatService.getLatestSession();
+        if (latest && latest.messages.length > 0) {
+          this.activeTutorSession = latest;
+        }
+      }
+    } else if (this.tutorChatService && this.currentResult?.query) {
+      if (
+        this.activeTutorSession &&
+        this.activeTutorSession.query.toLowerCase() !==
+          this.currentResult.query.trim().toLowerCase()
+      ) {
+        this.activeTutorSession = this.tutorChatService.getOrCreateSession({
+          query: this.currentResult.query,
+          contextSentence:
+            this.currentResult.contextSentence ||
+            this.currentResult.contextSentenceClean ||
+            "",
+          docContext: this.currentResult.docContext,
+          sourceLang: this.currentResult.sourceLang,
+          targetLang: this.currentResult.targetLang,
+        });
+      }
+    }
 
     if (!this.activeTutorSession) {
       const emptyState = tutorContainer.createDiv({

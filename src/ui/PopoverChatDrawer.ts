@@ -61,6 +61,20 @@ export class PopoverChatDrawer {
   }
 
   /**
+   * Returns the active session attached to this drawer.
+   */
+  getSession(): TutorSession | null {
+    return this.session;
+  }
+
+  /**
+   * Returns whether this drawer has any messages recorded in its session.
+   */
+  hasMessages(): boolean {
+    return (this.session?.messages?.length ?? 0) > 0;
+  }
+
+  /**
    * Toggles the accordion drawer between collapsed and expanded.
    * @param expand Optional explicit target state
    */
