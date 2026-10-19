@@ -94,5 +94,45 @@ describe("domHighlightHelper", () => {
     expect(container.querySelectorAll(".polyglot-reading-highlight")).toHaveLength(0);
     expect(container.textContent?.replace(/\s+/g, " ").trim()).toBe("First Second Third");
   });
+
+  it("safely highlights across multiple elements without losing text or structure", () => {
+    container.innerHTML = `
+      <p id="p1">D. Deliver tested increments frequently while producing the necessary release records.</p>
+      <p id="p2"><strong>Q16 · L2 Slides 29–30</strong> — A product has well-defined requirements...</p>
+    `;
+
+    const p1 = container.querySelector("#p1")!;
+    const p2 = container.querySelector("#p2")!;
+    const initialText = container.textContent;
+
+    const t1 = p1.firstChild!;
+    const startOffset = t1.nodeValue!.indexOf("y while");
+
+    const t2 = p2.childNodes[1]!; // after strong
+    const endOffset = t2.nodeValue!.indexOf("well-defined");
+
+    const range = document.createRange();
+    range.setStart(t1, startOffset);
+    range.setEnd(t2, endOffset);
+
+    // 1. Wrap
+    const firstMark = wrapRangeWithHighlight(range, "hl-cross", "yellow", "rgba(250, 204, 21, 0.4)");
+    expect(firstMark).not.toBeNull();
+    // Absolutely NO text dropped during highlight
+    expect(container.textContent).toBe(initialText);
+    // Block structures intact: p1 and p2 both still exist and are separate
+    expect(container.querySelectorAll("p")).toHaveLength(2);
+    expect(p1.textContent).toContain("frequentl");
+    expect(p1.textContent).toContain("y while producing the necessary release records.");
+    expect(p2.textContent).toContain("Q16 · L2 Slides 29–30");
+    expect(p2.textContent).toContain("well-defined requirements...");
+
+    // 2. Unwrap
+    const unwrapped = unwrapHighlightsByText(container, "y while producing");
+    expect(unwrapped).toBeGreaterThan(0);
+    // Text content is completely preserved
+    expect(container.textContent).toBe(initialText);
+  });
 });
+
 

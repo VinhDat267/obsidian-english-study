@@ -133,4 +133,21 @@ describe("ReadingHighlightService", () => {
     const res2 = service.addHighlight("doc.md", "trimmed phrase", "orange");
     expect(res2.action).toBe("removed"); // toggled off
   });
+
+  it("removes highlight by substring match when dragging eraser over part of a phrase", () => {
+    const saveFn = vi.fn();
+    const service = new ReadingHighlightService({}, saveFn);
+
+    service.addHighlight(
+      "doc.md",
+      "Deliver tested increments frequently while producing the necessary release records.",
+      "yellow"
+    );
+    expect(service.getHighlights("doc.md")).toHaveLength(1);
+
+    // Eraser dragged over only a substring
+    const removed = service.removeHighlight("doc.md", "the necessary release records");
+    expect(removed).toBe(true);
+    expect(service.getHighlights("doc.md")).toHaveLength(0);
+  });
 });

@@ -83,9 +83,20 @@ export class ReadingHighlightService {
     if (!list || list.length === 0) return false;
 
     const trimmed = textOrId.trim();
-    const idx = list.findIndex(
-      (h) => h.id === textOrId || h.text.toLowerCase() === trimmed.toLowerCase()
+    const lowerTrimmed = trimmed.toLowerCase();
+
+    // 1. Exact ID or exact text match first
+    let idx = list.findIndex(
+      (h) => h.id === textOrId || h.text.toLowerCase() === lowerTrimmed
     );
+
+    // 2. Substring / partial match fallback (khi quẹt tẩy trúng một phần câu highlight dài)
+    if (idx === -1 && lowerTrimmed.length >= 2) {
+      idx = list.findIndex((h) => {
+        const hText = h.text.trim().toLowerCase();
+        return hText.includes(lowerTrimmed) || lowerTrimmed.includes(hText);
+      });
+    }
 
     if (idx !== -1) {
       list.splice(idx, 1);
