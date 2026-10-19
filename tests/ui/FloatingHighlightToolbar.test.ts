@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FloatingHighlightToolbar } from "../../src/ui/FloatingHighlightToolbar";
 
+// The document installed below returns plain-object DOM doubles.
+function asMockElement(element: HTMLElement | null | undefined): any { return element; }
+
 describe("FloatingHighlightToolbar", () => {
   let docListeners: Record<string, ((...args: any[]) => void)[]>;
   let mockBody: any;
@@ -139,7 +142,7 @@ describe("FloatingHighlightToolbar", () => {
     );
 
     expect(toolbar.isVisible()).toBe(true);
-    const el = toolbar.getElement()!;
+    const el = asMockElement(toolbar.getElement())!;
     expect(el).not.toBeNull();
     expect(el.classList.contains("polyglot-highlight-toolbar")).toBe(true);
 
@@ -170,7 +173,7 @@ describe("FloatingHighlightToolbar", () => {
       { onHighlight, onClear: vi.fn(), onLookup: vi.fn() }
     );
 
-    const el = toolbar.getElement()!;
+    const el = asMockElement(toolbar.getElement())!;
     const greenDot = el.querySelector(".dot-green");
     expect(greenDot).not.toBeNull();
 
@@ -195,7 +198,7 @@ describe("FloatingHighlightToolbar", () => {
       { onHighlight: vi.fn(), onClear, onLookup: vi.fn() }
     );
 
-    const el = toolbar.getElement()!;
+    const el = asMockElement(toolbar.getElement())!;
     const clearDot = el.querySelector(".dot-clear");
 
     clearDot?.dispatchEvent({
@@ -219,7 +222,7 @@ describe("FloatingHighlightToolbar", () => {
       { onHighlight: vi.fn(), onClear: vi.fn(), onLookup }
     );
 
-    const el = toolbar.getElement()!;
+    const el = asMockElement(toolbar.getElement())!;
     const lookupBtn = el.querySelector(".toolbar-btn-lookup");
 
     lookupBtn?.dispatchEvent({
@@ -241,7 +244,7 @@ describe("FloatingHighlightToolbar", () => {
       { onHighlight: vi.fn(), onClear: vi.fn(), onLookup: vi.fn() }
     );
 
-    const el = toolbar.getElement()!;
+    const el = asMockElement(toolbar.getElement())!;
     const yellowDot = el.querySelector(".dot-yellow")!;
     const preventDefault = vi.fn();
 

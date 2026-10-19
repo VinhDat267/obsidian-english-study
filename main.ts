@@ -9,6 +9,7 @@ import { EnglishStudySettingTab, PluginWithSettings } from "./src/ui/SettingsTab
 import { GeminiService } from "./src/services/provider/GeminiService";
 import { BilingualTranslationService } from "./src/services/translation/BilingualTranslationService";
 import { BilingualTranslationModal } from "./src/ui/BilingualTranslationModal";
+import { writeBilingualFile } from "./src/services/translation/BilingualFileWriter";
 import { RectLike } from "./src/utils/domHelper";
 import { registerReadingTranslation } from "./src/reading/registerReadingTranslation";
 import type { ReadingTranslationController } from "./src/reading/ReadingTranslationController";
@@ -27,7 +28,7 @@ import { FloatingHighlightToolbar } from "./src/ui/FloatingHighlightToolbar";
 import { HighlighterPenPill } from "./src/ui/HighlighterPenPill";
 import {
   wrapRangeWithHighlight,
-  unwrapHighlightsByText,
+  unwrapHighlightsByIds,
   unwrapAllHighlights,
 } from "./src/utils/domHighlightHelper";
 import { RightClickPenHandler } from "./src/reading/RightClickPenHandler";
@@ -51,8 +52,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   sidebarView: EnglishStudySidebar | null = null;
   private lastLookupResult: LookupResult | null = null;
   private selectionDebounceTimer: any = null;
+  private lookupGeneration = 0;
+  private lookupDisposed = false;
+  private settingsWrite: Promise<void> = Promise.resolve();
 
   async onload(): Promise<void> {
+    this.lookupDisposed = false;
     await this.loadSettings();
 
     this.geminiService = new GeminiService();
@@ -61,8 +66,15 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.vocabService = new VocabService(this.app, this.settings);
     this.readingHighlightService = new ReadingHighlightService(
       this.settings.readingHighlights || {},
-      () => this.saveSettings()
+      () => this.saveSettings().catch(() => { new Notice("Không thể lưu cấu hình/highlight. Dữ liệu hiện còn trong phiên đang mở."); })
     );
+    this.readingHighlightService.migrateLegacyPaths(this.app.vault.getMarkdownFiles().map(file => file.path));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      this.readingHighlightService.renamePath(oldPath, file.path);
+    }));
+    this.registerEvent(this.app.vault.on("delete", file => {
+      this.readingHighlightService.removePath(file.path);
+    }));
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
     this.floatingHighlightToolbar = new FloatingHighlightToolbar();
@@ -131,8 +143,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
       editorCheckCallback: (
         checking: boolean,
-        editor: Editor,
-        _view: MarkdownView
+        editor: Editor
       ) => {
         const selection = editor.getSelection ? editor.getSelection() : "";
         const hasSelection = Boolean(selection && selection.trim().length > 0);
@@ -288,7 +299,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     // 4. Đăng ký Context Menus cho Editor và File Explorer
     this.registerEvent(
-      this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view: MarkdownView) => {
+      this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view) => {
         menu.addItem((item: any) => {
           item
             .setTitle("Dịch song ngữ toàn bộ file")
@@ -391,6 +402,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     this.registerEvent(
       this.app.workspace.on("file-open", () => {
+        this.dismissFloatingUi();
         this.restoreHighlightsForActiveView();
       })
     );
@@ -406,6 +418,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   async onunload(): Promise<void> {
+    this.lookupDisposed = true;
     this.readingTranslationController?.unload();
     this.dismissFloatingUi();
     this.penPill?.hide();
@@ -428,8 +441,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (this.readingHighlightService) {
       this.settings.readingHighlights = this.readingHighlightService.getAllHighlights();
     }
-    await this.saveData(this.settings);
+    const snapshot: PluginSettings = JSON.parse(JSON.stringify(this.settings));
+    const write = this.settingsWrite.catch(() => {}).then(() => this.saveData(snapshot));
+    this.settingsWrite = write;
+    await write;
     this.readingTranslationController?.updateSettings();
+    this.providerManager?.updateSettings(this.settings);
     if (this.vocabService) {
       this.vocabService.updateSettings(this.settings);
     }
@@ -583,7 +600,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         // Fallback cho Reading Mode: tìm heading gần nhất trong DOM preview
         try {
           const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-          const previewEl = activeView?.previewMode?.containerEl;
+          const previewEl: HTMLElement | undefined = activeView?.previewMode?.containerEl;
           const sel = activeView?.containerEl?.ownerDocument?.defaultView?.getSelection?.();
           const anchorNode = sel?.anchorNode;
           if (previewEl && anchorNode) {
@@ -619,6 +636,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     cursorOffset: number,
     editor?: Editor
   ): Promise<LookupResult | null> {
+    if (this.lookupDisposed) return null;
+    const generation = ++this.lookupGeneration;
+    const isCurrent = () => generation === this.lookupGeneration && !this.lookupDisposed;
+    let latestAiResult: LookupResult | undefined;
+    let shown = false;
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
     }
@@ -628,7 +650,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     // Hiển thị ngay trạng thái Loading tại vị trí vùng chọn
     this.floatingPopover.showLoading(rect, selectedText, {
       onClose: () => {
-        this.providerManager.cancelPending();
+        if (isCurrent()) this.invalidateLookup();
       },
     });
 
@@ -643,11 +665,10 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         this.settings,
         docContext,
         (updatedResult: LookupResult) => {
-          // Bảo vệ chống race condition: Bỏ qua callback của từ cũ nếu người dùng đã tra từ mới
-          if (this.lastLookupResult && this.lastLookupResult.query !== updatedResult.query) {
-            return;
-          }
+          if (!isCurrent()) return;
+          latestAiResult = updatedResult;
           this.lastLookupResult = updatedResult;
+          if (!shown) return;
           this.floatingPopover.updateAiContent(updatedResult, {
             enableAiGrammar: this.settings.enableAiGrammar,
             enableAiTranslation: this.settings.enableAiTranslation,
@@ -658,6 +679,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         }
       );
     } catch (err: any) {
+      if (!isCurrent()) return null;
       this.floatingPopover.hide();
       if (err?.name === "AbortError") {
         return null;
@@ -665,6 +687,8 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       throw err;
     }
 
+    if (!isCurrent()) return null;
+    result = latestAiResult ?? result;
     this.lastLookupResult = result;
 
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -680,10 +704,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           await this.vocabService.saveVocab(res, this.settings);
         },
         onPinToSidebar: (res: LookupResult) => {
-          this.dismissFloatingUi();
+          if (!isCurrent()) return;
+          this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
+            if (!isCurrent()) return;
             if (this.sidebarView) {
-              this.sidebarView.setResult(res);
+              this.sidebarView.setResult(latestAiResult ?? res);
             }
           });
         },
@@ -693,7 +719,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           }
         },
         onClose: () => {
-          // Popover closed
+          if (isCurrent()) this.invalidateLookup();
         },
       },
       {
@@ -702,6 +728,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         isReadingMode,
       }
     );
+    shown = true;
 
     if (this.sidebarView) {
       this.sidebarView.setResult(result);
@@ -720,6 +747,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     view?: MarkdownView
   ): boolean {
     const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!this.canMutateReadingHighlight(activeView, range)) return false;
     const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
     if (!file || !file.path || !selectedText || selectedText.trim().length < 2) return false;
 
@@ -730,9 +758,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     // 2. Live DOM Wrap (Mượt mà 0ms, không reload)
     if (action === "removed") {
-      if (activeView?.contentEl) {
-        unwrapHighlightsByText(activeView.contentEl, selectedText);
-      }
+      if (activeView?.contentEl && item) unwrapHighlightsByIds(activeView.contentEl, [item.id]);
     } else {
       if (range) {
         wrapRangeWithHighlight(range, highlightId, color, bg);
@@ -741,9 +767,23 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       }
     }
 
-    this.saveSettings();
     this.floatingHighlightToolbar?.hide();
     return true;
+  }
+
+  private canMutateReadingHighlight(view: MarkdownView | null | undefined, range?: Range | null): boolean {
+    if (!view || view.getMode() !== "preview") return false;
+    if (!range) return true;
+    const root: HTMLElement = view.contentEl;
+    const editable = '.cm-editor, [contenteditable]:not([contenteditable="false"])';
+    const accepts = (node: Node) => {
+      const element = node.nodeType === 1 ? node as Element : node.parentElement;
+      return root.contains(node) && Boolean(element) && !element!.closest(editable);
+    };
+    try {
+      if (!accepts(range.startContainer) || !accepts(range.endContainer)) return false;
+      return !Array.from(root.querySelectorAll(editable)).some(element => range.intersectsNode(element));
+    } catch { return false; }
   }
 
   /**
@@ -751,14 +791,14 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
    */
   clearLiveReadingHighlight(selectedText: string, view?: MarkdownView): boolean {
     const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView || activeView.getMode() !== "preview") return false;
     const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
     if (!file || !file.path || !selectedText) return false;
 
-    this.readingHighlightService.removeHighlight(file.path, selectedText);
+    const removed = this.readingHighlightService.removeHighlights(file.path, selectedText);
     if (activeView?.contentEl) {
-      unwrapHighlightsByText(activeView.contentEl, selectedText);
+      unwrapHighlightsByIds(activeView.contentEl, removed.map(item => item.id));
     }
-    this.saveSettings();
     this.floatingHighlightToolbar?.hide();
     return true;
   }
@@ -775,7 +815,6 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (activeView?.contentEl) {
       unwrapAllHighlights(activeView.contentEl);
     }
-    this.saveSettings();
     this.floatingHighlightToolbar?.hide();
     new Notice("Đã xóa toàn bộ highlight trong ghi chú hiện tại.", 2500);
     return true;
@@ -843,10 +882,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           this.togglePenMode(false);
         },
       });
-      const modeLabel =
-        this.currentPenAction === "clear"
-          ? "Tẩy xóa"
-          : HIGHLIGHT_COLORS[this.currentPenAction]?.label || "Vàng";
+      const modeLabel = HIGHLIGHT_COLORS[this.settings.highlighterPenColor || "yellow"]?.label || "Vàng";
       new Notice(
         `Đã BẬT chế độ bút dạ quang (${modeLabel}). Quét CHUỘT PHẢI để tô/tẩy highlight, Chuột trái bôi đen để tra từ dịch! (Nhấn Esc để tắt)`,
         4000
@@ -1119,7 +1155,8 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   /**
    * Ẩn các UI nổi (Trigger Icon và Popover) khi scroll hoặc đổi tab
    */
-  dismissFloatingUi(): void {
+  dismissFloatingUi(cancelLookup = true): void {
+    if (cancelLookup) this.invalidateLookup();
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
     }
@@ -1129,6 +1166,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (this.floatingHighlightToolbar) {
       this.floatingHighlightToolbar.hide();
     }
+  }
+
+  private invalidateLookup(): void {
+    this.lookupGeneration++;
+    this.providerManager?.cancelPending();
   }
 
   private getSelectionBoundingRect(): RectLike {
@@ -1170,7 +1212,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
    * Mở Modal cấu hình và điều khiển dịch song ngữ toàn bộ file Markdown
    */
   async openBilingualTranslationModal(file: TFile, editor?: Editor): Promise<void> {
-    const fileContent = editor ? editor.getValue() : await this.app.vault.read(file);
+    const diskContent = await this.app.vault.read(file);
+    const fileContent = editor ? editor.getValue() : diskContent;
+    const sourceView = editor ? this.app.workspace.getLeavesOfType("markdown")
+      .map(leaf => leaf.view).find((view): view is MarkdownView => view instanceof MarkdownView && view.editor === editor && view.file === file) : undefined;
+    const snapshot = { file, path: file.path, content: fileContent, diskContent, editor, view: sourceView };
     const docContext = this.extractDocumentContext(editor);
 
     const modal = new BilingualTranslationModal({
@@ -1180,22 +1226,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       fileContent,
       docContext,
       translationService: this.bilingualTranslationService,
-      onComplete: async (newContent: string, destination: "inplace" | "new_file") => {
-        if (destination === "inplace") {
-          if (editor) {
-            editor.setValue(newContent);
-            await this.app.vault.modify(file, newContent);
-          } else {
-            await this.app.vault.modify(file, newContent);
-          }
-        } else {
-          const dir =
-            file.parent && file.parent.path && file.parent.path !== "/"
-              ? `${file.parent.path}/`
-              : "";
-          const base = file.basename || file.name.replace(/\.[^/.]+$/, "");
-          const newPath = `${dir}${base} (Bilingual).md`;
-          const newFile = await this.app.vault.create(newPath, newContent);
+      onComplete: async (newContent: string, destination: "inplace" | "new_file", signal?: AbortSignal) => {
+        const newFile = await writeBilingualFile(this.app, snapshot, newContent, destination, signal);
+        if (destination === "new_file") {
           const leaf = this.app.workspace.getLeaf
             ? this.app.workspace.getLeaf(true)
             : this.app.workspace.activeLeaf;
@@ -1206,6 +1239,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
+    this.register(() => modal.close());
     modal.open();
   }
 }

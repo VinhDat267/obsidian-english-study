@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HighlighterPenPill } from "../../src/ui/HighlighterPenPill";
 
+// The document installed below returns plain-object DOM doubles.
+function asMockElement(element: HTMLElement | null | undefined): any { return element; }
+
 describe("HighlighterPenPill", () => {
   let docListeners: Record<string, ((...args: any[]) => void)[]>;
   let mockBody: any;
@@ -137,7 +140,7 @@ describe("HighlighterPenPill", () => {
     });
 
     expect(pill.isVisible()).toBe(true);
-    const el = pill.getElement();
+    const el = asMockElement(pill.getElement());
     expect(el).not.toBeNull();
     expect(el?.classList.contains("polyglot-pen-pill")).toBe(true);
     expect(el?.getAttribute("role")).toBe("status");
@@ -152,7 +155,7 @@ describe("HighlighterPenPill", () => {
     });
 
     expect(pill.getColor()).toBe("green");
-    const colorBtn = pill.getElement()?.querySelector(".pen-pill-color-btn");
+    const colorBtn = asMockElement(pill.getElement())?.querySelector(".pen-pill-color-btn");
     expect(colorBtn).not.toBeNull();
 
     pill.setColor("pink");
@@ -167,7 +170,7 @@ describe("HighlighterPenPill", () => {
       onClose: vi.fn(),
     });
 
-    const el = pill.getElement()!;
+    const el = asMockElement(pill.getElement())!;
     const colorBtn = el.querySelector(".pen-pill-color-btn");
     expect(colorBtn).toBeDefined();
 
@@ -196,7 +199,7 @@ describe("HighlighterPenPill", () => {
       onClose,
     });
 
-    const closeBtn = pill.getElement()?.querySelector(".pen-pill-close-btn");
+    const closeBtn = asMockElement(pill.getElement())?.querySelector(".pen-pill-close-btn");
     expect(closeBtn).toBeDefined();
 
     closeBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
@@ -212,7 +215,7 @@ describe("HighlighterPenPill", () => {
       onClose: vi.fn(),
     });
 
-    const el = pill.getElement()!;
+    const el = asMockElement(pill.getElement())!;
     const eraserBtn = el.querySelector(".pen-pill-eraser-btn");
     expect(eraserBtn).not.toBeNull();
 
@@ -232,7 +235,7 @@ describe("HighlighterPenPill", () => {
       onClose: vi.fn(),
     });
 
-    const el = pill.getElement()!;
+    const el = asMockElement(pill.getElement())!;
     const colorBtn = el.querySelector(".pen-pill-color-btn");
     colorBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
 
@@ -256,7 +259,7 @@ describe("HighlighterPenPill", () => {
     pill.setAction("clear");
     expect(pill.isEraser()).toBe(true);
 
-    const el = pill.getElement()!;
+    const el = asMockElement(pill.getElement())!;
     const colorBtn = el.querySelector(".pen-pill-color-btn");
     colorBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
 

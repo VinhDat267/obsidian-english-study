@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { App, Editor, MarkdownView, WorkspaceLeaf, Notice, createMockObsidianElement } from "obsidian";
-import EnglishStudyPlugin from "../main.ts";
+import EnglishStudyPlugin from "../main";
 import { DEFAULT_SETTINGS, LookupResult } from "../src/types";
 import { VIEW_TYPE_ENGLISH_STUDY } from "../src/ui/SidebarView";
 
@@ -164,8 +164,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
       expect(scrollEvent?.options).toBe(true);
 
-      // Workspace events (active-leaf-change, editor-menu, file-menu, file-open)
-      expect(plugin.events.length).toBe(4);
+      // Workspace events plus Vault rename/delete lifecycle.
+      expect(plugin.events.length).toBe(6);
 
       // Settings tab
       expect(plugin.settingTabs.length).toBe(1);
@@ -685,6 +685,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
 
       // In preview/reading mode
       mockView.mode = "preview";
+      mockView.contentEl.closest = vi.fn(() => null);
       const mockFile: any = { path: "Notes/Article.md" };
       mockView.file = mockFile;
       (global as any).window.getSelection = vi.fn(() => ({
@@ -1268,6 +1269,10 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const p = document.createElement("p");
       p.textContent = "Right drag to highlight text";
       mockView.contentEl.appendChild(p);
+      Object.assign(p, { nodeType: 1, closest: () => null });
+      const previewRange: any = { ...document.createRange(), startContainer: p, endContainer: p,
+        commonAncestorContainer: p, toString: () => "", cloneRange: () => previewRange };
+      (document.createRange as any).mockReturnValue(previewRange);
 
       (document as any).caretRangeFromPoint = vi.fn(() => document.createRange());
 
@@ -1302,6 +1307,10 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const p = document.createElement("p");
       p.textContent = "Right drag to clear";
       mockView.contentEl.appendChild(p);
+      Object.assign(p, { nodeType: 1, closest: () => null });
+      const previewRange: any = { ...document.createRange(), startContainer: p, endContainer: p,
+        commonAncestorContainer: p, toString: () => "", cloneRange: () => previewRange };
+      (document.createRange as any).mockReturnValue(previewRange);
 
       (document as any).caretRangeFromPoint = vi.fn(() => document.createRange());
 

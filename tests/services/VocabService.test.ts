@@ -282,7 +282,7 @@ describe("VocabService", () => {
       // Invoke callback directly to check return value is a string, not a Promise
       const result = callback(getDefaultTemplate());
       expect(typeof result).toBe("string");
-      expect(result instanceof Promise).toBe(false);
+      expect((result as unknown) instanceof Promise).toBe(false);
     });
 
     it("should save to separate language file when separateVocabFileByLanguage is enabled", async () => {

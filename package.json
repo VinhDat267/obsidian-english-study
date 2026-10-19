@@ -1,12 +1,14 @@
 {
   "name": "obsidian-polyglot-study",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Polyglot & English study assistant for Obsidian - multilingual dictionary lookup, CJK romanization, sentence translation, AI grammar, and contextual vocabulary notebook.",
   "main": "main.js",
   "scripts": {
     "build": "node esbuild.config.mjs",
     "dev": "node esbuild.config.mjs --watch",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "typecheck:production": "tsc --project tsconfig.production.json --noEmit",
     "typecheck:reading": "tsc --project tsconfig.reading.json --noEmit"
   },
   "keywords": [
@@ -23,15 +25,19 @@
     "translation",
     "vocabulary"
   ],
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  },
   "author": "Personal",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "esbuild": "^0.21.0",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
     "jsdom": "26.1.0",
     "obsidian": "^1.7.2",
     "tslib": "^2.6.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0"
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
   }
 }

@@ -1,4 +1,6 @@
 import { vi } from "vitest";
+// Load Obsidian's actual DOM extensions while keeping runtime calls mocked.
+import type {} from "../node_modules/obsidian/obsidian";
 
 export interface RequestUrlParam {
   url: string;
@@ -63,6 +65,11 @@ export class TFolder extends TAbstractFile {
 export class Vault {
   private files: Map<string, { file: TFile; content: string }> = new Map();
   private folders: Map<string, TFolder> = new Map();
+  public on = vi.fn((name: string, callback: (...args: any[]) => any) => ({ name, callback }));
+
+  getMarkdownFiles(): TFile[] {
+    return Array.from(this.files.values()).map(entry => entry.file).filter(file => file.extension === "md");
+  }
 
   getAbstractFileByPath(path: string): TAbstractFile | null {
     const normalized = path.replace(/^\/+|\/+$/g, "");
@@ -411,7 +418,7 @@ export class Setting {
   }
 
   addText(cb: (text: any) => any): this {
-    const textComponent = {
+    const textComponent: any = {
       _value: "",
       _placeholder: "",
       _onChange: null as any,
@@ -436,7 +443,7 @@ export class Setting {
   }
 
   addDropdown(cb: (dropdown: any) => any): this {
-    const dropdownComponent = {
+    const dropdownComponent: any = {
       _value: "",
       _options: {} as Record<string, string>,
       _onChange: null as any,
@@ -465,7 +472,7 @@ export class Setting {
   }
 
   addToggle(cb: (toggle: any) => any): this {
-    const toggleComponent = {
+    const toggleComponent: any = {
       _value: false,
       _onChange: null as any,
       setValue: vi.fn((val: boolean) => {
@@ -485,7 +492,7 @@ export class Setting {
   }
 
   addButton(cb: (button: any) => any): this {
-    const buttonComponent = {
+    const buttonComponent: any = {
       _buttonText: "",
       _icon: "",
       _cls: "",

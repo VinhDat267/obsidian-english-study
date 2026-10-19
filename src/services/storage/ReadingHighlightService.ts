@@ -1,34 +1,42 @@
 import { ReadingHighlightItem } from "../../types";
-import { HighlightColorKey } from "../../utils/textHighlighter";
+import { HIGHLIGHT_COLORS, HighlightColorKey } from "../../utils/textHighlighter";
+
+// NUL cannot occur in a Vault path. Keep ownership-ambiguous legacy data
+// persisted, but never expose it to a note or reassign it on a later startup.
+const LEGACY_RECOVERY_PREFIX = "\0polyglot-legacy:";
+const PATH_FORMAT_KEY = "\0polyglot-path-format:2";
+
+function isHighlightItem(value: unknown): value is ReadingHighlightItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<ReadingHighlightItem>;
+  return typeof item.id === "string" && item.id.length > 0 &&
+    typeof item.text === "string" && item.text.trim().length >= 2 &&
+    typeof item.color === "string" && Object.prototype.hasOwnProperty.call(HIGHLIGHT_COLORS, item.color) &&
+    typeof item.timestamp === "number" && Number.isFinite(item.timestamp);
+}
 
 export class ReadingHighlightService {
   private highlights: Record<string, ReadingHighlightItem[]>;
   private onSaveCallback?: () => Promise<void> | void;
+  private hasCanonicalPaths = true;
 
   constructor(
-    initialData: Record<string, ReadingHighlightItem[]> = {},
+    initialData: unknown = {},
     onSave?: () => Promise<void> | void
   ) {
-    this.highlights = {};
+    this.highlights = Object.create(null);
     this.setAllHighlights(initialData);
     this.onSaveCallback = onSave;
   }
 
   normalizePath(filePath: string): string {
     if (!filePath) return "";
-    let clean = filePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-    try {
-      clean = decodeURIComponent(clean);
-    } catch {}
-    clean = clean.toLowerCase();
-    if (clean.endsWith(".md")) {
-      clean = clean.slice(0, -3);
-    }
-    return clean;
+    return filePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   }
 
   getHighlights(filePath: string): ReadingHighlightItem[] {
     const norm = this.normalizePath(filePath);
+    if (norm.startsWith(LEGACY_RECOVERY_PREFIX)) return [];
     return this.highlights[norm] ? [...this.highlights[norm]] : [];
   }
 
@@ -39,7 +47,7 @@ export class ReadingHighlightService {
   ): { action: "added" | "updated" | "removed"; item?: ReadingHighlightItem } {
     const norm = this.normalizePath(filePath);
     const trimmedText = text.trim();
-    if (!trimmedText || trimmedText.length < 2) return { action: "removed" };
+    if (!norm || norm.includes("\0") || !trimmedText || trimmedText.length < 2) return { action: "removed" };
 
     if (!this.highlights[norm]) {
       this.highlights[norm] = [];
@@ -78,36 +86,36 @@ export class ReadingHighlightService {
   }
 
   removeHighlight(filePath: string, textOrId: string): boolean {
+    return this.removeHighlights(filePath, textOrId).length > 0;
+  }
+
+  removeHighlights(filePath: string, textOrId: string): ReadingHighlightItem[] {
     const norm = this.normalizePath(filePath);
+    if (norm.includes("\0")) return [];
     const list = this.highlights[norm];
-    if (!list || list.length === 0) return false;
+    if (!list || list.length === 0) return [];
 
     const trimmed = textOrId.trim();
     const lowerTrimmed = trimmed.toLowerCase();
 
-    // 1. Exact ID or exact text match first
-    let idx = list.findIndex(
-      (h) => h.id === textOrId || h.text.toLowerCase() === lowerTrimmed
-    );
-
-    // 2. Substring / partial match fallback (khi quẹt tẩy trúng một phần câu highlight dài)
-    if (idx === -1 && lowerTrimmed.length >= 2) {
-      idx = list.findIndex((h) => {
-        const hText = h.text.trim().toLowerCase();
-        return hText.includes(lowerTrimmed) || lowerTrimmed.includes(hText);
-      });
-    }
-
-    if (idx !== -1) {
-      list.splice(idx, 1);
-      this.triggerSave();
-      return true;
-    }
-    return false;
+    const exactId = list.some(h => h.id === textOrId);
+    const removed = list.filter(h => {
+      if (exactId) return h.id === textOrId;
+      if (lowerTrimmed.length < 2) return false;
+      const hText = h.text.trim().toLowerCase();
+      return hText.includes(lowerTrimmed) || lowerTrimmed.includes(hText);
+    });
+    if (removed.length === 0) return [];
+    const removedItems = new Set(removed);
+    this.highlights[norm] = list.filter(h => !removedItems.has(h));
+    if (this.highlights[norm].length === 0) delete this.highlights[norm];
+    this.triggerSave();
+    return removed;
   }
 
   clearHighlightsForFile(filePath: string): void {
     const norm = this.normalizePath(filePath);
+    if (norm.includes("\0")) return;
     if (this.highlights[norm]) {
       delete this.highlights[norm];
       this.triggerSave();
@@ -118,11 +126,81 @@ export class ReadingHighlightService {
     return this.highlights;
   }
 
-  setAllHighlights(data: Record<string, ReadingHighlightItem[]>): void {
-    this.highlights = {};
-    for (const [key, val] of Object.entries(data || {})) {
-      this.highlights[this.normalizePath(key)] = [...val];
+  setAllHighlights(data: unknown): void {
+    this.highlights = Object.create(null);
+    this.hasCanonicalPaths = true;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return;
+    const format = Object.prototype.hasOwnProperty.call(data, PATH_FORMAT_KEY)
+      ? (data as Record<string, unknown>)[PATH_FORMAT_KEY] : undefined;
+    this.hasCanonicalPaths = (Array.isArray(format) && format.length === 0) || Object.keys(data).length === 0;
+    if (this.hasCanonicalPaths) this.highlights[PATH_FORMAT_KEY] = [];
+    for (const [key, val] of Object.entries(data)) {
+      if (key === PATH_FORMAT_KEY) continue;
+      if (!Array.isArray(val)) continue;
+      const path = this.normalizePath(key);
+      if (!path || (path.includes("\0") && !path.startsWith(LEGACY_RECOVERY_PREFIX))) continue;
+      const valid = val.filter(isHighlightItem).map(item => ({ ...item }));
+      if (valid.length > 0) {
+        this.highlights[path] = [...(this.highlights[path] || []), ...valid];
+      }
     }
+  }
+
+  renamePath(oldPath: string, newPath: string): void {
+    const oldKey = this.normalizePath(oldPath);
+    const newKey = this.normalizePath(newPath);
+    if (!oldKey || !newKey || oldKey === newKey || oldKey.includes("\0") || newKey.includes("\0")) return;
+    const moved = Object.entries(this.highlights).filter(([key]) =>
+      !key.includes("\0") && (key === oldKey || key.startsWith(`${oldKey}/`))
+    );
+    for (const [key] of moved) delete this.highlights[key];
+    for (const [key, items] of moved) {
+      const destination = newKey + key.slice(oldKey.length);
+      this.highlights[destination] = [...(this.highlights[destination] || []), ...items];
+    }
+    if (moved.length > 0) this.triggerSave();
+  }
+
+  removePath(path: string): void {
+    const norm = this.normalizePath(path);
+    if (!norm || norm.includes("\0")) return;
+    let changed = false;
+    for (const key of Object.keys(this.highlights)) {
+      if (!key.includes("\0") && (key === norm || key.startsWith(`${norm}/`))) {
+        delete this.highlights[key];
+        changed = true;
+      }
+    }
+    if (changed) this.triggerSave();
+  }
+
+  migrateLegacyPaths(knownPaths: readonly string[]): void {
+    if (this.hasCanonicalPaths) return;
+    const known = new Set(knownPaths.map(path => this.normalizePath(path)).filter(Boolean));
+    const legacyOwners = new Map<string, Set<string>>();
+    for (const path of known) {
+      // Decode only to recognize keys written by the old, lossy storage format.
+      // Raw Vault identities never use this conversion.
+      let legacy = path;
+      try { legacy = decodeURIComponent(legacy); } catch {}
+      legacy = legacy.toLowerCase().replace(/\.md$/, "");
+      const owners = legacyOwners.get(legacy) || new Set<string>();
+      owners.add(path);
+      legacyOwners.set(legacy, owners);
+    }
+    const migrated: Record<string, ReadingHighlightItem[]> = Object.create(null);
+    for (const [key, items] of Object.entries(this.highlights)) {
+      const owners = new Set(legacyOwners.get(key));
+      if (known.has(key)) owners.add(key);
+      const destination = key.startsWith(LEGACY_RECOVERY_PREFIX) ? key
+        : owners.size === 1 ? owners.values().next().value as string
+        : LEGACY_RECOVERY_PREFIX + key;
+      migrated[destination] = [...(migrated[destination] || []), ...items];
+    }
+    migrated[PATH_FORMAT_KEY] = [];
+    this.highlights = migrated;
+    this.hasCanonicalPaths = true;
+    this.triggerSave();
   }
 
   private triggerSave(): void {

@@ -208,6 +208,8 @@ describe("EnglishStudySidebar", () => {
     const jaResult: LookupResult = {
       query: "勉強",
       type: "word",
+      contextSentence: "勉強",
+      contextSentenceClean: "勉強",
       vietnameseTranslation: "học tập",
       sourceLang: "ja",
       transliteration: "Benkyō",
@@ -228,6 +230,8 @@ describe("EnglishStudySidebar", () => {
     const loadingResult: LookupResult = {
       query: "paradigm",
       type: "word",
+      contextSentence: "paradigm",
+      contextSentenceClean: "paradigm",
       vietnameseTranslation: "mô hình",
       aiLoading: true,
       timestamp: Date.now(),

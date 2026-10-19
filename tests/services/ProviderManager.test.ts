@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { requestUrl } from "obsidian";
 import { ProviderManager } from "../../src/services/provider/ProviderManager";
+import { FreeDictService } from "../../src/services/provider/FreeDictService";
+import { GoogleTranslate, GoogleTranslationMeta } from "../../src/services/provider/GoogleTranslate";
+import { GeminiService } from "../../src/services/provider/GeminiService";
 import { LRUCache } from "../../src/utils/lruCache";
-import { DEFAULT_SETTINGS, LookupResult } from "../../src/types";
+import { DEFAULT_SETTINGS, LookupResult, PluginSettings } from "../../src/types";
 
 describe("ProviderManager", () => {
   let manager: ProviderManager;
@@ -123,11 +126,11 @@ describe("ProviderManager", () => {
 
       const initialTimestamp = res1.timestamp;
 
-      // Second lookup of the same word (case-insensitive)
+      // The same query and context can reuse its completed result
       vi.clearAllMocks();
       const res2 = await manager.lookup(
-        "Hypothesis",
-        "Another sentence with hypothesis."
+        "hypothesis",
+        "The scientist proposed a bold hypothesis."
       );
 
       // Should return from cache without network calls
@@ -744,6 +747,219 @@ describe("ProviderManager", () => {
         "Câu hỏi chuyên ngành?\nA. Lựa chọn 1\nB. Lựa chọn 2\nC. Lựa chọn 3\nD. Lựa chọn 4"
       );
     });
+  });
+});
+
+describe("lookup cache isolation and lifetime", () => {
+  const offline = { ...DEFAULT_SETTINGS, enableAiTranslation: false, enableAiGrammar: false };
+  const aiSettings = { ...offline, geminiApiKey: "offline-key", enableAiTranslation: true };
+  const ticks = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>(yes => { resolve = yes; });
+    return { promise, resolve };
+  }
+  function setup(settings: PluginSettings = offline) {
+    const manager = new ProviderManager(settings);
+    const providers = manager as unknown as {
+      freeDict: FreeDictService; googleTranslate: GoogleTranslate; geminiService: GeminiService;
+    };
+    const dictionary = vi.spyOn(providers.freeDict, "lookup").mockResolvedValue({
+      word: "bank", phonetic: "/bank/", definitions: [{ partOfSpeech: "noun", meaningEn: "a financial institution" }],
+    });
+    const google = vi.spyOn(providers.googleTranslate, "translateWithMeta").mockResolvedValue({
+      translation: "Google", detectedLang: "en",
+    });
+    const translate = vi.spyOn(providers.geminiService, "translateContext").mockResolvedValue("AI");
+    const grammar = vi.spyOn(providers.geminiService, "analyzeGrammar").mockResolvedValue("Grammar");
+    const legacy = vi.spyOn(providers.geminiService, "analyzeContext").mockResolvedValue("Legacy grammar");
+    return { manager, dictionary, google, translate, grammar, legacy };
+  }
+
+  it("isolates source language and preserves the requested document metadata", async () => {
+    const { manager, google } = setup();
+    google.mockImplementation(async (_text, source = "auto") => ({
+      translation: source === "de" ? "thuốc độc" : "quà tặng", detectedLang: source,
+    }));
+    await manager.lookup("Gift", "Gift", 0, { sourceLanguage: "en" }, { noteTitle: "English" });
+    const result = await manager.lookup("Gift", "Gift", 0, { sourceLanguage: "de" }, { noteTitle: "German" });
+    expect(result).toMatchObject({ vietnameseTranslation: "thuốc độc", sourceLang: "de", docContext: { noteTitle: "German" } });
+  });
+
+  it("keeps case-sensitive queries distinct", async () => {
+    const { manager, google } = setup();
+    google.mockImplementation(async query => ({ translation: query === "Polish" ? "tiếng Ba Lan" : "đánh bóng", detectedLang: "en" }));
+    await manager.lookup("Polish", "Polish", 0);
+    const result = await manager.lookup("polish", "polish", 0);
+    expect(result).toMatchObject({ query: "polish", vietnameseTranslation: "đánh bóng" });
+  });
+
+  it("recomputes contextual AI when the selected sentence changes", async () => {
+    const { manager, translate } = setup(aiSettings);
+    translate.mockImplementation(async (_text, context) => context.includes("river") ? "bờ sông" : "ngân hàng");
+    await manager.lookup("bank", "At the bank.", 0);
+    const result = await manager.lookup("bank", "By the river bank.", 0);
+    expect(result).toMatchObject({ aiTranslation: "bờ sông", contextSentenceClean: "By the river bank." });
+  });
+
+  it("recomputes contextual AI when only document metadata changes", async () => {
+    const { manager, translate } = setup(aiSettings);
+    translate.mockImplementation(async (_text, _context, _key, doc) => doc?.noteTitle || "");
+    await manager.lookup("bank", "bank", 0, undefined, { noteTitle: "Finance", heading: "Accounts", tags: ["money"] });
+    const result = await manager.lookup("bank", "bank", 0, undefined, { noteTitle: "Geography", heading: "River", tags: ["water"] });
+    expect(result).toMatchObject({ aiTranslation: "Geography", docContext: { noteTitle: "Geography", heading: "River", tags: ["water"] } });
+  });
+
+  it.each([
+    [{ translateEndpointUrl: "https://offline.invalid/new" }, "new endpoint"],
+    [{ preferredAccent: "uk" as const }, "new accent"],
+  ])("isolates result-affecting provider settings %j", async (changed, expected) => {
+    const { manager, google, dictionary } = setup();
+    google.mockImplementation(async (_text, _source, _target, endpoint) => ({
+      translation: endpoint === "https://offline.invalid/new" ? "new endpoint" : "Google", detectedLang: "en",
+    }));
+    dictionary.mockImplementation(async (_text, accent) => ({ word: "bank", definitions: [], phonetic: accent === "uk" ? "new accent" : "/bank/" }));
+    await manager.lookup("bank", "bank", 0);
+    const result = await manager.lookup("bank", "bank", 0, changed);
+    expect("preferredAccent" in changed ? result.phonetic : result.vietnameseTranslation).toBe(expected);
+  });
+
+  it("runs newly enabled AI instead of returning an earlier non-AI result", async () => {
+    const { manager } = setup();
+    await manager.lookup("bank", "bank", 0);
+    const result = await manager.lookup("bank", "bank", 0, aiSettings);
+    expect(result).toMatchObject({ aiTranslation: "AI", vietnameseTranslation: "AI", aiLoading: false });
+  });
+
+  it("does not reuse translation or grammar after their feature flags change", async () => {
+    const { manager } = setup(aiSettings);
+    await manager.lookup("bank", "bank", 0);
+    const result = await manager.lookup("bank", "bank", 0, { enableAiTranslation: false, enableAiGrammar: true });
+    expect(result.aiTranslation).toBeUndefined();
+    expect(result).toMatchObject({ vietnameseTranslation: "Google", aiGrammarNote: "Grammar", aiLoading: false });
+  });
+
+  it("invalidates credential changes without exposing credentials in cache keys", async () => {
+    const { manager, translate } = setup(aiSettings);
+    translate.mockImplementation(async (_text, _context, key) => key === "replacement-secret" ? "new credentials" : "old credentials");
+    await manager.lookup("bank", "bank", 0);
+    const result = await manager.lookup("bank", "bank", 0, { geminiApiKey: "replacement-secret" });
+    expect(result.aiTranslation).toBe("new credentials");
+    expect(manager.getCache().keys().join(" ")).not.toMatch(/offline-key|replacement-secret/);
+  });
+
+  it("isolates credentials when separate managers share an injected cache", async () => {
+    const cache = new LRUCache<LookupResult>();
+    const first = new ProviderManager(aiSettings, cache);
+    const second = new ProviderManager({ ...aiSettings, geminiApiKey: "second-offline-key" }, cache);
+    for (const [manager, translation] of [[first, "First account"], [second, "Second account"]] as const) {
+      vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValue(null);
+      vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValue({ translation: "Google" });
+      vi.spyOn((manager as any).geminiService, "translateContext").mockResolvedValue(translation);
+    }
+    await first.lookup("bank", "bank");
+    await second.lookup("bank", "bank");
+    const result = await first.lookup("bank", "bank");
+    expect(result.aiTranslation).toBe("First account");
+    expect(cache.keys().join(" ")).not.toMatch(/offline-key|second-offline-key/);
+  });
+
+  it("distinguishes an explicit empty document context from no document context", async () => {
+    const { manager } = setup();
+    await manager.lookup("bank", "bank");
+    const result = await manager.lookup("bank", "bank", 0, undefined, {});
+    expect(result.docContext).toEqual({});
+  });
+
+  it("returns independent snapshots and captures document tags before awaiting providers", async () => {
+    const { manager, google } = setup();
+    const gate = deferred<GoogleTranslationMeta>();
+    google.mockReturnValueOnce(gate.promise);
+    const doc = { noteTitle: "Finance", tags: ["money"] };
+    const pending = manager.lookup("bank", "bank", 0, undefined, doc);
+    doc.tags[0] = "mutated during request";
+    gate.resolve({ translation: "Google", detectedLang: "en" });
+    const first = await pending;
+    expect(first.docContext?.tags).toEqual(["money"]);
+    first.docContext!.tags![0] = "mutated result";
+    first.definitions![0].meaningEn = "mutated definition";
+    first.vietnameseTranslation = "mutated translation";
+    const second = await manager.lookup("bank", "bank", 0, undefined, { noteTitle: "Finance", tags: ["money"] });
+    expect(second).toMatchObject({ vietnameseTranslation: "Google", docContext: { tags: ["money"] }, definitions: [{ meaningEn: "a financial institution" }] });
+    expect(second).not.toBe(first);
+    expect(google).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps progressive base, AI callback and cached snapshots independent", async () => {
+    const { manager, translate } = setup(aiSettings);
+    const gate = deferred<string>();
+    translate.mockReturnValueOnce(gate.promise);
+    const updates: LookupResult[] = [];
+    const base = await manager.lookup("bank", "bank", 0, undefined, undefined, value => updates.push(value));
+    expect(base).toMatchObject({ vietnameseTranslation: "Google", aiLoading: true });
+    gate.resolve("AI");
+    await ticks();
+    expect(updates[0]).toMatchObject({ aiTranslation: "AI", aiLoading: false });
+    expect(base).toMatchObject({ vietnameseTranslation: "Google", aiLoading: true });
+    updates[0].vietnameseTranslation = "mutated callback";
+    const cached = await manager.lookup("bank", "bank", 0, undefined, undefined, () => {});
+    expect(cached.vietnameseTranslation).toBe("AI");
+  });
+
+  it("cancels pending AI and clears old results when runtime settings update", async () => {
+    const { manager, translate } = setup(aiSettings);
+    const gate = deferred<string>();
+    translate.mockReturnValueOnce(gate.promise);
+    const update = vi.fn();
+    await manager.lookup("bank", "bank", 0, undefined, undefined, update);
+    manager.updateSettings({ geminiApiKey: "replacement-secret" });
+    gate.resolve("stale AI");
+    await ticks();
+    expect(update).not.toHaveBeenCalled();
+    expect(manager.getCache().size).toBe(0);
+    const next = await manager.lookup("bank", "bank", 0);
+    expect(next.aiTranslation).toBe("AI");
+  });
+
+  it("does not publish or cache an AI fallback that finishes after cancellation", async () => {
+    const { manager, grammar, legacy } = setup({ ...aiSettings, enableAiTranslation: false, enableAiGrammar: true });
+    grammar.mockResolvedValueOnce(null);
+    const gate = deferred<string>();
+    legacy.mockReturnValueOnce(gate.promise);
+    const update = vi.fn();
+    await manager.lookup("bank", "bank", 0, undefined, undefined, update);
+    await ticks();
+    manager.cancelPending();
+    gate.resolve("stale fallback");
+    await ticks();
+    expect(update).not.toHaveBeenCalled();
+    expect(manager.getCache().size).toBe(0);
+  });
+
+  it("rejects cancellation while a legacy sentence falls back to Google", async () => {
+    const { manager, legacy, google } = setup({ ...offline, enableAiGrammar: true, geminiApiKey: "offline-key" });
+    legacy.mockResolvedValueOnce(null);
+    const gate = deferred<GoogleTranslationMeta>();
+    google.mockReturnValueOnce(gate.promise);
+    const pending = manager.lookup("This is a full sentence.", "This is a full sentence.");
+    await ticks();
+    manager.cancelPending();
+    gate.resolve({ translation: "stale Google", detectedLang: "en" });
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(manager.getCache().size).toBe(0);
+  });
+
+  it("uses progressive sentence grammar with the wrapper callback", async () => {
+    const { manager, legacy, grammar } = setup({ ...offline, enableAiGrammar: true, geminiApiKey: "offline-key" });
+    const gate = deferred<string>();
+    grammar.mockReturnValueOnce(gate.promise);
+    const update = vi.fn();
+    const base = await manager.lookup("This is a full sentence.", "This is a full sentence.", 0, undefined, { onAiUpdate: update });
+    expect(base).toMatchObject({ vietnameseTranslation: "Google", aiLoading: true });
+    expect(legacy).not.toHaveBeenCalled();
+    gate.resolve("Grammar");
+    await ticks();
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ aiGrammarNote: "Grammar", aiLoading: false }));
   });
 });
 

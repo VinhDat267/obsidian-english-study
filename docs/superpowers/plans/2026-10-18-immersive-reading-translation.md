@@ -10,7 +10,7 @@
 
 **Spec:** [2026-10-18-immersive-reading-translation-design.md](../specs/2026-10-18-immersive-reading-translation-design.md), được người dùng duyệt ngày 2026-10-18.
 
-**Status:** Người dùng đã duyệt và chọn Native. Đã triển khai, review toàn nhánh, sửa hai lỗi Important bằng test hồi quy và kiểm thử cục bộ. Chờ quyết định tích hợp nhánh.
+**Status:** Đã triển khai Native, review và merge qua PR #2 thành `781353d`. Bằng chứng phía dưới là lịch sử thực hiện ngày 2026-10-18; trạng thái hiện tại và bản sửa audit 1.1.1 ở `docs/audits/2026-10-19-remediation.md`.
 
 ## Global Constraints
 

@@ -28,15 +28,146 @@ describe("ReadingHighlightService", () => {
     expect(service.getHighlights("folder/note%2Emd")).toBeDefined();
   });
 
-  it("normalizes URL-encoded paths with spaces correctly", () => {
+  it("keeps literal percent-encoded filenames distinct from spaces", () => {
     const service = new ReadingHighlightService({
       "spm/week 2/quiz.md": [
         { id: "1", text: "hello", color: "yellow", timestamp: 100 },
       ],
     });
 
-    expect(service.getHighlights("spm/week%202/quiz.md")).toHaveLength(1);
+    expect(service.getHighlights("spm/week%202/quiz.md")).toHaveLength(0);
     expect(service.getHighlights("spm/week 2/quiz.md")).toHaveLength(1);
+  });
+
+  it("keeps case and markdown extensions in raw Vault identities", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("Week 2.md", "space note", "yellow");
+    service.addHighlight("Week%202.md", "percent note", "blue");
+    service.addHighlight("week 2.md", "lowercase note", "green");
+    service.addHighlight("Week 2", "extensionless note", "pink");
+
+    expect(service.getHighlights("Week 2.md").map(h => h.text)).toEqual(["space note"]);
+    expect(service.getHighlights("Week%202.md").map(h => h.text)).toEqual(["percent note"]);
+    expect(service.getHighlights("week 2.md").map(h => h.text)).toEqual(["lowercase note"]);
+    expect(service.getHighlights("Week 2").map(h => h.text)).toEqual(["extensionless note"]);
+  });
+
+  it("removes every record touched by one eraser selection and returns their identities", () => {
+    const service = new ReadingHighlightService();
+    const alpha = service.addHighlight("doc.md", "alpha", "yellow").item!;
+    const beta = service.addHighlight("doc.md", "beta", "blue").item!;
+    service.addHighlight("doc.md", "untouched", "green");
+
+    expect(service.removeHighlights("doc.md", "alpha and beta").map(h => h.id)).toEqual([alpha.id, beta.id]);
+    expect(service.getHighlights("doc.md").map(h => h.text)).toEqual(["untouched"]);
+  });
+
+  it("removes all overlapping phrases but prioritizes an exact ID", () => {
+    const service = new ReadingHighlightService();
+    const phrase = service.addHighlight("doc.md", "neural network learns", "yellow").item!;
+    const word = service.addHighlight("doc.md", "neural", "blue").item!;
+    expect(service.removeHighlights("doc.md", word.id).map(h => h.id)).toEqual([word.id]);
+    expect(service.removeHighlights("doc.md", "neural").map(h => h.id)).toEqual([phrase.id]);
+    expect(service.removeHighlights("doc.md", " ")).toEqual([]);
+  });
+
+  it("moves one file and an entire folder without capturing sibling prefixes", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("folder/note.md", "first", "yellow");
+    service.addHighlight("folder/sub/other.md", "second", "blue");
+    service.addHighlight("folder-other/note.md", "sibling", "green");
+
+    service.renamePath("folder/note.md", "folder/renamed.md");
+    expect(service.getHighlights("folder/note.md")).toEqual([]);
+    expect(service.getHighlights("folder/renamed.md")[0].text).toBe("first");
+    service.renamePath("folder", "moved");
+    expect(service.getHighlights("moved/renamed.md")[0].text).toBe("first");
+    expect(service.getHighlights("moved/sub/other.md")[0].text).toBe("second");
+    expect(service.getHighlights("folder-other/note.md")[0].text).toBe("sibling");
+  });
+
+  it("removes deleted files and folders and saves each mutation once", () => {
+    const save = vi.fn();
+    const service = new ReadingHighlightService({}, save);
+    service.addHighlight("folder/one.md", "first", "yellow");
+    service.addHighlight("folder/two.md", "second", "blue");
+    service.addHighlight("folder-other/two.md", "sibling", "green");
+    save.mockClear();
+
+    service.removePath("folder/one.md");
+    service.removePath("folder");
+    service.removePath("missing.md");
+    expect(service.getHighlights("folder/one.md")).toEqual([]);
+    expect(service.getHighlights("folder/two.md")).toEqual([]);
+    expect(service.getHighlights("folder-other/two.md")[0].text).toBe("sibling");
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+
+  it("migrates an unambiguous legacy path and retains canonical records", () => {
+    const item = { id: "legacy", text: "saved phrase", color: "yellow" as const, timestamp: 10 };
+    const service = new ReadingHighlightService({ "folder/week 2": [item] });
+    service.migrateLegacyPaths(["Folder/Week 2.md", "unrelated.md"]);
+    expect(service.getHighlights("Folder/Week 2.md")).toEqual([item]);
+    expect(Object.keys(service.getAllHighlights()).filter(key => !key.includes("\0"))).toEqual(["Folder/Week 2.md"]);
+    service.migrateLegacyPaths(["Folder/Week 2.md"]);
+    expect(service.getHighlights("Folder/Week 2.md")).toEqual([item]);
+  });
+
+  it("retains ambiguous legacy data without attaching it to either colliding file", () => {
+    const item = { id: "legacy", text: "unknown owner", color: "yellow" as const, timestamp: 10 };
+    const service = new ReadingHighlightService({ "week 2": [item] });
+    service.migrateLegacyPaths(["Week 2.md", "Week%202.md"]);
+    expect(service.getHighlights("Week 2.md")).toEqual([]);
+    expect(service.getHighlights("Week%202.md")).toEqual([]);
+    expect(service.getAllHighlights()["\0polyglot-legacy:week 2"]).toEqual([item]);
+    const reloaded = new ReadingHighlightService(JSON.parse(JSON.stringify(service.getAllHighlights())));
+    reloaded.migrateLegacyPaths(["Week 2.md"]);
+    expect(reloaded.getHighlights("Week 2.md")).toEqual([]);
+    expect(reloaded.getAllHighlights()["\0polyglot-legacy:week 2"]).toEqual([item]);
+  });
+
+  it("supports prototype-named paths and validates malformed persisted records", () => {
+    const service = new ReadingHighlightService({
+      "bad.md": { unexpected: true },
+      "mixed.md": [null, { id: "bad", text: 3 }, { id: "bad-color", text: "phrase", color: "constructor", timestamp: 1 },
+        { id: "valid", text: "safe phrase", color: "green", timestamp: 1 }],
+    } as any);
+    expect(() => service.addHighlight("constructor.md", "constructor phrase", "yellow")).not.toThrow();
+    expect(() => service.addHighlight("__proto__", "prototype phrase", "blue")).not.toThrow();
+    expect(service.getHighlights("constructor.md")[0].text).toBe("constructor phrase");
+    expect(service.getHighlights("__proto__")[0].text).toBe("prototype phrase");
+    expect(service.getHighlights("bad.md")).toEqual([]);
+    expect(service.getHighlights("mixed.md").map(h => h.id)).toEqual(["valid"]);
+  });
+
+  it("preserves all legacy records when a migration destination is also an ambiguous old key", () => {
+    const first = { id: "first", text: "first owner", color: "yellow" as const, timestamp: 10 };
+    const ambiguous = { id: "ambiguous", text: "unknown owner", color: "blue" as const, timestamp: 10 };
+    const service = new ReadingHighlightService({ "foo": [first], "foo.md": [ambiguous] });
+    service.migrateLegacyPaths(["foo.md", "foo.md.md"]);
+    expect(service.getHighlights("foo.md")).toEqual([first]);
+    expect(service.getHighlights("foo.md.md")).toEqual([]);
+    expect(service.getAllHighlights()["\0polyglot-legacy:foo.md"]).toEqual([ambiguous]);
+  });
+
+  it("keeps current canonical data identifiable across reload even with double extensions", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("foo.md", "current owner", "green");
+    const reloaded = new ReadingHighlightService(JSON.parse(JSON.stringify(service.getAllHighlights())));
+    reloaded.migrateLegacyPaths(["foo.md", "foo.md.md"]);
+    expect(reloaded.getHighlights("foo.md").map(h => h.text)).toEqual(["current owner"]);
+    expect(reloaded.getHighlights("foo.md.md")).toEqual([]);
+  });
+
+  it("retains orphan legacy records without assigning them to a later new file", () => {
+    const item = { id: "orphan", text: "old owner", color: "yellow" as const, timestamp: 10 };
+    const service = new ReadingHighlightService({ "deleted": [item] });
+    service.migrateLegacyPaths(["unrelated.md"]);
+    expect(service.getAllHighlights()["\0polyglot-legacy:deleted"]).toEqual([item]);
+    const reloaded = new ReadingHighlightService(JSON.parse(JSON.stringify(service.getAllHighlights())));
+    reloaded.migrateLegacyPaths(["deleted.md"]);
+    expect(reloaded.getHighlights("deleted.md")).toEqual([]);
+    expect(reloaded.getAllHighlights()["\0polyglot-legacy:deleted"]).toEqual([item]);
   });
 
   it("adds a new highlight and triggers save callback", () => {

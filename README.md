@@ -4,7 +4,7 @@
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vitest](https://img.shields.io/badge/Tests-393%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
+[![Vitest](https://img.shields.io/badge/Tests-583%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -35,6 +35,15 @@ Open a note in **Reading Mode**, then use the **languages icon in the note heade
 - Successful translations are cached in memory, up to 200 entries. Changes to translation settings end existing reading sessions; toggle again to apply them.
 
 The separate **Dịch song ngữ file Markdown hiện tại** command writes bilingual Markdown to the current file or a new file. Use the reading command above for a temporary view.
+
+File export checks cancellation and source conflicts before committing. If the source/editor changed or is not synchronized with disk, in-place export is rejected; save/sync the note first or choose a new file. A failed or incomplete translation writes nothing. Existing exports are preserved by choosing a unique filename.
+
+### 🖍️ Reading Highlights
+
+- Use the highlight toolbar or continuous pen in **Reading Mode**. Right-drag paints or erases; left selection remains available for translation. Edit Mode and contenteditable regions are excluded.
+- Highlights persist in plugin settings without changing the original Markdown, including Japanese/Chinese text and phrases spanning inline tags.
+- Erasing removes all fragments of the affected saved highlight IDs. Note/folder renames migrate the records; deleted paths are cleaned up.
+- Raw Vault paths preserve case and literal percent characters. Legacy path keys migrate once when ownership is unambiguous. Ambiguous/orphan legacy records remain stored under `\u0000polyglot-legacy:` recovery keys and are not assigned to a guessed note; the old lossy format cannot reliably identify their original owner.
 
 ### 🌍 1. Multilingual Study Expansion (Đa Ngôn Ngữ Toàn Diện)
 - **Automatic Script & Language Detection**:
@@ -108,7 +117,7 @@ The separate **Dịch song ngữ file Markdown hiện tại** command writes bil
   - **Deep Dive Tab**: Displays comprehensive definitions, grammar notes, phonetic IPA, Romaji/Pinyin, and audio player.
   - **Session History Tab**: Logs every lookup during your active session.
 - **0ms Instant LRU Cache**:
-  - In-RAM LRU Cache stores up to 200 items isolated by target language (`${targetLang}:${query}`) for immediate, zero-latency recall.
+  - In-RAM LRU Cache stores up to 200 items isolated by exact query, source/target languages, context, document metadata, endpoint and AI settings. Provider setting changes invalidate pending work and cached results.
 
 ---
 
@@ -173,15 +182,18 @@ The separate **Dịch song ngữ file Markdown hiện tại** command writes bil
 ---
 
 ### Option 2: Build From Source
+
+Development requires Node.js 22.12+ on the 22.x line, 24.x, or 26+. This is a build/test toolchain requirement, not an additional runtime dependency inside Obsidian.
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/VinhDat267/obsidian-polyglot-study.git
 cd obsidian-polyglot-study
 
 # 2. Install dependencies
-npm install
+npm ci
 
-# 3. Run full test suite (393 tests)
+# 3. Run full test suite (583 tests)
 npm test
 
 # 4. Build production bundle
@@ -233,10 +245,14 @@ Open **Settings > Polyglot Study Assistant** to customize your environment:
 The project is built on strict **Test-Driven Development (TDD)** principles:
 
 ```bash
-# Run 393 tests across 26 test suites
+# Run 583 tests across 34 test suites
 npm test
 
-# Check the reading feature against the real Obsidian API types
+# Typecheck application and tests, then all production code against real Obsidian types
+npm run typecheck
+npm run typecheck:production
+
+# Check the reading feature independently against the real Obsidian API types
 npm run typecheck:reading
 
 # Run tests with coverage
@@ -253,7 +269,7 @@ npx vitest run --coverage
 - `SettingsTab`: All 5 setting groups verification, dropdown change handlers, toggle synchronization.
 - `main`: Full plugin lifecycle, ribbon icons, commands, Edit and Reading mode lookups.
 
-Verification limits: automated tests use a mocked Obsidian host and HTTP. The reading feature passes its dedicated check against the installed real Obsidian API types; the repository-wide typecheck still has pre-existing errors. Browser fixture checks cover representative light/dark themes, narrow panes, and 200% CSS zoom. Actual Obsidian and live-provider acceptance remain separate and were not run for this change.
+Verification limits: automated tests use a mocked Obsidian host and HTTP. All production code and the reading module pass checks against the installed real Obsidian API types; the full application/test typecheck also passes. Version 1.1.1 includes audit regression tests for safe file commits, cancellation, cache isolation, AI language targets and highlight persistence. Browser fixture checks from the original reading feature cover representative light/dark themes, narrow panes, and 200% CSS zoom. Actual Obsidian and live-provider acceptance remain separate and were not run for the audit fixes. See [the remediation record](docs/audits/2026-10-19-remediation.md).
 
 ---
 
@@ -262,7 +278,7 @@ Verification limits: automated tests use a mocked Obsidian host and HTTP. The re
 - **Language**: [TypeScript 5.4](https://www.typescriptlang.org) (Strict mode)
 - **Runtime**: [Obsidian Plugin API](https://github.com/obsidianmd/obsidian-api)
 - **Bundler**: [esbuild](https://esbuild.github.io) (CommonJS target ES2018)
-- **Test Runner**: [Vitest 1.6](https://vitest.dev)
+- **Test Runner**: [Vitest 5.0.5](https://vitest.dev), Vite 8.3.4; esbuild 0.28.2
 - **Styling**: Scoped CSS adhering 100% to Obsidian Theme Tokens (`taste-skill` verified)
 
 ---
