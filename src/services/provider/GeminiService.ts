@@ -1,5 +1,5 @@
 import { BaseProvider } from "./BaseProvider";
-import { DocumentContextMeta } from "../../types";
+import { DocumentContextMeta, TutorSession } from "../../types";
 
 export interface GeminiTestResult {
   ok: boolean;
@@ -371,6 +371,148 @@ Yêu cầu BẮT BUỘC:
   }
 
   /**
+   * 4. MINI CONVERSATIONAL AI TUTOR (chatWithTutor)
+   * Multi-turn chat API calling Gemini v1beta generateContent with
+   * systemInstruction, alternating contents, generationConfig, and 429 fallback.
+   */
+  async chatWithTutor(
+    session: TutorSession,
+    apiKey: string,
+    model: string = "gemini-flash-latest",
+    systemInstructionText?: string
+  ): Promise<string | null> {
+    const cleanKey = apiKey ? apiKey.trim() : "";
+    if (!cleanKey) return null;
+
+    if (!session || !Array.isArray(session.messages) || session.messages.length === 0) {
+      return null;
+    }
+
+    const validMessages = session.messages.filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "model") &&
+        typeof m.content === "string" &&
+        m.content.trim() !== ""
+    );
+
+    if (validMessages.length === 0) {
+      return null;
+    }
+
+    // Chuẩn bị system instruction
+    let instruction = systemInstructionText ? systemInstructionText.trim() : "";
+    if (!instruction) {
+      const contextHint = this.buildContextHint(session.docContext);
+      const targetLangName = session.targetLang
+        ? this.targetLanguageName(session.targetLang)
+        : "tiếng Việt";
+      instruction = contextHint
+        ? `Bạn là Polyglot AI Tutor, một gia sư học thuật và chuyên gia ngôn ngữ xuất sắc. Ngữ cảnh tài liệu: ${contextHint}. Trả lời bằng ${targetLangName}.`
+        : `Bạn là Polyglot AI Tutor, một gia sư học thuật và chuyên gia ngôn ngữ xuất sắc. Trả lời bằng ${targetLangName}.`;
+    }
+
+    // Tạo contents tuân thủ định dạng luân phiên vai trò của Gemini API
+    const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+    for (const msg of validMessages) {
+      const role: "user" | "model" = msg.role === "model" ? "model" : "user";
+      const last = contents[contents.length - 1];
+      if (last && last.role === role) {
+        last.parts.push({ text: msg.content.trim() });
+      } else {
+        contents.push({
+          role,
+          parts: [{ text: msg.content.trim() }],
+        });
+      }
+    }
+
+    const payload = {
+      systemInstruction: {
+        parts: [{ text: instruction }],
+      },
+      contents,
+      generationConfig: {
+        temperature: 0.3,
+        topP: 0.85,
+      },
+    };
+
+    let selectedModel = model;
+    if (selectedModel === "gemini-2.0-flash" || selectedModel === "gemini-2.5-flash") {
+      selectedModel = "gemini-flash-latest";
+    }
+
+    if (this.isFlashExhausted && selectedModel === "gemini-flash-latest") {
+      selectedModel = "gemini-flash-lite-latest";
+    }
+
+    const tryRequest = async (
+      modelName: string
+    ): Promise<{ text: string | null; status?: number }> => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        modelName
+      )}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+      try {
+        const res = await this.executeRequest(
+          url,
+          {
+            method: "POST",
+            contentType: "application/json",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          },
+          10000
+        );
+
+        if (!res || res.status !== 200) {
+          return { text: null, status: res?.status };
+        }
+
+        let data = res.json;
+        if (!data && res.text) {
+          try {
+            data = JSON.parse(res.text);
+          } catch {
+            return { text: null, status: 200 };
+          }
+        }
+
+        const parts = data?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts) && parts.length > 0) {
+          const text = parts
+            .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
+            .join("")
+            .trim();
+          return { text: text || null, status: 200 };
+        }
+
+        return { text: null, status: 200 };
+      } catch {
+        return { text: null };
+      }
+    };
+
+    const firstAttempt = await tryRequest(selectedModel);
+    if (firstAttempt.status === 200 && firstAttempt.text) {
+      return firstAttempt.text;
+    }
+
+    // Nếu gặp mã lỗi 429 trên gemini-flash-latest, thử fallback sang gemini-flash-lite-latest
+    if (firstAttempt.status === 429 && selectedModel !== "gemini-flash-lite-latest") {
+      this.isFlashExhausted = true;
+      const fallbackAttempt = await tryRequest("gemini-flash-lite-latest");
+      if (fallbackAttempt.status === 200 && fallbackAttempt.text) {
+        return fallbackAttempt.text;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Kiểm tra kết nối API Key hợp lệ (boolean)
    */
   async testConnection(apiKey: string): Promise<boolean> {
@@ -378,3 +520,4 @@ Yêu cầu BẮT BUỘC:
     return res.ok;
   }
 }
+
