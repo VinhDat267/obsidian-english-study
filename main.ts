@@ -12,9 +12,22 @@ import { BilingualTranslationModal } from "./src/ui/BilingualTranslationModal";
 import { RectLike } from "./src/utils/domHelper";
 import { registerReadingTranslation } from "./src/reading/registerReadingTranslation";
 import type { ReadingTranslationController } from "./src/reading/ReadingTranslationController";
-import { applyHighlight, HighlightAction } from "./src/utils/textHighlighter";
+import {
+  applyHighlight,
+  HighlightAction,
+  HighlightColorKey,
+  HIGHLIGHT_COLORS,
+} from "./src/utils/textHighlighter";
 import { ReadingHighlightService } from "./src/services/storage/ReadingHighlightService";
-import { createReadingHighlightPostProcessor } from "./src/reading/readingHighlightPostProcessor";
+import {
+  createReadingHighlightPostProcessor,
+  applyHighlightsToElement,
+} from "./src/reading/readingHighlightPostProcessor";
+import { FloatingHighlightToolbar } from "./src/ui/FloatingHighlightToolbar";
+import {
+  wrapRangeWithHighlight,
+  unwrapHighlightsByText,
+} from "./src/utils/domHighlightHelper";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
   readingTranslationController?: ReadingTranslationController;
@@ -26,6 +39,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   bilingualTranslationService!: BilingualTranslationService;
   floatingTrigger!: FloatingTrigger;
   floatingPopover!: FloatingPopover;
+  floatingHighlightToolbar!: FloatingHighlightToolbar;
   sidebarView: EnglishStudySidebar | null = null;
   private lastLookupResult: LookupResult | null = null;
   private selectionDebounceTimer: any = null;
@@ -43,6 +57,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     );
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
+    this.floatingHighlightToolbar = new FloatingHighlightToolbar();
     this.readingTranslationController = registerReadingTranslation(this, () => this.settings);
     this.registerMarkdownPostProcessor(
       createReadingHighlightPostProcessor(this.readingHighlightService)
@@ -270,7 +285,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         (e: Event) => {
           const target = e?.target as Node | null;
           const popoverEl = this.floatingPopover?.getElement();
-          if (popoverEl && target && (popoverEl === target || popoverEl.contains(target))) {
+          const toolbarEl = this.floatingHighlightToolbar?.getElement();
+          if (
+            (popoverEl && target && (popoverEl === target || popoverEl.contains(target))) ||
+            (toolbarEl && target && (toolbarEl === target || toolbarEl.contains(target)))
+          ) {
             return;
           }
           this.dismissFloatingUi();
@@ -595,6 +614,59 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   }
 
   /**
+   * Áp dụng highlight trực tiếp trên live DOM (0ms, không reload, không giật màn hình)
+   */
+  applyLiveReadingHighlight(
+    color: HighlightColorKey,
+    selectedText: string,
+    range: Range | null,
+    view?: MarkdownView
+  ): boolean {
+    const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
+    const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
+    if (!file || !file.path || !selectedText) return false;
+
+    // 1. Lưu vào service
+    const { action, item } = this.readingHighlightService.addHighlight(file.path, selectedText, color);
+    const highlightId = item?.id || `hl-${Date.now()}`;
+    const bg = HIGHLIGHT_COLORS[color]?.bg || "rgba(250, 204, 21, 0.4)";
+
+    // 2. Live DOM Wrap (Mượt mà 0ms, không reload)
+    if (action === "removed") {
+      if (activeView?.contentEl) {
+        unwrapHighlightsByText(activeView.contentEl, selectedText);
+      }
+    } else {
+      if (range) {
+        wrapRangeWithHighlight(range, highlightId, color, bg);
+      } else if (activeView?.contentEl) {
+        applyHighlightsToElement(activeView.contentEl, this.readingHighlightService.getHighlights(file.path));
+      }
+    }
+
+    this.saveSettings();
+    this.floatingHighlightToolbar?.hide();
+    return true;
+  }
+
+  /**
+   * Xóa highlight trực tiếp trên live DOM (0ms, không reload)
+   */
+  clearLiveReadingHighlight(selectedText: string, view?: MarkdownView): boolean {
+    const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
+    const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
+    if (!file || !file.path || !selectedText) return false;
+
+    this.readingHighlightService.removeHighlight(file.path, selectedText);
+    if (activeView?.contentEl) {
+      unwrapHighlightsByText(activeView.contentEl, selectedText);
+    }
+    this.saveSettings();
+    this.floatingHighlightToolbar?.hide();
+    return true;
+  }
+
+  /**
    * Bôi màu highlight hoặc gỡ highlight trực quan trong Reading Mode (Không sửa file markdown)
    */
   highlightReadingSelection(action: HighlightAction = "yellow", view?: MarkdownView): boolean {
@@ -607,30 +679,25 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (!isPreview) return false;
 
     let selectedText = "";
+    let range: Range | null = null;
     if (typeof window !== "undefined" && window.getSelection) {
       const sel = window.getSelection();
       selectedText =
         sel && typeof sel.toString === "function" ? sel.toString().trim() : "";
+      if (sel && sel.rangeCount > 0) {
+        range = sel.getRangeAt(0).cloneRange();
+      }
     }
     if (!selectedText && this.lastLookupResult) {
       selectedText = this.lastLookupResult.query;
     }
     if (!selectedText) return false;
 
-    const file = activeView.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
-    if (!file || !file.path) return false;
-
     if (action === "clear") {
-      this.readingHighlightService.removeHighlight(file.path, selectedText);
+      return this.clearLiveReadingHighlight(selectedText, activeView);
     } else {
-      this.readingHighlightService.addHighlight(file.path, selectedText, action);
+      return this.applyLiveReadingHighlight(action, selectedText, range, activeView);
     }
-
-    this.saveSettings();
-    if (activeView.previewMode && typeof activeView.previewMode.rerender === "function") {
-      activeView.previewMode.rerender(true);
-    }
-    return true;
   }
 
   /**
@@ -702,6 +769,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
 
     // 2. Nếu không có selection trong editor -> kiểm tra DOM selection (Reading mode)
+    let readingRange: Range | null = null;
     let readingContext: { paragraph: string; cursorOffset: number } | null = null;
     if (!isEditorMode && typeof window !== "undefined" && window.getSelection) {
       const sel = window.getSelection();
@@ -717,6 +785,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
         if (isInsideView) {
           selectedText = domSel;
+          if (sel && sel.rangeCount > 0) {
+            try {
+              readingRange = sel.getRangeAt(0).cloneRange();
+            } catch {}
+          }
           readingContext = this.extractReadingModeContext(sel!);
         }
       }
@@ -724,6 +797,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     if (!selectedText) {
       this.dismissFloatingTrigger();
+      this.floatingHighlightToolbar?.hide();
       return;
     }
 
@@ -738,6 +812,35 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     if (this.settings.triggerMode === "hotkey-only") {
       this.dismissFloatingTrigger();
+      this.floatingHighlightToolbar?.hide();
+      return;
+    }
+
+    // 4. Nếu ở Reading mode -> hiển thị thanh FloatingHighlightToolbar độc lập tức thì (0ms, không chờ dịch)
+    if (!isEditorMode) {
+      this.dismissFloatingTrigger();
+      const rect = this.getSelectionBoundingRect();
+      this.floatingHighlightToolbar.show(
+        rect,
+        selectedText,
+        readingRange,
+        {
+          onHighlight: (color) => {
+            this.applyLiveReadingHighlight(color, selectedText, readingRange, activeView);
+          },
+          onClear: () => {
+            this.clearLiveReadingHighlight(selectedText, activeView);
+          },
+          onLookup: () => {
+            this.floatingHighlightToolbar.hide();
+            this.performLookupFromReading(
+              selectedText,
+              readingContext?.paragraph || selectedText,
+              readingContext?.cursorOffset || 0
+            );
+          },
+        }
+      );
       return;
     }
 
@@ -821,6 +924,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
     if (this.floatingPopover) {
       this.floatingPopover.hide();
+    }
+    if (this.floatingHighlightToolbar) {
+      this.floatingHighlightToolbar.hide();
     }
   }
 

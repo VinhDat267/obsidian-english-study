@@ -653,7 +653,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(highlights).toHaveLength(1);
       expect(highlights[0].text).toBe("important phrase");
       expect(highlights[0].color).toBe("yellow");
-      expect(rerenderSpy).toHaveBeenCalledWith(true);
+      // Zero-reload: previewMode.rerender is eliminated for smooth 60fps live DOM updates
+      expect(rerenderSpy).not.toHaveBeenCalled();
 
       // Editor was NEVER modified (0 edits to markdown file)
       expect(editor.getValue()).not.toContain("==");
@@ -680,7 +681,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
 
       // Highlight removed
       expect(plugin.readingHighlightService.getHighlights("Notes/Article.md")).toHaveLength(0);
-      expect(rerenderSpy).toHaveBeenCalledWith(true);
+      expect(rerenderSpy).not.toHaveBeenCalled();
       expect(editor.getValue()).not.toContain("==");
     });
 
@@ -750,7 +751,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(popoverSpy).toHaveBeenCalled();
     });
 
-    it("should detect reading view selection in handleSelectionDebounced and show trigger", () => {
+    it("should detect reading view selection in handleSelectionDebounced and show floatingHighlightToolbar", () => {
       plugin.settings.triggerMode = "icon";
       (global as any).window.getSelection = vi.fn(() => ({
         rangeCount: 1,
@@ -772,19 +773,28 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
             width: 100,
             height: 20,
           }),
+          cloneRange: vi.fn(() => ({} as Range)),
         }),
       }));
 
-      const triggerShowSpy = vi.spyOn(plugin.floatingTrigger, "show");
+      const toolbarShowSpy = vi.spyOn(plugin.floatingHighlightToolbar, "show");
 
       plugin.handleSelectionDebounced();
       vi.advanceTimersByTime(150);
 
-      expect(triggerShowSpy).toHaveBeenCalled();
+      expect(toolbarShowSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        "serendipity",
+        expect.anything(),
+        expect.objectContaining({
+          onHighlight: expect.any(Function),
+          onClear: expect.any(Function),
+          onLookup: expect.any(Function),
+        })
+      );
     });
 
-    it("should auto-popup in Reading mode when triggerMode is auto-popup", () => {
-      plugin.settings.triggerMode = "auto-popup";
+    it("should trigger performLookupFromReading when onLookup is called from floatingHighlightToolbar", () => {
       (global as any).window.getSelection = vi.fn(() => ({
         rangeCount: 1,
         toString: () => "serendipity",
@@ -792,6 +802,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         getRangeAt: () => ({
           commonAncestorContainer: {
             nodeType: 1,
+            parentElement: mockView.contentEl,
             closest: vi.fn(() => ({
               textContent: "Finding this book was sheer serendipity.",
             })),
@@ -804,18 +815,77 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
             width: 100,
             height: 20,
           }),
+          cloneRange: vi.fn(() => ({} as Range)),
         }),
       }));
 
-      const performSpy = vi.spyOn(plugin, "performLookupFromReading").mockResolvedValue(null);
+      let capturedCallbacks: any;
+      vi.spyOn(plugin.floatingHighlightToolbar, "show").mockImplementation(
+        (_rect, _text, _range, callbacks) => {
+          capturedCallbacks = callbacks;
+        }
+      );
 
       plugin.handleSelectionDebounced();
       vi.advanceTimersByTime(150);
+
+      expect(capturedCallbacks).toBeDefined();
+
+      const performSpy = vi.spyOn(plugin, "performLookupFromReading").mockResolvedValue(null);
+      capturedCallbacks.onLookup();
 
       expect(performSpy).toHaveBeenCalledWith(
         "serendipity",
         "Finding this book was sheer serendipity.",
         expect.any(Number)
+      );
+    });
+
+    it("should trigger applyLiveReadingHighlight when onHighlight is called from floatingHighlightToolbar", () => {
+      (global as any).window.getSelection = vi.fn(() => ({
+        rangeCount: 1,
+        toString: () => "serendipity",
+        anchorNode: mockView.contentEl,
+        getRangeAt: () => ({
+          commonAncestorContainer: {
+            nodeType: 1,
+            parentElement: mockView.contentEl,
+            closest: vi.fn(() => ({
+              textContent: "Finding this book was sheer serendipity.",
+            })),
+          },
+          getBoundingClientRect: () => ({
+            top: 150,
+            bottom: 170,
+            left: 100,
+            right: 200,
+            width: 100,
+            height: 20,
+          }),
+          cloneRange: vi.fn(() => ({} as Range)),
+        }),
+      }));
+
+      let capturedCallbacks: any;
+      vi.spyOn(plugin.floatingHighlightToolbar, "show").mockImplementation(
+        (_rect, _text, _range, callbacks) => {
+          capturedCallbacks = callbacks;
+        }
+      );
+
+      plugin.handleSelectionDebounced();
+      vi.advanceTimersByTime(150);
+
+      expect(capturedCallbacks).toBeDefined();
+
+      const highlightSpy = vi.spyOn(plugin, "applyLiveReadingHighlight");
+      capturedCallbacks.onHighlight("yellow");
+
+      expect(highlightSpy).toHaveBeenCalledWith(
+        "yellow",
+        "serendipity",
+        expect.anything(),
+        mockView
       );
     });
 

@@ -9,13 +9,18 @@ export class ReadingHighlightService {
     initialData: Record<string, ReadingHighlightItem[]> = {},
     onSave?: () => Promise<void> | void
   ) {
-    this.highlights = { ...initialData };
+    this.highlights = {};
+    this.setAllHighlights(initialData);
     this.onSaveCallback = onSave;
   }
 
   normalizePath(filePath: string): string {
     if (!filePath) return "";
-    return filePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    let clean = filePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+    if (clean.endsWith(".md")) {
+      clean = clean.slice(0, -3);
+    }
+    return clean;
   }
 
   getHighlights(filePath: string): ReadingHighlightItem[] {
@@ -99,7 +104,10 @@ export class ReadingHighlightService {
   }
 
   setAllHighlights(data: Record<string, ReadingHighlightItem[]>): void {
-    this.highlights = { ...data };
+    this.highlights = {};
+    for (const [key, val] of Object.entries(data || {})) {
+      this.highlights[this.normalizePath(key)] = [...val];
+    }
   }
 
   private triggerSave(): void {
