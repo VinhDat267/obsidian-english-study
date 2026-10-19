@@ -55,7 +55,7 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
     vi.restoreAllMocks();
   });
 
-  it("1. nav bar displays 3 tabs including 'Gia sư AI 💬'", () => {
+  it("1. nav bar displays 3 tabs including 'Gia sư AI'", () => {
     sidebar.render();
 
     const tabButtons = sidebar.contentEl.querySelectorAll(".sidebar-tab-btn");
@@ -63,7 +63,7 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
 
     const tutorBtn = sidebar.contentEl.querySelector(".tab-btn-ai-tutor");
     expect(tutorBtn).not.toBeNull();
-    expect(tutorBtn.textContent).toContain("Gia sư AI 💬");
+    expect(tutorBtn.textContent).toContain("Gia sư AI");
 
     const deepDiveBtn = sidebar.contentEl.querySelector(".tab-btn-deep-dive");
     expect(deepDiveBtn).not.toBeNull();

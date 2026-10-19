@@ -1,5 +1,4 @@
-import { setIcon } from "obsidian";
-import { calculatePosition, RectLike } from "../utils/domHelper";
+import { calculatePosition, RectLike, safeSetIcon } from "../utils/domHelper";
 import {
   HighlightColorKey,
   HIGHLIGHT_COLORS,
@@ -79,13 +78,7 @@ export class FloatingHighlightToolbar {
     clearDot.className = "toolbar-color-dot dot-clear";
     clearDot.setAttribute("data-color", "clear");
     clearDot.setAttribute("title", "Xóa highlight");
-    clearDot.setAttribute("aria-label", "Xóa highlight");
-    try {
-      setIcon(clearDot, "eraser");
-    } catch {}
-    if (!clearDot.innerHTML || !clearDot.innerHTML.trim()) {
-      clearDot.textContent = "✕";
-    }
+    safeSetIcon(clearDot, "eraser", "Xóa highlight");
 
     clearDot.addEventListener("mousedown", (e: MouseEvent) => {
       e.preventDefault();
@@ -114,12 +107,7 @@ export class FloatingHighlightToolbar {
 
     const iconSpan = document.createElement("span");
     iconSpan.className = "toolbar-lookup-icon";
-    try {
-      setIcon(iconSpan, "search");
-    } catch {}
-    if (!iconSpan.innerHTML || !iconSpan.innerHTML.trim()) {
-      iconSpan.textContent = "🔍";
-    }
+    safeSetIcon(iconSpan, "search");
     lookupBtn.appendChild(iconSpan);
 
     const textSpan = document.createElement("span");

@@ -1,5 +1,4 @@
-import { setIcon } from "obsidian";
-import { RectLike } from "../utils/domHelper";
+import { RectLike, safeSetIcon } from "../utils/domHelper";
 
 export class FloatingTrigger {
   private element: HTMLElement | null = null;
@@ -20,15 +19,7 @@ export class FloatingTrigger {
 
     const iconSpan = document.createElement("span");
     iconSpan.className = "trigger-icon";
-    try {
-      setIcon(iconSpan, "book-open");
-    } catch {
-      // In mock environment or if setIcon fails
-    }
-
-    if (!iconSpan.innerHTML.trim()) {
-      iconSpan.textContent = "📖";
-    }
+    safeSetIcon(iconSpan, "book-open");
     trigger.appendChild(iconSpan);
 
     const triggerSize = 24;

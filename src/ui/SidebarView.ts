@@ -1,27 +1,13 @@
-import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, WorkspaceLeaf } from "obsidian";
 import { LookupResult, TutorSession } from "../types";
 import { LRUCache } from "../utils/lruCache";
 import { getLanguageMeta } from "../utils/languageHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
+import { safeSetIcon } from "../utils/domHelper";
 import { AiTutorChatService } from "../services/ai/AiTutorChatService";
 import { GeminiService } from "../services/provider/GeminiService";
 
 export const VIEW_TYPE_ENGLISH_STUDY = "english-study-sidebar";
-
-function safeSetIcon(element: HTMLElement, iconId: string, fallbackText: string): void {
-  try {
-    setIcon(element, iconId);
-  } catch {
-    // ignore
-  }
-  if (!element.innerHTML || !element.innerHTML.trim()) {
-    if (typeof (element as any).setText === "function") {
-      (element as any).setText(fallbackText);
-    } else {
-      element.textContent = fallbackText;
-    }
-  }
-}
 
 export class EnglishStudySidebar extends ItemView {
   private currentResult: LookupResult | null = null;
@@ -173,7 +159,7 @@ export class EnglishStudySidebar extends ItemView {
 
     const tutorBtn = tabsGroup.createEl("button", {
       cls: `sidebar-tab-btn tab-btn-ai-tutor ${this.activeTab === "ai-tutor" ? "active" : ""}`,
-      text: "Gia sư AI 💬",
+      text: "Gia sư AI",
     });
     tutorBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
@@ -214,12 +200,7 @@ export class EnglishStudySidebar extends ItemView {
         cls: "empty-state sidebar-empty-state",
       });
       const iconEl = emptyState.createDiv({ cls: "empty-state-icon" });
-      try {
-        setIcon(iconEl, "book-open");
-      } catch {}
-      if (!iconEl.innerHTML.trim()) {
-        iconEl.setText("📖");
-      }
+      safeSetIcon(iconEl, "book-open");
       emptyState.createEl("p", {
         text: "Chưa có dữ liệu tra cứu. Hãy bôi đen text trong ghi chú để tra từ hoặc dịch câu.",
       });
@@ -265,14 +246,7 @@ export class EnglishStudySidebar extends ItemView {
       cls: "audio-btn",
       attr: { "aria-label": "Phát âm", title: "Phát âm" },
     });
-    try {
-      setIcon(audioBtn, "volume-2");
-    } catch {
-      // ignore
-    }
-    if (!audioBtn.innerHTML || !audioBtn.innerHTML.trim()) {
-      audioBtn.setText("🔊");
-    }
+    safeSetIcon(audioBtn, "volume-2", "Phát âm");
     audioBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -284,11 +258,14 @@ export class EnglishStudySidebar extends ItemView {
     if (displayTranslation) {
       const viMeaning = deepDiveContainer.createDiv({ cls: "vocab-meaning-vi" });
       if (result.aiTranslation) {
-        viMeaning.createSpan({ cls: "vocab-ai-badge-inline", text: "✨ AI" });
+        const badge = viMeaning.createSpan({ cls: "vocab-ai-badge-inline" });
+        safeSetIcon(badge, "sparkles");
+        badge.createSpan({ text: " AI" });
         viMeaning.createSpan({ cls: "vocab-translation-text", text: ` ${result.aiTranslation}` });
       } else if (result.aiLoading) {
         const loadingChip = viMeaning.createSpan({ cls: "vocab-ai-badge-inline vocab-ai-loading-chip" });
-        loadingChip.createSpan({ cls: "vocab-ai-spinner", text: "✨" });
+        const spinner = loadingChip.createSpan({ cls: "vocab-ai-spinner" });
+        safeSetIcon(spinner, "sparkles");
         loadingChip.createSpan({ text: " AI..." });
         viMeaning.createSpan({ cls: "vocab-translation-text", text: ` ${displayTranslation}` });
       } else {
@@ -330,14 +307,7 @@ export class EnglishStudySidebar extends ItemView {
       const aiBadge = aiNote.createDiv({ cls: "vocab-ai-badge" });
 
       const aiIcon = aiBadge.createSpan({ cls: "vocab-ai-icon" });
-      try {
-        setIcon(aiIcon, "sparkles");
-      } catch {
-        // fallback
-      }
-      if (!aiIcon.innerHTML.trim()) {
-        aiIcon.setText("✨");
-      }
+      safeSetIcon(aiIcon, "sparkles");
 
       aiBadge.createSpan({
         cls: "vocab-ai-title",
@@ -373,14 +343,7 @@ export class EnglishStudySidebar extends ItemView {
     });
 
     const saveIcon = saveBtn.createSpan({ cls: "btn-icon" });
-    try {
-      setIcon(saveIcon, "bookmark");
-    } catch {
-      // fallback
-    }
-    if (!saveIcon.innerHTML.trim()) {
-      saveIcon.setText("💾");
-    }
+    safeSetIcon(saveIcon, "bookmark");
 
     const saveText = saveBtn.createSpan({
       cls: "btn-text",
@@ -398,13 +361,11 @@ export class EnglishStudySidebar extends ItemView {
 
       try {
         await this.onSaveCallback(result);
-        saveText.setText("Đã lưu ✓");
+        saveText.setText("Đã lưu");
         saveBtn.addClass("saved");
-        try {
-          setIcon(saveIcon, "check");
-        } catch {}
+        safeSetIcon(saveIcon, "check");
       } catch (err) {
-        saveText.setText("Lỗi khi lưu ✕");
+        saveText.setText("Lỗi khi lưu");
         saveBtn.removeAttribute("disabled");
         (saveBtn as any).disabled = false;
         setTimeout(() => {
@@ -419,14 +380,7 @@ export class EnglishStudySidebar extends ItemView {
     });
 
     const copyIcon = copyBtn.createSpan({ cls: "btn-icon" });
-    try {
-      setIcon(copyIcon, "copy");
-    } catch {
-      // fallback
-    }
-    if (!copyIcon.innerHTML.trim()) {
-      copyIcon.setText("📋");
-    }
+    safeSetIcon(copyIcon, "copy");
 
     const copyText = copyBtn.createSpan({
       cls: "btn-text",
@@ -445,15 +399,11 @@ export class EnglishStudySidebar extends ItemView {
       if (typeof navigator !== "undefined" && navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(textToCopy);
       }
-      copyText.setText("Đã copy ✓");
-      try {
-        setIcon(copyIcon, "check");
-      } catch {}
+      copyText.setText("Đã sao chép");
+      safeSetIcon(copyIcon, "check");
       setTimeout(() => {
         copyText.setText("Sao chép");
-        try {
-          setIcon(copyIcon, "copy");
-        } catch {}
+        safeSetIcon(copyIcon, "copy");
       }, 2000);
     });
   }
@@ -569,7 +519,7 @@ export class EnglishStudySidebar extends ItemView {
       const iconEl = emptyState.createDiv({
         cls: "sidebar-tutor-empty-icon empty-state-icon",
       });
-      safeSetIcon(iconEl, "bot", "🤖");
+      safeSetIcon(iconEl, "bot");
       emptyState.createEl("p", {
         cls: "sidebar-tutor-empty-text",
         text: "Chưa có phiên học Gia sư AI nào. Hãy chọn từ trong ghi chú hoặc nhấn 'Hỏi sâu Gia sư AI' từ cửa sổ tra từ.",
@@ -599,7 +549,7 @@ export class EnglishStudySidebar extends ItemView {
       cls: "sidebar-tutor-clear-btn btn-clear-chat",
       attr: { type: "button", title: "Xóa đoạn chat", "aria-label": "Xóa đoạn chat" },
     });
-    safeSetIcon(clearBtn, "trash-2", "🗑️");
+    safeSetIcon(clearBtn, "trash-2", "Xóa đoạn chat");
     clearBtn.addEventListener("click", (e: MouseEvent) => {
       e?.preventDefault?.();
       if (this.activeTutorSession) {
@@ -621,7 +571,7 @@ export class EnglishStudySidebar extends ItemView {
       });
       if (chip.icon) {
         const iconSpan = chipBtn.createSpan({ cls: "chip-icon" });
-        safeSetIcon(iconSpan, chip.icon, "");
+        safeSetIcon(iconSpan, chip.icon);
       }
       chipBtn.createSpan({ cls: "chip-label", text: chip.label });
 
@@ -664,7 +614,14 @@ export class EnglishStudySidebar extends ItemView {
       cls: "sidebar-tutor-send-btn",
       attr: { type: "button", title: "Gửi tin nhắn", "aria-label": "Gửi tin nhắn" },
     }) as HTMLButtonElement;
-    safeSetIcon(sendBtn, "send", "➤");
+    safeSetIcon(sendBtn, "send", "Gửi tin nhắn");
+
+    const adjustTextareaHeight = () => {
+      textarea.style.height = "auto";
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 34), 110);
+      textarea.style.height = `${newHeight}px`;
+    };
+    textarea.addEventListener("input", adjustTextareaHeight);
 
     textarea.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -672,6 +629,7 @@ export class EnglishStudySidebar extends ItemView {
         const text = (textarea.value || "").trim();
         if (text && !this.isTutorLoading) {
           textarea.value = "";
+          textarea.style.height = "";
           this.sendTutorMessage(text, messagesContainer, textarea, sendBtn);
         }
       }
@@ -681,6 +639,7 @@ export class EnglishStudySidebar extends ItemView {
       const text = (textarea.value || "").trim();
       if (text && !this.isTutorLoading) {
         textarea.value = "";
+        textarea.style.height = "";
         this.sendTutorMessage(text, messagesContainer, textarea, sendBtn);
       }
     });
@@ -737,7 +696,11 @@ export class EnglishStudySidebar extends ItemView {
     if (sendBtn) sendBtn.disabled = true;
 
     const loadingBubble = messagesContainer.createDiv({ cls: "tutor-message-loading" });
-    loadingBubble.setText("Gia sư AI đang suy nghĩ...");
+    const dots = loadingBubble.createSpan({ cls: "tutor-typing-dots" });
+    dots.createSpan();
+    dots.createSpan();
+    dots.createSpan();
+    loadingBubble.createSpan({ text: "Gia sư AI đang suy nghĩ..." });
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     // 3. Dispatch to Gemini

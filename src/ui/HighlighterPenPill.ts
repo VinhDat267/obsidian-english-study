@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { safeSetIcon } from "../utils/domHelper";
 import {
   HighlightColorKey,
   HighlightAction,
@@ -113,13 +113,7 @@ export class HighlighterPenPill {
     pClearDot.className = "palette-dot palette-dot-clear";
     pClearDot.setAttribute("data-color", "clear");
     pClearDot.setAttribute("title", "Cục tẩy (Xóa highlight)");
-    pClearDot.setAttribute("aria-label", "Xóa highlight");
-    try {
-      setIcon(pClearDot, "eraser");
-    } catch {}
-    if (!pClearDot.innerHTML || !pClearDot.innerHTML.trim()) {
-      pClearDot.textContent = "✕";
-    }
+    safeSetIcon(pClearDot, "eraser", "Xóa highlight");
 
     pClearDot.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
@@ -148,12 +142,7 @@ export class HighlighterPenPill {
 
     const eraserIconSpan = document.createElement("span");
     eraserIconSpan.className = "eraser-icon";
-    try {
-      setIcon(eraserIconSpan, "eraser");
-    } catch {}
-    if (!eraserIconSpan.innerHTML || !eraserIconSpan.innerHTML.trim()) {
-      eraserIconSpan.textContent = "🧹";
-    }
+    safeSetIcon(eraserIconSpan, "eraser");
     eraserBtn.appendChild(eraserIconSpan);
 
     const eraserTextSpan = document.createElement("span");
@@ -175,8 +164,7 @@ export class HighlighterPenPill {
     const closeBtn = document.createElement("button");
     closeBtn.className = "pen-pill-close-btn";
     closeBtn.setAttribute("title", "Tắt chế độ bút (Esc)");
-    closeBtn.setAttribute("aria-label", "Tắt chế độ bút");
-    closeBtn.textContent = "✕";
+    safeSetIcon(closeBtn, "x", "Tắt chế độ bút");
 
     closeBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
@@ -238,12 +226,7 @@ export class HighlighterPenPill {
     }
 
     if (this.iconSpanEl) {
-      try {
-        setIcon(this.iconSpanEl, isClear ? "eraser" : "highlighter");
-      } catch {}
-      if (!this.iconSpanEl.innerHTML || !this.iconSpanEl.innerHTML.trim()) {
-        this.iconSpanEl.textContent = isClear ? "🧹" : "🖊️";
-      }
+      safeSetIcon(this.iconSpanEl, isClear ? "eraser" : "highlighter");
     }
 
     // Update color dot

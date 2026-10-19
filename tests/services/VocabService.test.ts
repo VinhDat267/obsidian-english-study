@@ -180,7 +180,7 @@ describe("VocabService", () => {
       expect(content).toContain("**ephemeral**");
 
       expect(Notice.instances.length).toBe(1);
-      expect(Notice.instances[0].message).toBe("✅ Đã lưu 'ephemeral' vào sổ từ vựng!");
+      expect(Notice.instances[0].message).toBe("Đã lưu 'ephemeral' vào sổ từ vựng!");
     });
 
     it("should safely create nested parent folders if path contains subfolders", async () => {

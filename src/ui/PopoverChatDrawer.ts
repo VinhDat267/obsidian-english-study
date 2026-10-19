@@ -1,23 +1,12 @@
-import { setIcon } from "obsidian";
 import { AiTutorChatService } from "../services/ai/AiTutorChatService";
 import { GeminiService } from "../services/provider/GeminiService";
 import { TutorSession } from "../types";
+import { safeSetIcon } from "../utils/domHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
 
 export interface PopoverChatDrawerCallbacks {
   onResize?: () => void;
   onPinToSidebar?: (session: TutorSession) => void;
-}
-
-function safeSetIcon(element: HTMLElement, iconId: string, fallbackText: string): void {
-  try {
-    setIcon(element, iconId);
-  } catch {
-    // fallback if setIcon fails in non-obsidian or mocked environment
-  }
-  if (!element.innerHTML.trim() && fallbackText) {
-    element.textContent = fallbackText;
-  }
 }
 
 export class PopoverChatDrawer {
@@ -125,7 +114,7 @@ export class PopoverChatDrawer {
 
     const chatIcon = document.createElement("span");
     chatIcon.className = "drawer-toggle-icon";
-    safeSetIcon(chatIcon, "message-square", "💬");
+    safeSetIcon(chatIcon, "message-square");
     toggleBtn.appendChild(chatIcon);
 
     const toggleText = document.createElement("span");
@@ -135,7 +124,7 @@ export class PopoverChatDrawer {
 
     const chevron = document.createElement("span");
     chevron.className = "drawer-toggle-chevron";
-    safeSetIcon(chevron, "chevron-down", "▼");
+    safeSetIcon(chevron, "chevron-down");
     this.chevronEl = chevron;
     toggleBtn.appendChild(chevron);
 
@@ -157,7 +146,7 @@ export class PopoverChatDrawer {
     titleGroup.className = "drawer-toolbar-title";
     const tutorBadgeIcon = document.createElement("span");
     tutorBadgeIcon.className = "drawer-title-icon";
-    safeSetIcon(tutorBadgeIcon, "bot", "🤖");
+    safeSetIcon(tutorBadgeIcon, "bot");
     titleGroup.appendChild(tutorBadgeIcon);
 
     const titleText = document.createElement("span");
@@ -175,7 +164,7 @@ export class PopoverChatDrawer {
     pinBtn.setAttribute("type", "button");
     pinBtn.setAttribute("title", "Ghim vào thanh bên");
     pinBtn.setAttribute("aria-label", "Ghim vào thanh bên");
-    safeSetIcon(pinBtn, "panel-right", "📌");
+    safeSetIcon(pinBtn, "panel-right", "Ghim vào thanh bên");
     pinBtn.addEventListener("click", () => {
       if (this.session) {
         this.callbacks?.onPinToSidebar?.(this.session);
@@ -189,7 +178,7 @@ export class PopoverChatDrawer {
     clearBtn.setAttribute("type", "button");
     clearBtn.setAttribute("title", "Xóa đoạn chat");
     clearBtn.setAttribute("aria-label", "Xóa đoạn chat");
-    safeSetIcon(clearBtn, "trash-2", "🗑️");
+    safeSetIcon(clearBtn, "trash-2", "Xóa đoạn chat");
     clearBtn.addEventListener("click", () => {
       if (this.session) {
         this.chatService.clearSession(this.session.id);
@@ -224,6 +213,15 @@ export class PopoverChatDrawer {
     textarea.className = "drawer-input-textarea";
     textarea.placeholder = "Hỏi thêm gia sư AI... (Enter để gửi)";
     textarea.rows = 1;
+
+    const adjustHeight = () => {
+      textarea.style.height = "auto";
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 32), 110);
+      textarea.style.height = `${newHeight}px`;
+      this.callbacks?.onResize?.();
+    };
+    textarea.addEventListener("input", adjustHeight);
+
     textarea.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -238,7 +236,7 @@ export class PopoverChatDrawer {
     sendBtn.setAttribute("type", "button");
     sendBtn.setAttribute("title", "Gửi tin nhắn");
     sendBtn.setAttribute("aria-label", "Gửi tin nhắn");
-    safeSetIcon(sendBtn, "send", "➤");
+    safeSetIcon(sendBtn, "send", "Gửi tin nhắn");
     sendBtn.addEventListener("click", () => this.handleSend());
     this.sendBtn = sendBtn;
     inputRow.appendChild(sendBtn);
@@ -325,6 +323,8 @@ export class PopoverChatDrawer {
     if (!text) return;
 
     this.textarea.value = "";
+    this.textarea.style.height = "";
+    this.callbacks?.onResize?.();
     this.sendMessage(text);
   }
 
@@ -421,7 +421,18 @@ export class PopoverChatDrawer {
 
     const loadingEl = document.createElement("div");
     loadingEl.className = "tutor-message-loading";
-    loadingEl.textContent = "Gia sư AI đang suy nghĩ...";
+
+    const dots = document.createElement("span");
+    dots.className = "tutor-typing-dots";
+    dots.appendChild(document.createElement("span"));
+    dots.appendChild(document.createElement("span"));
+    dots.appendChild(document.createElement("span"));
+    loadingEl.appendChild(dots);
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = "Gia sư AI đang suy nghĩ...";
+    loadingEl.appendChild(textSpan);
+
     this.loadingEl = loadingEl;
     this.messagesList.appendChild(loadingEl);
     this.scrollToBottom();

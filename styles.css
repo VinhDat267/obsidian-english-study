@@ -355,7 +355,7 @@
   right: 0;
   background-color: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
-  box-shadow: var(--shadow-s, 0 4px 12px rgba(0, 0, 0, 0.15));
+  box-shadow: var(--shadow-s, 0 4px 12px rgba(0, 0, 0, 0.15)); /* taste-skill-ignore: real floating dropdown overlay */
   border-radius: var(--english-study-radius-sm, 6px);
   padding: 4px 6px;
   display: flex;
@@ -383,7 +383,7 @@
 
 .english-study-popover .popover-color-dot:hover {
   transform: scale(1.22);
-  box-shadow: 0 0 0 2px var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
 .english-study-popover .popover-color-dot.dot-clear {
@@ -1368,7 +1368,7 @@ mark.polyglot-reading-highlight:hover {
   background-color: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 20px;
-  box-shadow: var(--shadow-l, 0 6px 16px rgba(0, 0, 0, 0.16));
+  box-shadow: var(--shadow-l, 0 6px 16px rgba(0, 0, 0, 0.16)); /* taste-skill-ignore: real floating toolbar overlay */
   z-index: 1000;
   animation: polyglot-pop-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
@@ -1397,7 +1397,7 @@ mark.polyglot-reading-highlight:hover {
 
 .polyglot-highlight-toolbar .toolbar-color-dot:hover {
   transform: scale(1.25);
-  box-shadow: 0 0 0 2px var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
 .polyglot-highlight-toolbar .toolbar-color-dot.dot-clear {
@@ -1469,7 +1469,7 @@ mark.polyglot-reading-highlight:hover {
   background-color: var(--background-primary);
   border: 1px solid var(--interactive-accent);
   border-radius: 24px;
-  box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.2)), 0 0 0 1px var(--interactive-accent);
+  box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.2)), 0 0 0 1px var(--interactive-accent); /* taste-skill-ignore: real floating pill overlay */
   z-index: 1000;
   user-select: none;
   animation: polyglot-pop-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1533,7 +1533,7 @@ mark.polyglot-reading-highlight:hover {
   border: 1px solid var(--background-modifier-border);
   border-radius: 16px;
   padding: 6px 8px;
-  box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.2));
+  box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.2)); /* taste-skill-ignore: real floating dropdown overlay */
   gap: 6px;
   z-index: 1001;
   animation: polyglot-pop-in 0.12s ease;
@@ -1558,7 +1558,7 @@ mark.polyglot-reading-highlight:hover {
 
 .polyglot-pen-pill .palette-dot:hover {
   transform: scale(1.25);
-  box-shadow: 0 0 0 2px var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
 .polyglot-pen-pill .pen-pill-close-btn {
@@ -1580,7 +1580,7 @@ mark.polyglot-reading-highlight:hover {
 
 .polyglot-pen-pill .pen-pill-color-btn.is-active {
   border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 1px var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
 .polyglot-pen-pill .pen-pill-eraser-btn {
@@ -1595,7 +1595,7 @@ mark.polyglot-reading-highlight:hover {
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .polyglot-pen-pill .pen-pill-eraser-btn:hover {
@@ -1608,7 +1608,7 @@ mark.polyglot-reading-highlight:hover {
   border-color: var(--text-error, #f44336);
   color: var(--text-error, #f44336);
   font-weight: 600;
-  box-shadow: 0 0 0 1px var(--text-error, #f44336);
+  box-shadow: 0 0 0 1px var(--text-error, #f44336); /* taste-skill-ignore: active error indicator ring */
 }
 
 .polyglot-pen-pill .pen-pill-eraser-btn .eraser-icon svg {
@@ -1630,7 +1630,7 @@ mark.polyglot-reading-highlight:hover {
   color: var(--text-error, #f44336);
   border-color: var(--text-error, #f44336);
   transform: scale(1.25);
-  box-shadow: 0 0 0 2px var(--text-error, #f44336);
+  box-shadow: 0 0 0 2px var(--text-error, #f44336); /* taste-skill-ignore: active error indicator ring */
 }
 
 .side-dock-ribbon-action.is-pen-active {
@@ -1647,13 +1647,12 @@ mark.polyglot-reading-highlight:hover {
    Popover Chat Drawer (Accordion in Floating Popover)
    -------------------------------------------------------------------------- */
 .popover-chat-drawer {
-  border-top: 1px solid var(--background-modifier-border);
-  margin-top: 6px;
-  padding-top: 8px;
+  margin-top: 8px;
+  padding-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: all var(--english-study-transition-normal);
+  transition: opacity var(--english-study-transition-fast);
 }
 
 .popover-chat-drawer .drawer-toggle-btn {
@@ -1732,7 +1731,6 @@ mark.polyglot-reading-highlight:hover {
   align-items: center;
   justify-content: space-between;
   padding: 2px 0 6px 0;
-  border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .popover-chat-drawer .drawer-toolbar-title {
@@ -1826,7 +1824,10 @@ mark.polyglot-reading-highlight:hover {
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: all var(--english-study-transition-fast);
+  transition: transform var(--english-study-transition-fast),
+              background-color var(--english-study-transition-fast),
+              color var(--english-study-transition-fast),
+              border-color var(--english-study-transition-fast);
   line-height: 1.3;
 }
 
@@ -1875,7 +1876,6 @@ mark.polyglot-reading-highlight:hover {
   font-size: var(--font-ui-smaller, 11.5px);
   line-height: 1.45;
   word-break: break-word;
-  box-shadow: var(--shadow-s);
 }
 
 .tutor-message-model {
@@ -1973,7 +1973,7 @@ mark.polyglot-reading-highlight:hover {
 
 .drawer-input-textarea:focus {
   border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 1.5px var(--interactive-accent);
+  box-shadow: 0 0 0 1.5px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
 .drawer-input-textarea:disabled {
@@ -2024,7 +2024,7 @@ mark.polyglot-reading-highlight:hover {
   background-color: var(--background-primary);
   color: var(--text-normal);
   font-weight: 600;
-  box-shadow: 0 -2px 0 0 var(--interactive-accent) inset;
+  box-shadow: 0 -2px 0 0 var(--interactive-accent) inset; /* taste-skill-ignore: active tab indicator */
 }
 
 .sidebar-tutor-container,
@@ -2083,7 +2083,7 @@ mark.polyglot-reading-highlight:hover {
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 4px;
   flex-shrink: 0;
 }
 
@@ -2161,7 +2161,6 @@ mark.polyglot-reading-highlight:hover {
   font-size: var(--font-ui-small, 12px);
   line-height: 1.45;
   word-break: break-word;
-  box-shadow: var(--shadow-s);
 }
 
 .sidebar-tutor-messages .tutor-message-model {
@@ -2183,16 +2182,53 @@ mark.polyglot-reading-highlight:hover {
   color: var(--text-error);
 }
 
-.sidebar-tutor-messages .tutor-message-loading {
+.tutor-message-loading {
   align-self: flex-start;
   font-size: var(--font-ui-smaller, 11px);
-  font-style: italic;
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  animation: english-study-pulse 1.2s infinite ease-in-out;
+}
+
+.tutor-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  padding: 2px 2px;
+}
+
+.tutor-typing-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  display: inline-block;
+  animation: tutorDotPulse 1.4s infinite ease-in-out both;
+}
+
+.tutor-typing-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.tutor-typing-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.tutor-typing-dots span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes tutorDotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.65);
+    opacity: 0.35;
+  }
+  40% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
 /* Sidebar Tutor Sticky Input Row */
@@ -2230,7 +2266,7 @@ mark.polyglot-reading-highlight:hover {
 .sidebar-tutor-textarea:focus {
   background-color: var(--background-primary);
   border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 1.5px var(--interactive-accent);
+  box-shadow: 0 0 0 1.5px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
 .sidebar-tutor-textarea:disabled {

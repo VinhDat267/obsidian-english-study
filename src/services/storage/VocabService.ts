@@ -167,7 +167,7 @@ export class VocabService {
           `Từ '${result.query}' đã có trong sổ. Đã bổ sung thêm ngữ cảnh mới!`
         );
       } else {
-        new Notice(`✅ Đã lưu '${result.query}' vào sổ từ vựng!`);
+        new Notice(`Đã lưu '${result.query}' vào sổ từ vựng!`);
       }
 
       return {

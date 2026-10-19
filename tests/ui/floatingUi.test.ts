@@ -872,7 +872,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.hide();
     });
 
-    it("should render [✨ AI] badge when aiTranslation is present", () => {
+    it("should render [AI] badge when aiTranslation is present", () => {
       const popover = new FloatingPopover();
       const mockResult: LookupResult = {
         query: "deployment",
@@ -896,7 +896,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(viMeaning).not.toBeNull();
       const aiBadge = viMeaning?.querySelector(".vocab-ai-badge-inline");
       expect(aiBadge).not.toBeNull();
-      expect(aiBadge?.textContent).toBe("✨ AI");
+      expect(aiBadge?.textContent?.trim()).toBe("AI");
       expect(viMeaning?.textContent).toContain("triển khai phần mềm");
 
       popover.hide();

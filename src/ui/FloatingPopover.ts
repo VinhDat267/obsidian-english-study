@@ -2,7 +2,7 @@ import { setIcon } from "obsidian";
 import { AiTutorChatService } from "../services/ai/AiTutorChatService";
 import { GeminiService } from "../services/provider/GeminiService";
 import { LookupResult, PopoverCallbacks, TutorSession } from "../types";
-import { calculatePosition, RectLike } from "../utils/domHelper";
+import { calculatePosition, RectLike, safeSetIcon } from "../utils/domHelper";
 import { getLanguageMeta } from "../utils/languageHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
 import {
@@ -145,16 +145,8 @@ export class FloatingPopover {
     // Audio Button
     const audioBtn = document.createElement("button");
     audioBtn.className = "audio-btn";
-    audioBtn.setAttribute("aria-label", "Phát âm");
     audioBtn.setAttribute("title", "Phát âm");
-    try {
-      setIcon(audioBtn, "volume-2");
-    } catch {
-      // fallback
-    }
-    if (!audioBtn.innerHTML.trim()) {
-      audioBtn.textContent = "🔊";
-    }
+    safeSetIcon(audioBtn, "volume-2", "Phát âm");
 
     audioBtn.addEventListener("mousedown", (e: MouseEvent) => {
       e.stopPropagation();
@@ -176,14 +168,8 @@ export class FloatingPopover {
     if (callbacks.onHighlight && options?.isReadingMode) {
       const highlightBtn = document.createElement("button");
       highlightBtn.className = "popover-btn-highlight";
-      highlightBtn.setAttribute("aria-label", "Highlight màu văn bản");
       highlightBtn.setAttribute("title", "Highlight màu văn bản");
-      try {
-        setIcon(highlightBtn, "highlighter");
-      } catch {}
-      if (!highlightBtn.innerHTML.trim()) {
-        highlightBtn.textContent = "🖍️";
-      }
+      safeSetIcon(highlightBtn, "highlighter", "Highlight màu văn bản");
 
       highlightBtn.addEventListener("mousedown", (e: MouseEvent) => {
         e.preventDefault();
@@ -230,13 +216,7 @@ export class FloatingPopover {
       clearDot.className = "popover-color-dot dot-clear";
       clearDot.setAttribute("data-color", "clear");
       clearDot.setAttribute("title", "Xóa highlight");
-      clearDot.setAttribute("aria-label", "Xóa highlight");
-      try {
-        setIcon(clearDot, "eraser");
-      } catch {}
-      if (!clearDot.innerHTML.trim()) {
-        clearDot.textContent = "✕";
-      }
+      safeSetIcon(clearDot, "eraser", "Xóa highlight");
 
       clearDot.addEventListener("mousedown", (e: MouseEvent) => {
         e.preventDefault();
@@ -266,16 +246,8 @@ export class FloatingPopover {
     if (callbacks.onPinToSidebar) {
       const pinBtn = document.createElement("button");
       pinBtn.className = "popover-btn-pin";
-      pinBtn.setAttribute("aria-label", "Ghim sang Sidebar");
       pinBtn.setAttribute("title", "Ghim sang Sidebar");
-      try {
-        setIcon(pinBtn, "panel-right");
-      } catch {
-        // fallback
-      }
-      if (!pinBtn.innerHTML.trim()) {
-        pinBtn.textContent = "📌";
-      }
+      safeSetIcon(pinBtn, "panel-right", "Ghim sang Sidebar");
 
       pinBtn.addEventListener("mousedown", (e: MouseEvent) => {
         e.stopPropagation();
@@ -302,16 +274,8 @@ export class FloatingPopover {
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "popover-btn-close";
-    closeBtn.setAttribute("aria-label", "Đóng");
     closeBtn.setAttribute("title", "Đóng");
-    try {
-      setIcon(closeBtn, "x");
-    } catch {
-      // fallback
-    }
-    if (!closeBtn.innerHTML.trim()) {
-      closeBtn.textContent = "✕";
-    }
+    safeSetIcon(closeBtn, "x", "Đóng");
 
     closeBtn.addEventListener("mousedown", (e: MouseEvent) => {
       e.stopPropagation();
@@ -341,7 +305,12 @@ export class FloatingPopover {
       if (result.aiTranslation) {
         const badge = document.createElement("span");
         badge.className = "vocab-ai-badge-inline";
-        badge.textContent = "✨ AI";
+        const badgeIcon = document.createElement("span");
+        safeSetIcon(badgeIcon, "sparkles");
+        badge.appendChild(badgeIcon);
+        const badgeText = document.createElement("span");
+        badgeText.textContent = "AI";
+        badge.appendChild(badgeText);
         viMeaning.appendChild(badge);
 
         const textSpan = document.createElement("span");
@@ -353,7 +322,7 @@ export class FloatingPopover {
         loadingChip.className = "vocab-ai-badge-inline vocab-ai-loading-chip";
         const spinner = document.createElement("span");
         spinner.className = "vocab-ai-spinner";
-        spinner.textContent = "✨";
+        safeSetIcon(spinner, "sparkles");
         loadingChip.appendChild(spinner);
         const chipText = document.createElement("span");
         chipText.textContent = " AI...";
@@ -421,14 +390,7 @@ export class FloatingPopover {
 
         const aiIcon = document.createElement("span");
         aiIcon.className = "vocab-ai-icon";
-        try {
-          setIcon(aiIcon, "sparkles");
-        } catch {
-          // fallback
-        }
-        if (!aiIcon.innerHTML.trim()) {
-          aiIcon.textContent = "✨";
-        }
+        safeSetIcon(aiIcon, "sparkles");
         aiBadge.appendChild(aiIcon);
 
         const aiTitle = document.createElement("span");
@@ -453,14 +415,7 @@ export class FloatingPopover {
 
         const aiIcon = document.createElement("span");
         aiIcon.className = "vocab-ai-icon";
-        try {
-          setIcon(aiIcon, "sparkles");
-        } catch {
-          // fallback
-        }
-        if (!aiIcon.innerHTML.trim()) {
-          aiIcon.textContent = "✨";
-        }
+        safeSetIcon(aiIcon, "sparkles");
         aiBadge.appendChild(aiIcon);
 
         const aiTitle = document.createElement("span");
@@ -515,14 +470,7 @@ export class FloatingPopover {
 
     const saveIcon = document.createElement("span");
     saveIcon.className = "btn-icon";
-    try {
-      setIcon(saveIcon, "bookmark");
-    } catch {
-      // fallback
-    }
-    if (!saveIcon.innerHTML.trim()) {
-      saveIcon.textContent = "💾";
-    }
+    safeSetIcon(saveIcon, "bookmark");
     saveBtn.appendChild(saveIcon);
 
     const saveText = document.createElement("span");
@@ -538,13 +486,11 @@ export class FloatingPopover {
       try {
         const activeRes = this.currentResult || result;
         await callbacks.onSave(activeRes);
-        saveText.textContent = "Đã lưu ✓";
+        saveText.textContent = "Đã lưu";
         saveBtn.classList.add("saved");
-        try {
-          setIcon(saveIcon, "check");
-        } catch {}
+        safeSetIcon(saveIcon, "check");
       } catch (err) {
-        saveText.textContent = "Lỗi khi lưu ✕";
+        saveText.textContent = "Lỗi khi lưu";
         saveBtn.disabled = false;
         setTimeout(() => {
           saveText.textContent = "Lưu vào sổ từ vựng";
@@ -560,14 +506,7 @@ export class FloatingPopover {
 
     const copyIcon = document.createElement("span");
     copyIcon.className = "btn-icon";
-    try {
-      setIcon(copyIcon, "copy");
-    } catch {
-      // fallback
-    }
-    if (!copyIcon.innerHTML.trim()) {
-      copyIcon.textContent = "📋";
-    }
+    safeSetIcon(copyIcon, "copy");
     copyBtn.appendChild(copyIcon);
 
     const copyText = document.createElement("span");
@@ -589,15 +528,11 @@ export class FloatingPopover {
       if (navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(textToCopy);
       }
-      copyText.textContent = "Đã copy ✓";
-      try {
-        setIcon(copyIcon, "check");
-      } catch {}
+      copyText.textContent = "Đã sao chép";
+      safeSetIcon(copyIcon, "check");
       setTimeout(() => {
         if (copyText) copyText.textContent = "Sao chép";
-        try {
-          setIcon(copyIcon, "copy");
-        } catch {}
+        safeSetIcon(copyIcon, "copy");
       }, 2000);
     });
     actions.appendChild(copyBtn);
@@ -760,7 +695,12 @@ export class FloatingPopover {
       }
       const badge = document.createElement("span");
       badge.className = "vocab-ai-badge-inline vocab-fade-in";
-      badge.textContent = "✨ AI";
+      const badgeIcon = document.createElement("span");
+      safeSetIcon(badgeIcon, "sparkles");
+      badge.appendChild(badgeIcon);
+      const badgeText = document.createElement("span");
+      badgeText.textContent = " AI";
+      badge.appendChild(badgeText);
       viMeaning.appendChild(badge);
 
       const textSpan = document.createElement("span");
@@ -798,12 +738,7 @@ export class FloatingPopover {
 
           const aiIcon = document.createElement("span");
           aiIcon.className = "vocab-ai-icon";
-          try {
-            setIcon(aiIcon, "sparkles");
-          } catch {}
-          if (!aiIcon.innerHTML.trim()) {
-            aiIcon.textContent = "✨";
-          }
+          safeSetIcon(aiIcon, "sparkles");
           aiBadge.appendChild(aiIcon);
 
           const aiTitle = document.createElement("span");
@@ -907,16 +842,8 @@ export class FloatingPopover {
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "popover-btn-close";
-    closeBtn.setAttribute("aria-label", "Đóng");
     closeBtn.setAttribute("title", "Hủy tra cứu");
-    try {
-      setIcon(closeBtn, "x");
-    } catch {
-      // fallback
-    }
-    if (!closeBtn.innerHTML.trim()) {
-      closeBtn.textContent = "✕";
-    }
+    safeSetIcon(closeBtn, "x", "Hủy tra cứu");
 
     closeBtn.addEventListener("mousedown", (e: MouseEvent) => {
       e.stopPropagation();

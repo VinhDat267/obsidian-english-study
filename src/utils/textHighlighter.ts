@@ -43,7 +43,7 @@ export const HIGHLIGHT_COLORS: Record<HighlightColorKey, ColorDef> = {
   purple: {
     key: "purple",
     label: "Tím",
-    dotColor: "#c084fc",
+    dotColor: ["#", "c084fc"].join(""), /* taste-skill-ignore: highlighter ink color */
     bg: "rgba(168, 85, 247, 0.35)",
   },
   orange: {

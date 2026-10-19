@@ -3,7 +3,9 @@ import {
   calculatePosition,
   PositionResult,
   RectLike,
+  safeSetIcon,
 } from "../../src/utils/domHelper";
+import { createMockObsidianElement } from "../../__mocks__/obsidian";
 
 describe("domHelper - calculatePosition", () => {
   const popoverWidth = 300;
@@ -184,5 +186,24 @@ describe("domHelper - calculatePosition", () => {
 
     expect(pos.flipped).toBe(true);
     expect(pos.top).toBe(8);
+  });
+});
+
+describe("domHelper - safeSetIcon (Taste Skill compliant)", () => {
+  it("renders SVG fallback with lucide icon class without emoji", () => {
+    const el = createMockObsidianElement("button");
+    safeSetIcon(el, "volume-2", "Phát âm");
+
+    expect(el.getAttribute("aria-label")).toBe("Phát âm");
+    expect(el.innerHTML).toContain("lucide-volume-2");
+    expect(el.innerHTML).toContain("<svg");
+    expect(el.innerHTML).not.toContain("🔊"); /* taste-skill-ignore: verifying emoji is absent */
+  });
+
+  it("handles empty or missing element gracefully without throwing", () => {
+    expect(() => {
+      // @ts-ignore
+      safeSetIcon(null as any, "x");
+    }).not.toThrow();
   });
 });
