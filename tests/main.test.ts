@@ -95,8 +95,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.ribbonIcons[1].icon).toBe("highlighter");
       expect(plugin.ribbonIcons[1].title).toBe("Bật/Tắt chế độ bút dạ quang (Reading)");
 
-      // Commands (11 commands)
-      expect(plugin.commands.length).toBe(11);
+      // Commands (12 commands)
+      expect(plugin.commands.length).toBe(12);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");
@@ -108,6 +108,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("bilingual-translate-file");
       expect(commandIds).toContain("highlight-selection-yellow");
       expect(commandIds).toContain("clear-highlight-selection");
+      expect(commandIds).toContain("clear-all-reading-highlights");
 
       // DOM events (mouseup, keyup, keydown, scroll)
       expect(plugin.domEvents.length).toBe(4);
@@ -1266,6 +1267,18 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
 
       keydownEvent!.callback({ key: "Escape" });
       expect(plugin.isPenModeActive).toBe(false);
+    });
+
+    it("should clear all highlights in current note via clearAllReadingHighlights", () => {
+      const mockFile: any = { path: "notes/sample.md" };
+      mockView.file = mockFile;
+      plugin.readingHighlightService.addHighlight("notes/sample.md", "concept", "yellow");
+
+      expect(plugin.readingHighlightService.getHighlights("notes/sample.md")).toHaveLength(1);
+
+      const result = plugin.clearAllReadingHighlights(mockView);
+      expect(result).toBe(true);
+      expect(plugin.readingHighlightService.getHighlights("notes/sample.md")).toHaveLength(0);
     });
   });
 });

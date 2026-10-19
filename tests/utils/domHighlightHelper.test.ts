@@ -4,6 +4,7 @@ import {
   wrapRangeWithHighlight,
   unwrapHighlightElement,
   unwrapHighlightsByText,
+  unwrapAllHighlights,
 } from "../../src/utils/domHighlightHelper";
 
 describe("domHighlightHelper", () => {
@@ -77,4 +78,21 @@ describe("domHighlightHelper", () => {
     expect(remaining[0].textContent).toBe("Vue");
     expect(container.textContent?.replace(/\s+/g, " ").trim()).toContain("Learn React and Vue with React Native.");
   });
+
+  it("unwraps all highlights in a container cleanly", () => {
+    container.innerHTML = `
+      <p>
+        <mark class="polyglot-reading-highlight" data-highlight-id="1">First</mark>
+        <mark class="polyglot-reading-highlight" data-highlight-id="2">Second</mark>
+        <mark class="polyglot-reading-highlight" data-highlight-id="3">Third</mark>
+      </p>
+    `;
+
+    const count = unwrapAllHighlights(container);
+
+    expect(count).toBe(3);
+    expect(container.querySelectorAll(".polyglot-reading-highlight")).toHaveLength(0);
+    expect(container.textContent?.replace(/\s+/g, " ").trim()).toBe("First Second Third");
+  });
 });
+

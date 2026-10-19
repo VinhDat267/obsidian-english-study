@@ -28,6 +28,7 @@ import { HighlighterPenPill } from "./src/ui/HighlighterPenPill";
 import {
   wrapRangeWithHighlight,
   unwrapHighlightsByText,
+  unwrapAllHighlights,
 } from "./src/utils/domHighlightHelper";
 
 export default class EnglishStudyPlugin extends Plugin implements PluginWithSettings {
@@ -248,6 +249,23 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         if (checking) return isPreview;
         if (isPreview && view) {
           this.highlightReadingSelection("clear", view);
+        }
+        return true;
+      },
+    });
+
+    // 3.10. Xóa toàn bộ highlight trong ghi chú hiện tại
+    this.addCommand({
+      id: "clear-all-reading-highlights",
+      name: "Xóa toàn bộ highlight trong ghi chú hiện tại",
+      checkCallback: (checking: boolean) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const isPreview = Boolean(
+          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+        );
+        if (checking) return isPreview;
+        if (isPreview && view) {
+          this.clearAllReadingHighlights(view);
         }
         return true;
       },
@@ -654,7 +672,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   ): boolean {
     const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
     const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
-    if (!file || !file.path || !selectedText) return false;
+    if (!file || !file.path || !selectedText || selectedText.trim().length < 2) return false;
 
     // 1. Lưu vào service
     const { action, item } = this.readingHighlightService.addHighlight(file.path, selectedText, color);
@@ -693,6 +711,24 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
     this.saveSettings();
     this.floatingHighlightToolbar?.hide();
+    return true;
+  }
+
+  /**
+   * Xóa toàn bộ highlight trong ghi chú hiện tại (0ms, không reload)
+   */
+  clearAllReadingHighlights(view?: MarkdownView): boolean {
+    const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
+    const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
+    if (!file || !file.path) return false;
+
+    this.readingHighlightService.clearHighlightsForFile(file.path);
+    if (activeView?.contentEl) {
+      unwrapAllHighlights(activeView.contentEl);
+    }
+    this.saveSettings();
+    this.floatingHighlightToolbar?.hide();
+    new Notice("Đã xóa toàn bộ highlight trong ghi chú hiện tại.", 2500);
     return true;
   }
 
@@ -894,6 +930,9 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       // 4.1. Nếu Chế độ Bút dạ quang (Continuous Highlighter Pen Mode) đang BẬT:
       if (this.isPenModeActive) {
         this.floatingHighlightToolbar?.hide();
+        // Bỏ qua các click nhầm 1 ký tự trong chế độ bút dạ quang
+        if (selectedText.length < 2) return;
+
         if (this.currentPenAction === "clear") {
           this.clearLiveReadingHighlight(selectedText, activeView);
         } else {

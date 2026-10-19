@@ -35,7 +35,7 @@ export class ReadingHighlightService {
   ): { action: "added" | "updated" | "removed"; item?: ReadingHighlightItem } {
     const norm = this.normalizePath(filePath);
     const trimmedText = text.trim();
-    if (!trimmedText) return { action: "removed" };
+    if (!trimmedText || trimmedText.length < 2) return { action: "removed" };
 
     if (!this.highlights[norm]) {
       this.highlights[norm] = [];

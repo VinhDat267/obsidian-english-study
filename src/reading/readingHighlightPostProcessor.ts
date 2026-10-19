@@ -70,6 +70,11 @@ interface MatchRange {
   highlight: ReadingHighlightItem;
 }
 
+function isWordChar(char: string): boolean {
+  if (!char) return false;
+  return /[\p{L}\p{N}_]/u.test(char);
+}
+
 function processTextNode(
   textNode: Text,
   highlights: ReadingHighlightItem[]
@@ -80,18 +85,36 @@ function processTextNode(
   const matches: MatchRange[] = [];
 
   for (const hl of highlights) {
-    if (!hl.text) continue;
+    const rawQuery = hl.text;
+    if (!rawQuery) continue;
+    const query = rawQuery.trim();
+    if (query.length < 2) continue; // Ignore accidental single-character or blank highlights
+
     const lowerText = text.toLowerCase();
-    const query = hl.text.toLowerCase();
-    let pos = lowerText.indexOf(query);
+    const lowerQuery = query.toLowerCase();
+    let pos = lowerText.indexOf(lowerQuery);
+
+    const firstChar = query[0];
+    const lastChar = query[query.length - 1];
+    const queryStartsWord = isWordChar(firstChar);
+    const queryEndsWord = isWordChar(lastChar);
 
     while (pos !== -1) {
-      matches.push({
-        start: pos,
-        end: pos + hl.text.length,
-        highlight: hl,
-      });
-      pos = lowerText.indexOf(query, pos + query.length);
+      const prevChar = pos > 0 ? text[pos - 1] : "";
+      const nextChar = pos + query.length < text.length ? text[pos + query.length] : "";
+
+      const wordStartOk = !queryStartsWord || !prevChar || !isWordChar(prevChar);
+      const wordEndOk = !queryEndsWord || !nextChar || !isWordChar(nextChar);
+
+      if (wordStartOk && wordEndOk) {
+        matches.push({
+          start: pos,
+          end: pos + query.length,
+          highlight: hl,
+        });
+      }
+
+      pos = lowerText.indexOf(lowerQuery, pos + query.length);
     }
   }
 

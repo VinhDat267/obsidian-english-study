@@ -133,4 +133,48 @@ describe("readingHighlightPostProcessor", () => {
     postProcessor(view.contentEl, ctx);
     expect(view.contentEl.querySelectorAll(".polyglot-reading-highlight")).toHaveLength(1);
   });
+
+  it("does NOT match substrings inside other words (word boundary enforcement)", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight("boundary.md", "in", "yellow");
+
+    const app = new App();
+    const view = makeReadingView(
+      app,
+      "<p>Finding information in training requires administration.</p>",
+      "boundary.md"
+    );
+    const { ctx } = makeReadingContext(view);
+    const postProcessor = createReadingHighlightPostProcessor(service);
+
+    postProcessor(view.contentEl, ctx);
+
+    const marks = view.contentEl.querySelectorAll(".polyglot-reading-highlight");
+    // "in" should only match the standalone word "in", NOT inside "Finding", "information", "training", "administration"
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe("in");
+  });
+
+  it("ignores accidental single-character highlights with length < 2", () => {
+    const service = new ReadingHighlightService();
+    // Directly simulate a corrupted single-letter highlight "o"
+    (service as any).highlights["test.md"] = [
+      { id: "bad-1", text: "o", color: "yellow", timestamp: 123 },
+    ];
+
+    const app = new App();
+    const view = makeReadingView(
+      app,
+      "<p>F. Source Accuracy Drill — 5 questions</p>",
+      "test.md"
+    );
+    const { ctx } = makeReadingContext(view);
+    const postProcessor = createReadingHighlightPostProcessor(service);
+
+    postProcessor(view.contentEl, ctx);
+
+    const marks = view.contentEl.querySelectorAll(".polyglot-reading-highlight");
+    // "o" must NOT highlight every letter 'o' in the sentence!
+    expect(marks).toHaveLength(0);
+  });
 });

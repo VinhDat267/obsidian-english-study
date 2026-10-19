@@ -62,3 +62,17 @@ export function unwrapHighlightsByText(
 
   return unwrappedCount;
 }
+
+export function unwrapAllHighlights(container: HTMLElement): number {
+  if (!container) return 0;
+  const marks = Array.from(
+    container.querySelectorAll(".polyglot-reading-highlight")
+  ) as HTMLElement[];
+
+  for (const mark of marks) {
+    unwrapHighlightElement(mark);
+  }
+
+  return marks.length;
+}
+
