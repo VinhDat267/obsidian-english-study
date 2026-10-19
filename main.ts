@@ -381,12 +381,25 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       );
     }
 
-    // 6. Tự động ẩn UI nổi khi active leaf thay đổi
+    // 6. Tự động ẩn UI nổi và đảm bảo khôi phục highlight khi chuyển tab hoặc mở file
     this.registerEvent(
-      this.app.workspace.on("active-leaf-change", () => {
+      this.app.workspace.on("active-leaf-change", (leaf: any) => {
         this.dismissFloatingUi();
+        this.restoreHighlightsForActiveView(leaf?.view);
       })
     );
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", () => {
+        this.restoreHighlightsForActiveView();
+      })
+    );
+
+    if (this.app.workspace?.onLayoutReady) {
+      this.app.workspace.onLayoutReady(() => {
+        this.restoreHighlightsForAllViews();
+      });
+    }
 
     // 7. Đăng ký Setting Tab
     this.addSettingTab(new EnglishStudySettingTab(this.app, this));
@@ -766,6 +779,41 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.floatingHighlightToolbar?.hide();
     new Notice("Đã xóa toàn bộ highlight trong ghi chú hiện tại.", 2500);
     return true;
+  }
+
+  /**
+   * Khôi phục highlight cho view đang mở (Reading Mode)
+   */
+  restoreHighlightsForActiveView(customView?: any): void {
+    const view =
+      customView instanceof MarkdownView
+        ? customView
+        : this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || !view.file) return;
+
+    const isPreview = view.getMode
+      ? view.getMode() === "preview"
+      : (view as any).mode === "preview";
+    if (!isPreview) return;
+
+    const highlights = this.readingHighlightService?.getHighlights(view.file.path);
+    if (highlights && highlights.length > 0 && view.contentEl) {
+      applyHighlightsToElement(view.contentEl, highlights);
+    }
+  }
+
+  /**
+   * Khôi phục highlight cho toàn bộ các Markdown view đang mở
+   */
+  restoreHighlightsForAllViews(): void {
+    const leaves = this.app.workspace.getLeavesOfType
+      ? this.app.workspace.getLeavesOfType("markdown")
+      : [];
+    for (const leaf of leaves) {
+      if (leaf.view instanceof MarkdownView) {
+        this.restoreHighlightsForActiveView(leaf.view);
+      }
+    }
   }
 
   /**

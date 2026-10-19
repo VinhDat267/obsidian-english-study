@@ -25,6 +25,18 @@ describe("ReadingHighlightService", () => {
     expect(service.getHighlights("/folder/note.md")).toHaveLength(1);
     expect(service.getHighlights("folder\\note.md")).toHaveLength(1);
     expect(service.getHighlights("/folder/note.md/")).toHaveLength(1);
+    expect(service.getHighlights("folder/note%2Emd")).toBeDefined();
+  });
+
+  it("normalizes URL-encoded paths with spaces correctly", () => {
+    const service = new ReadingHighlightService({
+      "spm/week 2/quiz.md": [
+        { id: "1", text: "hello", color: "yellow", timestamp: 100 },
+      ],
+    });
+
+    expect(service.getHighlights("spm/week%202/quiz.md")).toHaveLength(1);
+    expect(service.getHighlights("spm/week 2/quiz.md")).toHaveLength(1);
   });
 
   it("adds a new highlight and triggers save callback", () => {

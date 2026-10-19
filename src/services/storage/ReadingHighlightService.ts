@@ -16,7 +16,11 @@ export class ReadingHighlightService {
 
   normalizePath(filePath: string): string {
     if (!filePath) return "";
-    let clean = filePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+    let clean = filePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    try {
+      clean = decodeURIComponent(clean);
+    } catch {}
+    clean = clean.toLowerCase();
     if (clean.endsWith(".md")) {
       clean = clean.slice(0, -3);
     }

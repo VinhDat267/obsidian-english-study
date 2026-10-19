@@ -177,4 +177,84 @@ describe("readingHighlightPostProcessor", () => {
     // "o" must NOT highlight every letter 'o' in the sentence!
     expect(marks).toHaveLength(0);
   });
+
+  it("highlights text crossing inline tags like bold <strong> tags on reload", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight(
+      "spm/week 2/notes.md",
+      "A. A formal process that removes all uncertainty from software projects.",
+      "yellow"
+    );
+
+    const app = new App();
+    // Note that Obsidian renders **A.** as <strong>A.</strong> followed by text node
+    const view = makeReadingView(
+      app,
+      "<p><strong>A.</strong> A formal process that removes all uncertainty from software projects.</p>",
+      "spm/week 2/notes.md"
+    );
+    const { ctx } = makeReadingContext(view);
+    const postProcessor = createReadingHighlightPostProcessor(service);
+
+    postProcessor(view.contentEl, ctx);
+
+    const marks = view.contentEl.querySelectorAll(".polyglot-reading-highlight");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe(
+      "A. A formal process that removes all uncertainty from software projects."
+    );
+    // Verified: bold tag is inside the highlight mark!
+    expect(marks[0].querySelector("strong")?.textContent).toBe("A.");
+  });
+
+  it("matches highlights when sourcePath is URL-encoded (e.g. week%202)", () => {
+    const service = new ReadingHighlightService();
+    service.addHighlight(
+      "spm/week 2/notes.md",
+      "Evolutionary Prototyping",
+      "purple"
+    );
+
+    const app = new App();
+    const view = makeReadingView(
+      app,
+      "<p>Begin Evolutionary Prototyping and address differences.</p>",
+      "spm/week%202/notes.md" // Obsidian passes URL-encoded path!
+    );
+    const { ctx } = makeReadingContext(view);
+    const postProcessor = createReadingHighlightPostProcessor(service);
+
+    postProcessor(view.contentEl, ctx);
+
+    const marks = view.contentEl.querySelectorAll(".polyglot-reading-highlight");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe("Evolutionary Prototyping");
+    expect(marks[0].getAttribute("data-color")).toBe("purple");
+  });
+
+  it("highlights multi-line selections across separate paragraph blocks", () => {
+    const service = new ReadingHighlightService();
+    // User selected across two options with a newline
+    service.addHighlight(
+      "quiz.md",
+      "A. Option one\nB. Option two",
+      "green"
+    );
+
+    const app = new App();
+    const view = makeReadingView(
+      app,
+      "<div><p>A. Option one</p><p>B. Option two</p></div>",
+      "quiz.md"
+    );
+    const { ctx } = makeReadingContext(view);
+    const postProcessor = createReadingHighlightPostProcessor(service);
+
+    postProcessor(view.contentEl, ctx);
+
+    const marks = view.contentEl.querySelectorAll(".polyglot-reading-highlight");
+    expect(marks).toHaveLength(2);
+    expect(marks[0].textContent).toBe("A. Option one");
+    expect(marks[1].textContent).toBe("B. Option two");
+  });
 });

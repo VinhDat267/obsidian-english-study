@@ -164,8 +164,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
       expect(scrollEvent?.options).toBe(true);
 
-      // Workspace events (active-leaf-change, editor-menu, file-menu)
-      expect(plugin.events.length).toBe(3);
+      // Workspace events (active-leaf-change, editor-menu, file-menu, file-open)
+      expect(plugin.events.length).toBe(4);
 
       // Settings tab
       expect(plugin.settingTabs.length).toBe(1);
