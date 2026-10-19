@@ -11,10 +11,10 @@ Baseline: `d613051`. Bản sửa: **1.1.1**, nhánh `vinhdat/audit-remediation`.
 | F03 — source fallback báo success | Thiếu/blank/null/throw/missing batch ID làm fail export, không ghi/success notice | Service + modal failure tests, incomplete Gemini batch |
 | F04 — cache sai ngôn ngữ/context/AI | Key theo exact query/source/target/context/metadata/endpoint/accent/AI flags/callback mode; private credential epoch; snapshots độc lập; settings update hủy việc cũ | 40 ProviderManager tests, gồm source/context/case/flags/key/endpoint/snapshot/cancellation |
 | F05 — AI sai target Nhật/Trung | Map ngôn ngữ đích dùng chung cho các entrypoint; multiline/choice có target rõ ràng | 40 Gemini tests, gồm en/vi/ja/zh/unknown target và multiline |
-| F06 — request cũ đóng UI mới | Lookup generation guard cho base/AI/catch/close/dismiss/unload | Main + audit integration deferred-response tests |
+| F06 — request cũ đóng UI mới | Lookup generation guard cho base/AI/catch/close/dismiss/unload; ghim sidebar giữ AI đang chạy nhưng không mở lại popover | Main + audit integration deferred-response tests, pin-while-AI-pending regression |
 | F07 — CJK highlight không restore | Chỉ áp dụng lexical word boundary cho script phù hợp; CJK được match trong câu không khoảng trắng | JSDOM restoration tests |
 | F08 — tẩy DOM/storage lệch nhau | Bulk removal trả affected IDs, gỡ mọi fragment theo ID; settings writes được xếp hàng với snapshot riêng | Service/helper + combined DOM/persistence + reordered-save regression |
-| F09 — bút tác động Edit Mode | Kiểm tra preview/view identity/editable ở down/move/up và mutation entrypoint | RightClickPenHandler + main source-mode guard |
+| F09 — bút tác động Edit Mode | Kiểm tra preview/view identity/editable ở down/move/up; mutation entrypoint chặn Range khác pane, endpoint editable và selection cắt ngang widget editable | RightClickPenHandler + main source-mode guard + three editable/range regressions |
 | F10 — rename/move orphan highlight | Vault rename/delete events migrate/cleanup exact paths và folder prefixes | Service migration + main Vault lifecycle integration |
 | F11 — decode path trộn note | Canonical raw paths giữ case/extension/literal percent; decode chỉ phục vụ nhận diện format cũ | Literal percent/path isolation + reload/migration collision tests |
 | F12 — inherited map key crash | Null-prototype dictionary, validate record shape/color và own keys | constructor.md/malformed-data tests |
@@ -24,13 +24,14 @@ Baseline: `d613051`. Bản sửa: **1.1.1**, nhánh `vinhdat/audit-remediation`.
 ## Verification
 
 - Baseline: **477/477** tests pass; full `tsc` fail **81** diagnostic; reading typecheck fail **1** diagnostic.
-- TDD: các worker xác nhận RED trước sửa cho service/modal, cache/prompt, highlight; parent xác nhận 10 ca main ban đầu RED, 3 ca integration RED và các ca initial-snapshot/unload RED riêng. Sau sửa, các ca này GREEN.
-- Integrated suite: **572/572**, **34** file, Vitest **5.0.5**.
+- TDD: các worker xác nhận RED trước sửa cho service/modal, cache/prompt, highlight; parent xác nhận 10 ca main ban đầu RED, 3 ca integration RED và các ca initial-snapshot/unload RED riêng. Sau review, thêm một ca pin-while-AI-pending và ba ca editable/range cũng RED trước sửa. Sau sửa, các ca này GREEN.
+- Integrated suite: **576/576**, **34** file, Vitest **5.0.5** (chạy lại sau các sửa cuối review).
 - Full application/test TypeScript: **PASS**, không tắt `strict` hoặc loại tests khỏi root check.
 - All production code against installed real Obsidian API types: **PASS**. Reading-only real API check: **PASS**.
 - Build esbuild **0.28.2**: **PASS**. Vite **8.3.4**, Node đã kiểm tra **24.19.0**.
 - Dependency upgrade xử lý peer dependencies tường minh (`vite`, `@types/node`), không dùng `--force`/`--legacy-peer-deps`. `npm audit`: **0 vulnerability** tại thời điểm kiểm tra.
-- Chờ review độc lập toàn nhánh trước khi tích hợp. Không tự push, merge hoặc cài vào Vault trong lượt sửa này.
+- Review độc lập toàn nhánh tại `6141d33` phát hiện một P2 còn sót ở F09: mutation entrypoint nhận Range trong widget editable. Đã sửa cùng ba regression test RED → GREEN. Parent cũng sửa ca ghim sidebar làm hủy AI đang chạy, với regression RED → GREEN. Chưa có review độc lập lại sau bốn ca bổ sung này; full suite, cả ba typecheck, build và npm audit đã chạy lại thành công.
+- Không tự push, merge hoặc cài vào Vault trong lượt sửa này.
 
 ## Compatibility decisions and limits
 

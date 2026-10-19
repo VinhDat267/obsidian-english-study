@@ -128,6 +128,25 @@ function prepareLookup() {
 }
 
 describe("lookup UI operation ownership", () => {
+  it("pinning_keeps_background_ai_alive_without_reopening_the_popover", async () => {
+    prepareLookup(); let update: any;
+    const base = { query: "Pinned", type: "word" as const, contextSentence: "Pinned", contextSentenceClean: "Pinned",
+      vietnameseTranslation: "Base", timestamp: Date.now(), aiLoading: true };
+    vi.spyOn(plugin.providerManager, "lookup").mockImplementation(async (_text, _raw, _offset, _settings, _context, callback) => {
+      update = callback; return base;
+    });
+    const cancel = vi.spyOn(plugin.providerManager, "cancelPending");
+    plugin.sidebarView = { setResult: vi.fn() } as any;
+    vi.spyOn(plugin, "activateSidebarView").mockResolvedValue();
+    await plugin.performLookupFromReading("Pinned", "Pinned");
+    const callbacks = vi.mocked(plugin.floatingPopover.show).mock.calls[0][2];
+    callbacks.onPinToSidebar!(base); await flushPromises();
+    update({ ...base, aiLoading: false, aiTranslation: "AI result" });
+    expect(cancel).not.toHaveBeenCalled();
+    expect(plugin.sidebarView!.setResult).toHaveBeenLastCalledWith(expect.objectContaining({ aiLoading: false, aiTranslation: "AI result" }));
+    expect(plugin.floatingPopover.show).toHaveBeenCalledOnce();
+  });
+
   it("late_abort_from_an_older_lookup_does_not_hide_the_new_result", async () => {
     prepareLookup(); const gate = deferred<any>();
     (plugin.providerManager as any).googleTranslate = { translateWithMeta: vi.fn((text: string) => text.startsWith("Old") ? gate.promise : Promise.resolve({ translation: "New", detectedLang: "en" })) };
@@ -156,6 +175,32 @@ describe("lookup UI operation ownership", () => {
 });
 
 describe("highlight integration boundary", () => {
+  it("does_not_persist_or_wrap_an_editable_preview_widget", () => {
+    const view = makeReadingView(app, '<p contenteditable="true">Editable widget text</p>', "A.md");
+    const range = document.createRange(); range.selectNodeContents(view.contentEl.firstElementChild);
+    expect(plugin.applyLiveReadingHighlight("yellow", "Editable widget text", range, view)).toBe(false);
+    expect(view.contentEl.querySelector("mark")).toBeNull();
+    expect(plugin.readingHighlightService.getHighlights("A.md")).toHaveLength(0);
+  });
+
+  it("rejects_a_range_owned_by_another_pane", () => {
+    const left = makeReadingView(app, "<p>Left pane</p>", "A.md");
+    const right = makeReadingView(app, "<p>Right pane</p>", "B.md");
+    const range = document.createRange(); range.selectNodeContents(right.contentEl.firstElementChild);
+    expect(plugin.applyLiveReadingHighlight("yellow", "Right pane", range, left)).toBe(false);
+    expect(right.contentEl.querySelector("mark")).toBeNull();
+    expect(plugin.readingHighlightService.getHighlights("A.md")).toHaveLength(0);
+  });
+
+  it("rejects_a_selection_spanning_an_editable_widget", () => {
+    const view = makeReadingView(app, '<p>Start</p><div contenteditable="true">Widget</div><p>End</p>', "A.md");
+    const range = document.createRange(); range.setStart(view.contentEl.firstElementChild.firstChild, 0);
+    range.setEnd(view.contentEl.lastElementChild.firstChild, 3);
+    expect(plugin.applyLiveReadingHighlight("yellow", range.toString(), range, view)).toBe(false);
+    expect(view.contentEl.querySelector("mark")).toBeNull();
+    expect(plugin.readingHighlightService.getHighlights("A.md")).toHaveLength(0);
+  });
+
   it("erases_all_fragments_of_the_removed_record_and_no_other_records", () => {
     const view = makeReadingView(app, "<p>a <strong>neural</strong> network learns</p>", "A.md");
     plugin.readingHighlightService.addHighlight("A.md", "a neural network learns", "yellow");

@@ -4,7 +4,7 @@
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vitest](https://img.shields.io/badge/Tests-572%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
+[![Vitest](https://img.shields.io/badge/Tests-576%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -193,7 +193,7 @@ cd obsidian-polyglot-study
 # 2. Install dependencies
 npm ci
 
-# 3. Run full test suite (572 tests)
+# 3. Run full test suite (576 tests)
 npm test
 
 # 4. Build production bundle
@@ -245,7 +245,7 @@ Open **Settings > Polyglot Study Assistant** to customize your environment:
 The project is built on strict **Test-Driven Development (TDD)** principles:
 
 ```bash
-# Run 572 tests across 34 test suites
+# Run 576 tests across 34 test suites
 npm test
 
 # Typecheck application and tests, then all production code against real Obsidian types

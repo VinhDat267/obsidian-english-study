@@ -37,7 +37,7 @@ Polyglot Study Assistant hỗ trợ học ngoại ngữ trong ghi chú: tra từ
 - `README.md`, `main.ts`, `src/types/index.ts`, các service provider, storage, translation và UI là nguồn mô tả hiện trạng.
 - `docs/superpowers/specs/2026-10-18-immersive-reading-translation-design.md` ghi thiết kế cho yêu cầu mới.
 - Kiểm tra ở snapshot `515e7b0`: 337 test trên 21 file pass; typecheck hiện thất bại. Test dùng mock Obsidian/HTTP, không thay thế bằng chứng chạy trong Obsidian thật.
-- Snapshot trước sửa audit `d613051`: 477 test pass, full typecheck có 81 diagnostic và scoped reading check fail. Sau sửa 1.1.1: 572 test/34 file pass, full/production/reading typecheck và build pass; npm audit báo 0 vulnerability. Browser fixture sáng/tối/pane hẹp thuộc nghiệm thu reading ban đầu; không thay cho chạy Obsidian thật.
+- Snapshot trước sửa audit `d613051`: 477 test pass, full typecheck có 81 diagnostic và scoped reading check fail. Sau sửa 1.1.1: 576 test/34 file pass, full/production/reading typecheck và build pass; npm audit báo 0 vulnerability. Browser fixture sáng/tối/pane hẹp thuộc nghiệm thu reading ban đầu; không thay cho chạy Obsidian thật.
 
 ## Product Principles
 

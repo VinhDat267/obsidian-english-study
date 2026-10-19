@@ -704,10 +704,10 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           await this.vocabService.saveVocab(res, this.settings);
         },
         onPinToSidebar: (res: LookupResult) => {
-          this.dismissFloatingUi();
+          this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
             if (this.sidebarView) {
-              this.sidebarView.setResult(res);
+              this.sidebarView.setResult(isCurrent() ? latestAiResult ?? res : res);
             }
           });
         },
@@ -745,7 +745,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     view?: MarkdownView
   ): boolean {
     const activeView = view || this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView || activeView.getMode() !== "preview") return false;
+    if (!this.canMutateReadingHighlight(activeView, range)) return false;
     const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
     if (!file || !file.path || !selectedText || selectedText.trim().length < 2) return false;
 
@@ -767,6 +767,21 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
 
     this.floatingHighlightToolbar?.hide();
     return true;
+  }
+
+  private canMutateReadingHighlight(view: MarkdownView | null | undefined, range?: Range | null): boolean {
+    if (!view || view.getMode() !== "preview") return false;
+    if (!range) return true;
+    const root: HTMLElement = view.contentEl;
+    const editable = '.cm-editor, [contenteditable]:not([contenteditable="false"])';
+    const accepts = (node: Node) => {
+      const element = node.nodeType === 1 ? node as Element : node.parentElement;
+      return root.contains(node) && Boolean(element) && !element!.closest(editable);
+    };
+    try {
+      if (!accepts(range.startContainer) || !accepts(range.endContainer)) return false;
+      return !Array.from(root.querySelectorAll(editable)).some(element => range.intersectsNode(element));
+    } catch { return false; }
   }
 
   /**
@@ -1138,8 +1153,8 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   /**
    * Ẩn các UI nổi (Trigger Icon và Popover) khi scroll hoặc đổi tab
    */
-  dismissFloatingUi(): void {
-    this.invalidateLookup();
+  dismissFloatingUi(cancelLookup = true): void {
+    if (cancelLookup) this.invalidateLookup();
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
     }
