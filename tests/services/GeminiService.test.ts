@@ -446,3 +446,46 @@ describe("reading batch language and token contract", () => {
     expect(prompt).toContain('⟦PG');
   });
 });
+
+describe("lookup AI target-language prompt contract", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const languages = [
+    ["en", "tiếng Anh"], ["vi", "tiếng Việt"], ["ja", "tiếng Nhật"],
+    ["zh", "tiếng Trung"], ["de", "ngôn ngữ có mã de"],
+  ];
+
+  function stubResponse() {
+    const json = { candidates: [{ content: { parts: [{ text: "Offline result" }] } }] };
+    vi.mocked(requestUrl).mockResolvedValueOnce({
+      status: 200, headers: {}, arrayBuffer: new ArrayBuffer(0), json, text: JSON.stringify(json),
+    });
+  }
+
+  function sentPrompt(): string {
+    const request = vi.mocked(requestUrl).mock.calls[0][0] as any;
+    return JSON.parse(request.body).contents[0].parts[0].text;
+  }
+
+  describe.each(["translateContext", "analyzeGrammar", "analyzeContext"] as const)("%s", method => {
+    it.each(languages)("requests the selected %s output language", async (target, name) => {
+      stubResponse();
+      const service = new GeminiService();
+      const result = method === "analyzeContext"
+        ? await service.analyzeContext("Hello", "Hello world.", "offline-key", "en", target)
+        : await service[method]("Hello", "Hello world.", "offline-key", undefined, "en", target);
+      expect(result).toBe("Offline result");
+      expect(sentPrompt()).toContain(`bằng ${name}`);
+    });
+  });
+
+  it.each([
+    ["Question\nA. First answer\nB. Second answer", "ja", "tiếng Nhật"],
+    ["Question A. First answer B. Second answer", "zh", "tiếng Trung"],
+  ])("retains the target language while preserving multiline or choice structure", async (text, target, name) => {
+    stubResponse();
+    await new GeminiService().translateContext(text, text, "offline-key", undefined, "en", target);
+    expect(sentPrompt()).toContain(`bằng ${name}`);
+    expect(sentPrompt()).toContain("mỗi lựa chọn trên một dòng");
+  });
+});

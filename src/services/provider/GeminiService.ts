@@ -9,6 +9,13 @@ export interface GeminiTestResult {
 export class GeminiService extends BaseProvider {
   private isFlashExhausted: boolean = false;
 
+  private targetLanguageName(targetLang: string): string {
+    const languages: Record<string, string> = {
+      vi: "tiếng Việt", en: "tiếng Anh", zh: "tiếng Trung", ja: "tiếng Nhật",
+    };
+    return languages[targetLang] || ("ngôn ngữ có mã " + targetLang);
+  }
+
   /**
    * Helper build context hint từ DocumentContextMeta
    */
@@ -50,14 +57,14 @@ export class GeminiService extends BaseProvider {
 
     const cleanContext = contextSentence ? contextSentence.trim() : "";
     const contextHint = this.buildContextHint(docContext);
-    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+    const langTargetName = this.targetLanguageName(targetLang);
 
     const isMultilineOrChoice =
       cleanTarget.includes("\n") ||
       /(?:^|[\s\n])(?:\([A-Da-d]\)|\[[A-Da-d]\]|[A-Da-d][.)])\s+/.test(cleanTarget);
 
     const formatRequirement = isMultilineOrChoice
-      ? `- Giữ nguyên cấu trúc các dòng và các lựa chọn đáp án (A, B, C, D... hoặc 1, 2, 3...) tương ứng như văn bản gốc, mỗi lựa chọn trên một dòng riêng biệt, không gộp chung vào một đoạn.`
+      ? `- Dịch nghĩa bằng ${langTargetName}. Giữ nguyên cấu trúc các dòng và các lựa chọn đáp án (A, B, C, D... hoặc 1, 2, 3...) tương ứng như văn bản gốc, mỗi lựa chọn trên một dòng riêng biệt, không gộp chung vào một đoạn.`
       : `- Trả về DUY NHẤT một câu dịch nghĩa bằng ${langTargetName} súc tích, tự nhiên.`;
 
     const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là một dịch giả chuyên gia am hiểu sâu sắc lĩnh vực trên. Hãy dịch nghĩa chính xác của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}".
@@ -90,7 +97,7 @@ ${formatRequirement}
 
     const cleanContext = contextSentence ? contextSentence.trim() : "";
     const contextHint = this.buildContextHint(docContext);
-    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+    const langTargetName = this.targetLanguageName(targetLang);
 
     const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là chuyên gia ngôn ngữ học. Hãy phân tích cấu trúc ngữ pháp và từ loại của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}".
 Yêu cầu:
@@ -118,8 +125,7 @@ Yêu cầu:
     if (!cleanKey || items.length === 0) return null;
 
     const contextHint = this.buildContextHint(docContext);
-    const languages: Record<string, string> = { vi: "tiếng Việt", en: "tiếng Anh", zh: "tiếng Trung", ja: "tiếng Nhật" };
-    const langTargetName = languages[targetLang] || ("ngôn ngữ có mã " + targetLang);
+    const langTargetName = this.targetLanguageName(targetLang);
 
     const prompt = `${contextHint ? `${contextHint}\n` : ""}Bạn là một dịch giả chuyên gia. Hãy dịch từng đoạn văn bản sau sang ${langTargetName} một cách tự nhiên, chính xác và giữ đúng ngữ cảnh chuyên môn của tài liệu.
 Đầu vào là mảng JSON:
@@ -274,7 +280,7 @@ Yêu cầu BẮT BUỘC:
     }
 
     let prompt: string;
-    const langTargetName = targetLang === "en" ? "tiếng Anh" : "tiếng Việt";
+    const langTargetName = this.targetLanguageName(targetLang);
     if (sourceLang === "ja") {
       prompt = `Bạn là chuyên gia tiếng Nhật. Hãy giải thích ngắn gọn (1-3 câu) nghĩa của "${cleanTarget}" trong ngữ cảnh: "${cleanContext}". Chỉ ra cách đọc Furigana/Romaji, Hán tự Kanji (nếu có) và ngữ pháp liên quan bằng ${langTargetName}.`;
     } else if (sourceLang === "zh") {

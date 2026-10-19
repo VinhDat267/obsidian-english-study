@@ -205,7 +205,7 @@ describe("readingHighlightPostProcessor", () => {
     );
   });
 
-  it("matches highlights when sourcePath is URL-encoded (e.g. week%202)", () => {
+  it("treats sourcePath as a raw Vault path and isolates literal percent filenames", () => {
     const service = new ReadingHighlightService();
     service.addHighlight(
       "spm/week 2/notes.md",
@@ -217,7 +217,7 @@ describe("readingHighlightPostProcessor", () => {
     const view = makeReadingView(
       app,
       "<p>Begin Evolutionary Prototyping and address differences.</p>",
-      "spm/week%202/notes.md" // Obsidian passes URL-encoded path!
+      "spm/week%202/notes.md"
     );
     const { ctx } = makeReadingContext(view);
     const postProcessor = createReadingHighlightPostProcessor(service);
@@ -225,9 +225,23 @@ describe("readingHighlightPostProcessor", () => {
     postProcessor(view.contentEl, ctx);
 
     const marks = view.contentEl.querySelectorAll(".polyglot-reading-highlight");
-    expect(marks).toHaveLength(1);
-    expect(marks[0].textContent).toBe("Evolutionary Prototyping");
-    expect(marks[0].getAttribute("data-color")).toBe("purple");
+    expect(marks).toHaveLength(0);
+    postProcessor(view.contentEl, { ...ctx, sourcePath: "spm/week 2/notes.md" });
+    expect(view.contentEl.querySelector("mark")?.textContent).toBe("Evolutionary Prototyping");
+  });
+
+  it.each([
+    ["日本語", "私は日本語を勉強します。"],
+    ["中文", "我正在学习中文语言。"],
+  ])("restores %s inside an unspaced CJK sentence after rerender", (text, sentence) => {
+    const service = new ReadingHighlightService();
+    const item = service.addHighlight("cjk.md", text, "yellow").item!;
+    const processor = createReadingHighlightPostProcessor(service);
+    const root = mountReadingHtml(`<p>${sentence}</p>`);
+    processor(root, { sourcePath: "cjk.md" } as any);
+    expect(root.querySelector("mark")?.textContent).toBe(text);
+    expect(root.querySelector("mark")?.dataset.highlightId).toBe(item.id);
+    expect(root.textContent).toBe(sentence);
   });
 
   it("highlights multi-line selections across separate paragraph blocks", () => {

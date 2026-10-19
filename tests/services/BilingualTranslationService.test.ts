@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BilingualTranslationService } from "../../src/services/translation/BilingualTranslationService";
+import { GoogleTranslate } from "../../src/services/provider/GoogleTranslate";
 import { MarkdownBlock } from "../../src/types";
 
 describe("BilingualTranslationService", () => {
@@ -9,13 +10,17 @@ describe("BilingualTranslationService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGoogleTranslate = {
-      translate: vi.fn(),
-    };
+    mockGoogleTranslate = new GoogleTranslate();
+    vi.spyOn(mockGoogleTranslate, "translateWithMeta");
     mockGeminiService = {
       translateBatch: vi.fn(),
     };
     service = new BilingualTranslationService(mockGoogleTranslate, mockGeminiService);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("should return blocks immediately if all blocks have skipTranslation: true", async () => {
@@ -31,7 +36,7 @@ describe("BilingualTranslationService", () => {
     });
 
     expect(result).toHaveLength(2);
-    expect(mockGoogleTranslate.translate).not.toHaveBeenCalled();
+    expect(mockGoogleTranslate.translateWithMeta).not.toHaveBeenCalled();
     expect(progressSpy).toHaveBeenCalledWith(
       expect.objectContaining({ current: 2, total: 2, percent: 100 })
     );
@@ -44,9 +49,9 @@ describe("BilingualTranslationService", () => {
       { id: "3", type: "multiple_choice", rawText: "A. Option A", translatableText: "A. Option A", skipTranslation: false },
     ];
 
-    mockGoogleTranslate.translate
-      .mockResolvedValueOnce("Xin chào thế giới.")
-      .mockResolvedValueOnce("A. Lựa chọn A");
+    mockGoogleTranslate.translateWithMeta
+      .mockResolvedValueOnce({ translation: "Xin chào thế giới.", detectedLang: "en" })
+      .mockResolvedValueOnce({ translation: "A. Lựa chọn A", detectedLang: "en" });
 
     const progressUpdates: any[] = [];
     const result = await service.translateBlocks(blocks, {
@@ -56,7 +61,7 @@ describe("BilingualTranslationService", () => {
       onProgress: (p) => progressUpdates.push(p),
     });
 
-    expect(mockGoogleTranslate.translate).toHaveBeenCalledTimes(2);
+    expect(mockGoogleTranslate.translateWithMeta).toHaveBeenCalledTimes(2);
     expect(result[0].translatedText).toBe("Xin chào thế giới.");
     expect(result[1].translatedText).toBeUndefined();
     expect(result[2].translatedText).toBe("A. Lựa chọn A");
@@ -106,9 +111,9 @@ describe("BilingualTranslationService", () => {
 
     const controller = new AbortController();
 
-    mockGoogleTranslate.translate.mockImplementation(async () => {
+    mockGoogleTranslate.translateWithMeta.mockImplementation(async () => {
       controller.abort();
-      return "Bản dịch 1";
+      return { translation: "Bản dịch 1", detectedLang: "en" };
     });
 
     await expect(
@@ -119,28 +124,113 @@ describe("BilingualTranslationService", () => {
       })
     ).rejects.toThrow("Translation aborted by user");
 
-    expect(mockGoogleTranslate.translate).toHaveBeenCalledTimes(1);
+    expect(mockGoogleTranslate.translateWithMeta).toHaveBeenCalledTimes(1);
   });
 
-  it("should gracefully recover if a block translation fails, preserving original text", async () => {
+  it("rejects a partial Google export and preserves the original blocks", async () => {
     const blocks: MarkdownBlock[] = [
       { id: "1", type: "paragraph", rawText: "Good text", translatableText: "Good text", skipTranslation: false },
       { id: "2", type: "paragraph", rawText: "Failing text", translatableText: "Failing text", skipTranslation: false },
       { id: "3", type: "paragraph", rawText: "Another text", translatableText: "Another text", skipTranslation: false },
     ];
 
-    mockGoogleTranslate.translate
-      .mockResolvedValueOnce("Văn bản tốt")
+    mockGoogleTranslate.translateWithMeta
+      .mockResolvedValueOnce({ translation: "Văn bản tốt", detectedLang: "en" })
       .mockResolvedValueOnce(null) // API failed
-      .mockResolvedValueOnce("Văn bản khác");
+      .mockResolvedValueOnce({ translation: "Văn bản khác", detectedLang: "en" });
 
-    const result = await service.translateBlocks(blocks, {
+    await expect(service.translateBlocks(blocks, {
       engine: "google",
       delayMs: 0,
-    });
+    })).rejects.toThrow(/Google.*block 2.*retry/i);
 
-    expect(result[0].translatedText).toBe("Văn bản tốt");
-    expect(result[1].translatedText).toBe("Failing text"); // Fallback to translatableText
-    expect(result[2].translatedText).toBe("Văn bản khác");
+    expect(blocks.every((block) => block.translatedText === undefined)).toBe(true);
+  });
+
+  const paragraph = (): MarkdownBlock => ({
+    id: "1", type: "paragraph", rawText: "Original source.",
+    translatableText: "Original source.", skipTranslation: false,
+  });
+
+  it.each(["google", "gemini"] as const)("rejects cancellation during the final %s response", async (engine) => {
+    const controller = new AbortController();
+    mockGoogleTranslate.translateWithMeta.mockImplementation(async () => {
+      controller.abort();
+      return { translation: "Bản dịch", detectedLang: "en" };
+    });
+    mockGeminiService.translateBatch.mockImplementation(async () => {
+      controller.abort();
+      return new Map([[0, "Bản dịch"]]);
+    });
+    const progress = vi.fn();
+
+    await expect(service.translateBlocks([paragraph()], {
+      engine, apiKey: "offline-key", delayMs: 0, signal: controller.signal, onProgress: progress,
+    })).rejects.toThrow(/aborted/i);
+    expect(progress).not.toHaveBeenCalled();
+  });
+
+  it.each(["google", "gemini"] as const)("rejects cancellation during the final %s delay", async (engine) => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    mockGoogleTranslate.translateWithMeta.mockResolvedValue({ translation: "Bản dịch", detectedLang: "en" });
+    mockGeminiService.translateBatch.mockResolvedValue(new Map([[0, "Bản dịch"]]));
+    setTimeout(() => controller.abort(), 10);
+    const result = service.translateBlocks([paragraph()], {
+      engine, apiKey: "offline-key", delayMs: 100, signal: controller.signal,
+    });
+    await Promise.all([
+      expect(result).rejects.toThrow(/aborted/i),
+      vi.runAllTimersAsync(),
+    ]);
+  });
+
+  it("rejects a pre-cancelled empty translation", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(service.translateBlocks([], { engine: "google", signal: controller.signal })).rejects.toThrow(/aborted/i);
+  });
+
+  it.each([null, "", "   "])("rejects an empty Google result (%s)", async (translation) => {
+    mockGoogleTranslate.translateWithMeta.mockResolvedValue(translation === null ? null : { translation, detectedLang: "en" });
+    await expect(service.translateBlocks([paragraph()], { engine: "google", delayMs: 0 })).rejects.toThrow(/Google.*block 1.*retry/i);
+  });
+
+  it("rejects a thrown Google request", async () => {
+    mockGoogleTranslate.translateWithMeta.mockRejectedValue(new Error("offline network failure"));
+    await expect(service.translateBlocks([paragraph()], { engine: "google", delayMs: 0 })).rejects.toThrow(/Google.*block 1.*retry/i);
+  });
+
+  it.each([
+    ["null response", null],
+    ["missing block ID", new Map([[0, "First translated"]])],
+    ["blank translation", new Map([[0, "First translated"], [1, "   "]])],
+  ])("rejects Gemini %s instead of substituting source text", async (_reason, response) => {
+    mockGeminiService.translateBatch.mockResolvedValue(response);
+    const blocks = [paragraph(), { ...paragraph(), id: "2" }];
+    await expect(service.translateBlocks(blocks, { engine: "gemini", apiKey: "offline-key", delayMs: 0 })).rejects.toThrow(/Gemini.*retry/i);
+    expect(blocks.every((block) => block.translatedText === undefined)).toBe(true);
+  });
+
+  it("rejects a thrown Gemini request", async () => {
+    mockGeminiService.translateBatch.mockRejectedValue(new Error("offline network failure"));
+    await expect(service.translateBlocks([paragraph()], { engine: "gemini", apiKey: "offline-key", delayMs: 0 })).rejects.toThrow(/Gemini.*retry/i);
+  });
+
+  it("requires a Gemini API key before translating", async () => {
+    await expect(service.translateBlocks([paragraph()], { engine: "gemini", delayMs: 0 })).rejects.toThrow(/Gemini.*API key/i);
+    expect(mockGeminiService.translateBatch).not.toHaveBeenCalled();
+  });
+
+  it("uses the selected Google source and target languages", async () => {
+    mockGoogleTranslate.translateWithMeta.mockResolvedValue({ translation: "Translation", detectedLang: "ja" });
+    await service.translateBlocks([paragraph()], { engine: "google", sourceLang: "ja", targetLang: "en", customEndpointUrl: "https://offline.test", delayMs: 0 });
+    expect(mockGoogleTranslate.translateWithMeta).toHaveBeenCalledWith("Original source.", "ja", "en", "https://offline.test");
+  });
+
+  it("uses the selected Gemini source and target languages", async () => {
+    mockGeminiService.translateBatch.mockResolvedValue(new Map([[0, "Translation"]]));
+    await service.translateBlocks([paragraph()], { engine: "gemini", sourceLang: "ja", targetLang: "en", apiKey: "offline-key", customModel: "custom-model", delayMs: 0 });
+    expect(mockGeminiService.translateBatch).toHaveBeenCalledWith([{ id: 0, text: "Original source." }], "offline-key", undefined, "en", "custom-model", "ja");
   });
 });

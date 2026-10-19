@@ -51,6 +51,7 @@ export class RightClickPenHandler {
   private didDragMove = false;
   private startPoint: { x: number; y: number } | null = null;
   private startRange: Range | null = null;
+  private dragView: MarkdownView | null = null;
   private suppressContextMenu = false;
 
   constructor(private options: RightClickPenOptions) {}
@@ -58,11 +59,12 @@ export class RightClickPenHandler {
   handleMouseDown(e: MouseEvent): void {
     if (e.button !== 2 || !this.options.isPenActive()) return;
 
+    this.reset();
+    this.suppressContextMenu = false;
     const view = this.options.getActiveView();
-    if (!view || !view.contentEl || !view.contentEl.contains(e.target as Node)) {
-      return;
-    }
+    if (!view || !this.isPreviewTarget(view, e.target as Node)) return;
 
+    this.dragView = view;
     this.isDragging = true;
     this.didDragMove = false;
     this.startPoint = { x: e.clientX, y: e.clientY };
@@ -75,10 +77,17 @@ export class RightClickPenHandler {
         this.startRange = null;
       }
     }
+    if (this.startRange && !this.isPreviewRange(view, this.startRange)) this.reset();
   }
 
   handleMouseMove(e: MouseEvent): void {
-    if (!this.isDragging || (e.buttons & 2) === 0) return;
+    if (!this.isDragging) return;
+    const view = this.options.getActiveView();
+    if ((e.buttons & 2) === 0 || !this.isCurrentDrag(view) ||
+      (e.target && !this.isPreviewTarget(view!, e.target as Node))) {
+      this.reset();
+      return;
+    }
 
     if (this.startPoint) {
       const dx = Math.abs(e.clientX - this.startPoint.x);
@@ -95,6 +104,10 @@ export class RightClickPenHandler {
           const current = (doc as any).caretRangeFromPoint(e.clientX, e.clientY);
           if (current) {
             const range = createOrderedRange(this.startRange, current, doc);
+            if (!this.isPreviewRange(view!, range)) {
+              this.reset();
+              return;
+            }
             const sel = (doc.defaultView || window).getSelection();
             if (sel) {
               sel.removeAllRanges();
@@ -108,10 +121,14 @@ export class RightClickPenHandler {
 
   handleMouseUp(e: MouseEvent): void {
     if (e.button !== 2 || !this.isDragging) return;
+    const view = this.options.getActiveView();
+    if (!this.isCurrentDrag(view) || !this.isPreviewTarget(view!, e.target as Node)) {
+      this.reset();
+      return;
+    }
 
     if (this.didDragMove) {
       this.suppressContextMenu = true;
-      const view = this.options.getActiveView();
       const doc = (e.target as Node)?.ownerDocument || document;
       const sel = (doc.defaultView || window).getSelection();
       const text = sel ? sel.toString().trim() : "";
@@ -123,8 +140,10 @@ export class RightClickPenHandler {
             range = sel.getRangeAt(0).cloneRange();
           } catch {}
         }
-        const action = this.options.getPenAction();
-        this.options.onHighlight(action, text, range, view);
+        if (range && this.isPreviewRange(view, range)) {
+          const action = this.options.getPenAction();
+          this.options.onHighlight(action, text, range, view);
+        }
       }
 
       if (sel) {
@@ -152,5 +171,24 @@ export class RightClickPenHandler {
     this.didDragMove = false;
     this.startPoint = null;
     this.startRange = null;
+    this.dragView = null;
+  }
+
+  private isPreviewTarget(view: MarkdownView, node: Node | null): boolean {
+    if (!node || view.getMode() !== "preview" || !view.contentEl?.contains(node)) return false;
+    const element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+    return !!element && !element.closest('.cm-editor, [contenteditable]:not([contenteditable="false"])');
+  }
+
+  private isPreviewRange(view: MarkdownView, range: Range): boolean {
+    if (!this.isPreviewTarget(view, range.startContainer) ||
+      !this.isPreviewTarget(view, range.endContainer)) return false;
+    const editable = view.contentEl.querySelectorAll('.cm-editor, [contenteditable]:not([contenteditable="false"])') as NodeListOf<Element>;
+    return !Array.from(editable).some(element => range.intersectsNode(element));
+  }
+
+  private isCurrentDrag(view: MarkdownView | null): boolean {
+    return !!view && view === this.dragView && this.options.isPenActive() &&
+      view.getMode() === "preview" && (!this.startRange || this.isPreviewRange(view, this.startRange));
   }
 }

@@ -15,12 +15,16 @@ import { GoogleTranslate, GoogleTranslationMeta } from "./GoogleTranslate";
 import { GeminiService } from "./GeminiService";
 
 export class ProviderManager {
+  private static nextCacheNamespace = 0;
   private freeDict: FreeDictService;
   private googleTranslate: GoogleTranslate;
   private geminiService: GeminiService;
   private cache: LRUCache<LookupResult>;
   private activeController: AbortController | null = null;
   private settings: PluginSettings;
+  private readonly cacheNamespace = ProviderManager.nextCacheNamespace++;
+  private credentialIdentity = "";
+  private credentialEpoch = 0;
 
   constructor(settings?: PluginSettings, cache?: LRUCache<LookupResult>) {
     this.settings = settings ? { ...settings } : { ...DEFAULT_SETTINGS };
@@ -34,6 +38,14 @@ export class ProviderManager {
    * Cập nhật runtime settings
    */
   updateSettings(settings: Partial<PluginSettings>): void {
+    const providerSettings: Array<keyof PluginSettings> = [
+      "sourceLanguage", "targetLanguage", "translateEndpointUrl", "preferredAccent",
+      "geminiApiKey", "enableAiTranslation", "enableAiGrammar",
+    ];
+    if (providerSettings.some(key => key in settings && settings[key] !== this.settings[key])) {
+      this.cancelPending();
+      this.cache.clear();
+    }
     this.settings = { ...this.settings, ...settings };
     if (settings.preferredAccent) {
       this.freeDict = new FreeDictService(settings.preferredAccent);
@@ -55,6 +67,19 @@ export class ProviderManager {
       this.activeController.abort();
       this.activeController = null;
     }
+  }
+
+  private snapshotDocContext(docContext?: DocumentContextMeta): DocumentContextMeta | undefined {
+    if (!docContext) return undefined;
+    return { ...docContext, ...(docContext.tags ? { tags: [...docContext.tags] } : {}) };
+  }
+
+  private snapshotResult(result: LookupResult): LookupResult {
+    return {
+      ...result,
+      ...(result.definitions ? { definitions: result.definitions.map(definition => ({ ...definition })) } : {}),
+      docContext: this.snapshotDocContext(result.docContext),
+    };
   }
 
   /**
@@ -135,6 +160,7 @@ export class ProviderManager {
         effectiveDocContext = docContext as DocumentContextMeta;
       }
     }
+    effectiveDocContext = this.snapshotDocContext(effectiveDocContext);
 
     const controller = new AbortController();
     this.activeController = controller;
@@ -146,6 +172,12 @@ export class ProviderManager {
 
     const sourceLang = effectiveSettings.sourceLanguage || "auto";
     const targetLang = effectiveSettings.targetLanguage || "vi";
+    const credentialIdentity = effectiveSettings.geminiApiKey.trim();
+    if (credentialIdentity !== this.credentialIdentity) {
+      this.credentialIdentity = credentialIdentity;
+      this.credentialEpoch++;
+      this.cache.clear();
+    }
 
     // 1. Làm sạch văn bản
     const cleanText = cleanSelection(text);
@@ -172,15 +204,20 @@ export class ProviderManager {
     const contextSentenceClean = cleanContext;
 
     // 3. Kiểm tra Cache
-    const cacheKey = `${targetLang}:${cleanText.toLowerCase()}`;
+    // Credentials stay private; only their invalidation epoch enters cache keys.
+    // Both context forms matter: the raw form is displayed, the clean form feeds AI.
+    const cacheKey = JSON.stringify([
+      this.cacheNamespace, this.credentialEpoch, cleanText, sourceLang, targetLang,
+      contextSentence, contextSentenceClean, Boolean(effectiveDocContext),
+      effectiveDocContext?.noteTitle, effectiveDocContext?.fileTitle, effectiveDocContext?.folderPath,
+      effectiveDocContext?.heading, effectiveDocContext?.headingContext, effectiveDocContext?.tags,
+      effectiveSettings.translateEndpointUrl, effectiveSettings.preferredAccent,
+      effectiveSettings.enableAiTranslation, effectiveSettings.enableAiGrammar,
+      Boolean(effectiveOnAiUpdate),
+    ]);
     const cached = this.cache.get(cacheKey);
     if (cached) {
-      cached.timestamp = Date.now();
-      if (rawContext && rawContext.trim()) {
-        cached.contextSentence = contextSentence;
-        cached.contextSentenceClean = contextSentenceClean;
-      }
-      return cached;
+      return { ...this.snapshotResult(cached), timestamp: Date.now() };
     }
 
     // 4. Phân loại và nhận diện ngôn ngữ
@@ -238,7 +275,7 @@ export class ProviderManager {
       }
     } else {
       // type === "sentence"
-      if (!onAiUpdate && needsAiGrammar && !needsAiTranslation) {
+      if (!effectiveOnAiUpdate && needsAiGrammar && !needsAiTranslation) {
         // Classic / legacy sentence mode: call analyzeContext directly (1 request)
         const geminiRes = await this.geminiService.analyzeContext(
           cleanText,
@@ -289,6 +326,10 @@ export class ProviderManager {
           }
         }
       }
+    }
+
+    if (controller.signal.aborted) {
+      throw new DOMException("The lookup operation was aborted", "AbortError");
     }
 
     const result: LookupResult = {
@@ -355,15 +396,16 @@ export class ProviderManager {
               detectedSourceLang || "auto",
               targetLang
             );
+            if (controller.signal.aborted) return;
             if (legacyRes) result.aiGrammarNote = legacyRes;
           }
         }
       } finally {
         result.aiLoading = false;
         if (!controller.signal.aborted) {
-          this.cache.set(cacheKey, result);
+          this.cache.set(cacheKey, this.snapshotResult(result));
           if (effectiveOnAiUpdate) {
-            effectiveOnAiUpdate(result);
+            effectiveOnAiUpdate(this.snapshotResult(result));
           }
         }
       }
@@ -373,15 +415,18 @@ export class ProviderManager {
       if (effectiveOnAiUpdate) {
         // Chế độ Progressive: trả về base result ngay lập tức, chạy AI ngầm
         executeAi();
-        return result;
+        return this.snapshotResult(result);
       } else {
         // Chế độ cổ điển/test: chờ AI hoàn thành trước khi trả về
         await executeAi();
-        return result;
+        if (controller.signal.aborted) {
+          throw new DOMException("The lookup operation was aborted", "AbortError");
+        }
+        return this.snapshotResult(result);
       }
     }
 
-    this.cache.set(cacheKey, result);
-    return result;
+    this.cache.set(cacheKey, this.snapshotResult(result));
+    return this.snapshotResult(result);
   }
 }

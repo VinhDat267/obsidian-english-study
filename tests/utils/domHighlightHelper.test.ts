@@ -4,6 +4,7 @@ import {
   wrapRangeWithHighlight,
   unwrapHighlightElement,
   unwrapHighlightsByText,
+  unwrapHighlightsByIds,
   unwrapAllHighlights,
 } from "../../src/utils/domHighlightHelper";
 
@@ -93,6 +94,15 @@ describe("domHighlightHelper", () => {
     expect(count).toBe(3);
     expect(container.querySelectorAll(".polyglot-reading-highlight")).toHaveLength(0);
     expect(container.textContent?.replace(/\s+/g, " ").trim()).toBe("First Second Third");
+  });
+
+  it("unwraps every fragment of the removed IDs while preserving other highlights", () => {
+    container.innerHTML = '<p>a <strong><mark class="polyglot-reading-highlight" data-highlight-id="phrase">neural</mark></strong><mark class="polyglot-reading-highlight" data-highlight-id="phrase"> network learns</mark> <mark class="polyglot-reading-highlight" data-highlight-id="other">more</mark></p>';
+    expect(unwrapHighlightsByIds(container, ["phrase"])).toBe(2);
+    expect(container.querySelectorAll("mark")).toHaveLength(1);
+    expect(container.querySelector("mark")?.dataset.highlightId).toBe("other");
+    expect(container.querySelector("strong")?.textContent).toBe("neural");
+    expect(container.textContent).toBe("a neural network learns more");
   });
 
   it("safely highlights across multiple elements without losing text or structure", () => {

@@ -540,7 +540,7 @@ export class EnglishStudySidebar extends ItemView {
   private setPlayingState(playing: boolean, audioBtn?: HTMLElement): void {
     this.isPlayingAudio = playing;
     const btn =
-      audioBtn || this.contentEl?.querySelector?.<HTMLElement>(".audio-btn");
+      audioBtn || this.contentEl?.querySelector?.(".audio-btn") as HTMLElement | undefined;
     if (btn) {
       if (playing) {
         btn.addClass ? btn.addClass("audio-playing") : btn.classList.add("audio-playing");

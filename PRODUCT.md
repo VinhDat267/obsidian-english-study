@@ -29,14 +29,15 @@ Polyglot Study Assistant hỗ trợ học ngoại ngữ trong ghi chú: tra từ
 - Chế độ đọc song ngữ mới phải giữ từng đoạn gốc và bản dịch liền nhau để đối chiếu.
 - Tiếp tục dùng provider của project. Không cần tích hợp tài khoản hoặc SDK Immersive Translate để đạt trải nghiệm được yêu cầu.
 - Tác vụ lưu từ vựng do người dùng chủ động thực hiện vẫn là một luồng riêng.
-- Chế độ đọc song ngữ mới đã được triển khai theo lựa chọn Native ngày 2026-10-18, với nền nổi rõ và chữ đậm; đang chờ review toàn nhánh. Kiểm chứng trong Obsidian và provider thật chưa chạy.
+- Chế độ đọc song ngữ đã được triển khai Native và merge qua PR #2 (`781353d`), với nền nổi rõ và chữ đậm. Bản sửa audit 1.1.1 bổ sung bảo vệ xuất file, cache/AI và vòng đời highlight; xem `docs/audits/2026-10-19-remediation.md`. Kiểm chứng Obsidian/provider thật chưa chạy.
+- Highlight khi đọc lưu trong cấu hình, không sửa Markdown; hỗ trợ bút/tẩy, CJK và migration khi đổi tên note. Bút không sửa DOM của Edit Mode.
 
 ## Evidence on Hand
 
 - `README.md`, `main.ts`, `src/types/index.ts`, các service provider, storage, translation và UI là nguồn mô tả hiện trạng.
 - `docs/superpowers/specs/2026-10-18-immersive-reading-translation-design.md` ghi thiết kế cho yêu cầu mới.
 - Kiểm tra ở snapshot `515e7b0`: 337 test trên 21 file pass; typecheck hiện thất bại. Test dùng mock Obsidian/HTTP, không thay thế bằng chứng chạy trong Obsidian thật.
-- Sau triển khai: 386 test trên 26 file pass, build và typecheck riêng phần đọc với API Obsidian thật pass. Typecheck toàn repository còn 49 lỗi có sẵn, không thêm lỗi so với baseline. Browser fixture đã kiểm tra sáng/tối và pane hẹp; không phải bằng chứng chạy trong Obsidian.
+- Snapshot trước sửa audit `d613051`: 477 test pass, full typecheck có 81 diagnostic và scoped reading check fail. Sau sửa 1.1.1: 572 test/34 file pass, full/production/reading typecheck và build pass; npm audit báo 0 vulnerability. Browser fixture sáng/tối/pane hẹp thuộc nghiệm thu reading ban đầu; không thay cho chạy Obsidian thật.
 
 ## Product Principles
 

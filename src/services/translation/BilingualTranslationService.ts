@@ -1,4 +1,4 @@
-import { MarkdownBlock, BilingualTranslationOptions, BilingualProgressMeta } from "../../types";
+import { MarkdownBlock, BilingualTranslationOptions } from "../../types";
 import { GoogleTranslate } from "../provider/GoogleTranslate";
 import { GeminiService } from "../provider/GeminiService";
 
@@ -18,6 +18,12 @@ export class BilingualTranslationService {
     blocks: MarkdownBlock[],
     options: BilingualTranslationOptions
   ): Promise<MarkdownBlock[]> {
+    const throwIfCancelled = () => {
+      if (options.signal?.aborted) {
+        throw new Error("Translation aborted by user");
+      }
+    };
+    throwIfCancelled();
     const targetBlocks = blocks.map((b) => ({ ...b }));
     const translatableIndices: number[] = [];
 
@@ -37,6 +43,7 @@ export class BilingualTranslationService {
           currentText: "Hoàn tất (Không có khối cần dịch)",
         });
       }
+      throwIfCancelled();
       return targetBlocks;
     }
 
@@ -56,6 +63,9 @@ export class BilingualTranslationService {
     };
 
     if (options.engine === "gemini") {
+      if (!options.apiKey?.trim()) {
+        throw new Error("Gemini API key is required. Configure it and retry the file translation.");
+      }
       const batchSize = Math.max(1, options.batchSize || 8);
       const chunks: number[][] = [];
       for (let i = 0; i < translatableIndices.length; i += batchSize) {
@@ -63,9 +73,7 @@ export class BilingualTranslationService {
       }
 
       for (const chunk of chunks) {
-        if (options.signal?.aborted) {
-          throw new Error("Translation aborted by user");
-        }
+        throwIfCancelled();
 
         const items = chunk.map((blockIdx, localIdx) => ({
           id: localIdx,
@@ -73,71 +81,81 @@ export class BilingualTranslationService {
         }));
 
         let resultMap: Map<number, string> | null = null;
-        if (options.apiKey) {
-          try {
-            resultMap = await this.geminiService.translateBatch(
-              items,
-              options.apiKey,
-              options.docContext,
-              options.targetLang || "vi",
-              options.customModel
-            );
-          } catch {
-            resultMap = null;
-          }
+        try {
+          resultMap = await this.geminiService.translateBatch(
+            items,
+            options.apiKey,
+            options.docContext,
+            options.targetLang || "vi",
+            options.customModel,
+            options.sourceLang || "auto"
+          );
+        } catch {
+          throwIfCancelled();
+          throw new Error(`Gemini translation failed for blocks ${chunk[0] + 1}-${chunk[chunk.length - 1] + 1}. Check your API key and connection, then retry the file translation.`);
         }
+        throwIfCancelled();
 
         for (let localIdx = 0; localIdx < chunk.length; localIdx++) {
+          throwIfCancelled();
           const blockIdx = chunk[localIdx];
           const block = targetBlocks[blockIdx];
           const translated = resultMap?.get(localIdx);
 
-          if (translated) {
-            block.translatedText = translated;
-          } else {
-            // Tự phục hồi: Giữ nguyên văn bản gốc nếu không dịch được
-            block.translatedText = block.translatableText;
+          if (typeof translated !== "string" || !translated.trim()) {
+            throw new Error(`Gemini returned no translation for block ${blockIdx + 1}. Check your API key and connection, then retry the file translation.`);
           }
+          block.translatedText = translated;
 
           completed++;
           reportProgress(block.translatableText || "");
+          throwIfCancelled();
         }
 
         if (delay > 0) {
           await new Promise((res) => setTimeout(res, delay));
+          throwIfCancelled();
         }
       }
     } else {
       // Mặc định: Google Translate engine
       for (const idx of translatableIndices) {
-        if (options.signal?.aborted) {
-          throw new Error("Translation aborted by user");
-        }
+        throwIfCancelled();
 
         const block = targetBlocks[idx];
         const textToTranslate = block.translatableText!;
 
+        let translated: string | undefined;
         try {
-          const res = await this.googleTranslate.translate(
+          const res = await this.googleTranslate.translateWithMeta(
             textToTranslate,
+            options.sourceLang || "auto",
             options.targetLang || "vi",
             options.customEndpointUrl
           );
-          block.translatedText = res || textToTranslate;
+          translated = res?.translation;
         } catch {
-          // Phục hồi khi lỗi: Giữ text gốc
-          block.translatedText = textToTranslate;
+          throwIfCancelled();
+          throw new Error(`Google translation failed for block ${idx + 1}. Check your connection and retry the file translation.`);
         }
+        throwIfCancelled();
+        if (typeof translated !== "string" || !translated.trim()) {
+          throw new Error(`Google returned no translation for block ${idx + 1}. Check your connection and retry the file translation.`);
+        }
+        block.translatedText = translated;
 
         completed++;
         reportProgress(textToTranslate);
+        throwIfCancelled();
 
         if (delay > 0) {
           await new Promise((res) => setTimeout(res, delay));
+          throwIfCancelled();
         }
       }
     }
 
+    throwIfCancelled();
     return targetBlocks;
   }
 }

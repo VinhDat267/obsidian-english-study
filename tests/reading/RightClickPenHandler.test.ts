@@ -20,6 +20,7 @@ describe("RightClickPenHandler", () => {
 
     mockView = {
       contentEl: container,
+      getMode: () => "preview",
     };
 
     isPenActive = true;
@@ -76,6 +77,84 @@ describe("RightClickPenHandler", () => {
   });
 
   describe("Mouse Event Handling", () => {
+    function eventAt(type: string, target: Node, x: number): MouseEvent {
+      const event = new MouseEvent(type, { button: 2, buttons: 2, clientX: x, clientY: 10 });
+      Object.defineProperty(event, "target", { value: target });
+      return event;
+    }
+
+    function startDrag(target: HTMLElement): void {
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      const start = document.createRange();
+      start.setStart(target.firstChild!, 0);
+      const end = document.createRange();
+      end.setStart(target.firstChild!, target.textContent!.length);
+      let calls = 0;
+      (document as any).caretRangeFromPoint = () => calls++ === 0 ? start : end;
+      handler.handleMouseDown(eventAt("mousedown", target, 10));
+      handler.handleMouseMove(eventAt("mousemove", target, 80));
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+    }
+
+    it("rejects source mode before a right drag is admitted", () => {
+      container.innerHTML = "<p>editable selection</p>";
+      const p = container.querySelector("p")!;
+      mockView.getMode = () => "source";
+      startDrag(p);
+      handler.handleMouseUp(eventAt("mouseup", p, 80));
+      expect(onHighlightSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(["cm-editor", "contenteditable"])("rejects %s targets inside a preview view", kind => {
+      container.innerHTML = kind === "cm-editor"
+        ? '<div class="cm-editor"><p>editable selection</p></div>'
+        : '<div contenteditable="true"><p>editable selection</p></div>';
+      const p = container.querySelector("p")!;
+      startDrag(p);
+      handler.handleMouseUp(eventAt("mouseup", p, 80));
+      expect(onHighlightSpy).not.toHaveBeenCalled();
+    });
+
+    it("cancels on a mode change during move even if preview returns before release", () => {
+      container.innerHTML = "<p>reading selection</p>";
+      const p = container.querySelector("p")!;
+      startDrag(p);
+      mockView.getMode = () => "source";
+      handler.handleMouseMove(eventAt("mousemove", p, 90));
+      mockView.getMode = () => "preview";
+      handler.handleMouseUp(eventAt("mouseup", p, 90));
+      expect(onHighlightSpy).not.toHaveBeenCalled();
+    });
+
+    it("rechecks preview and pen activity at release", () => {
+      container.innerHTML = "<p>reading selection</p>";
+      const p = container.querySelector("p")!;
+      startDrag(p);
+      mockView.getMode = () => "source";
+      handler.handleMouseUp(eventAt("mouseup", p, 80));
+      expect(onHighlightSpy).not.toHaveBeenCalled();
+      mockView.getMode = () => "preview";
+      startDrag(p);
+      isPenActive = false;
+      handler.handleMouseUp(eventAt("mouseup", p, 80));
+      expect(onHighlightSpy).not.toHaveBeenCalled();
+    });
+
+    it("rejects a drag whose selection reaches into an editable region", () => {
+      container.innerHTML = '<p>reading selection</p><div class="cm-editor">editable text</div>';
+      const p = container.querySelector("p")!;
+      startDrag(p);
+      const range = document.createRange();
+      range.setStart(p.firstChild!, 0);
+      range.setEnd(container.querySelector(".cm-editor")!.firstChild!, 5);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      handler.handleMouseUp(eventAt("mouseup", p, 80));
+      expect(onHighlightSpy).not.toHaveBeenCalled();
+    });
+
     it("does nothing when pen mode is inactive", () => {
       isPenActive = false;
 

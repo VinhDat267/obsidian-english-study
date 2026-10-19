@@ -31,6 +31,11 @@ function isWordChar(char: string): boolean {
   return /[\p{L}\p{N}_]/u.test(char);
 }
 
+function requiresWordBoundary(char: string): boolean {
+  // Han and Japanese scripts do not require spaces between selected words.
+  return isWordChar(char) && !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(char);
+}
+
 export function createReadingHighlightPostProcessor(
   service: ReadingHighlightService
 ): (el: HTMLElement, ctx: MarkdownPostProcessorContext) => void {
@@ -151,8 +156,8 @@ function processBlockElement(
 
     const firstChar = query[0];
     const lastChar = query[query.length - 1];
-    const queryStartsWord = isWordChar(firstChar);
-    const queryEndsWord = isWordChar(lastChar);
+    const queryStartsWord = requiresWordBoundary(firstChar);
+    const queryEndsWord = requiresWordBoundary(lastChar);
 
     while (pos !== -1) {
       const prevChar = pos > 0 ? fullText[pos - 1] : "";

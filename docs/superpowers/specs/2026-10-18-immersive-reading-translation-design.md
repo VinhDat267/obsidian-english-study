@@ -4,7 +4,7 @@ Ngày: 2026-10-18
 
 Snapshot khảo sát: `main@515e7b0`
 
-Trạng thái: Người dùng đã duyệt ngày 2026-10-18; đã triển khai Native, review toàn nhánh và sửa hai lỗi vòng đời bằng test hồi quy. Chờ quyết định tích hợp nhánh. Obsidian/provider thật: NOT_RUN.
+Trạng thái: Đã duyệt ngày 2026-10-18, triển khai Native, review và merge qua PR #2 (`781353d`). Bản sửa audit hiện tại được ghi riêng trong `docs/audits/2026-10-19-remediation.md`. Obsidian/provider thật: NOT_RUN.
 
 ## 1. Mục tiêu và quyết định đã xác nhận
 

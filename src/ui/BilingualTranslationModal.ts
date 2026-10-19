@@ -10,7 +10,7 @@ export interface BilingualModalOptions {
   fileContent: string;
   docContext?: DocumentContextMeta;
   translationService: BilingualTranslationService;
-  onComplete: (newContent: string, destination: "inplace" | "new_file") => Promise<void>;
+  onComplete: (newContent: string, destination: "inplace" | "new_file", signal?: AbortSignal) => Promise<void>;
 }
 
 export class BilingualTranslationModal extends Modal {
@@ -19,11 +19,12 @@ export class BilingualTranslationModal extends Modal {
   private fileContent: string;
   private docContext?: DocumentContextMeta;
   private translationService: BilingualTranslationService;
-  private onComplete: (newContent: string, destination: "inplace" | "new_file") => Promise<void>;
+  private onComplete: BilingualModalOptions["onComplete"];
 
   private selectedEngine: "google" | "gemini" = "google";
   private selectedDestination: "inplace" | "new_file" = "inplace";
   private abortController: AbortController | null = null;
+  private isClosed = false;
 
   constructor(options: BilingualModalOptions) {
     super(options.app);
@@ -41,6 +42,7 @@ export class BilingualTranslationModal extends Modal {
   }
 
   onOpen(): void {
+    this.isClosed = false;
     const { contentEl } = this;
     contentEl.empty();
     this.titleEl.setText("Dịch Song Ngữ File Markdown (Bilingual Translation)");
@@ -86,7 +88,7 @@ export class BilingualTranslationModal extends Modal {
           dropdown.addOption("gemini", "Gemini AI (Chưa cấu hình API Key)");
         }
         dropdown.setValue(this.selectedEngine);
-        dropdown.onChange((val) => {
+        dropdown.onChange((val: string) => {
           this.selectedEngine = val as "google" | "gemini";
         });
       });
@@ -99,7 +101,7 @@ export class BilingualTranslationModal extends Modal {
         dropdown.addOption("inplace", "Ghi đè trực tiếp vào file hiện tại (Hỗ trợ Ctrl + Z)");
         dropdown.addOption("new_file", "Tạo file mới ([Tên] (Bilingual).md)");
         dropdown.setValue(this.selectedDestination);
-        dropdown.onChange((val) => {
+        dropdown.onChange((val: string) => {
           this.selectedDestination = val as "inplace" | "new_file";
         });
       });
@@ -123,6 +125,17 @@ export class BilingualTranslationModal extends Modal {
    * Kích hoạt tiến trình dịch và cập nhật Progress Bar
    */
   async startTranslation(): Promise<void> {
+    if (this.isClosed) return;
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const destination = this.selectedDestination;
+    const isCurrentOperation = () => !this.isClosed && this.abortController === controller;
+    const throwIfCancelled = () => {
+      if (!isCurrentOperation() || controller.signal.aborted) {
+        throw new Error("Translation aborted by user");
+      }
+    };
     const { contentEl } = this;
     contentEl.empty();
 
@@ -152,8 +165,6 @@ export class BilingualTranslationModal extends Modal {
     });
     cancelBtn.addEventListener("click", () => this.cancelTranslation());
 
-    this.abortController = new AbortController();
-
     const blocks = parseMarkdownIntoBlocks(this.fileContent);
 
     try {
@@ -164,24 +175,29 @@ export class BilingualTranslationModal extends Modal {
         apiKey: this.settings.geminiApiKey,
         customEndpointUrl: this.settings.translateEndpointUrl,
         docContext: this.docContext,
-        signal: this.abortController.signal,
+        signal: controller.signal,
         onProgress: (progress) => {
+          if (!isCurrentOperation() || controller.signal.aborted) return;
           fillEl.style.width = `${progress.percent}%`;
           statusTextEl.setText(`Đang dịch: ${progress.current} / ${progress.total} khối (${progress.percent}%)`);
           previewEl.setText(progress.currentText);
         },
       });
+      throwIfCancelled();
 
       const reassembled = reassembleBilingualMarkdown(
         translatedBlocks,
         this.settings.bilingualTranslationStyle
       );
 
-      await this.onComplete(reassembled, this.selectedDestination);
+      throwIfCancelled();
+      await this.onComplete(reassembled, destination, controller.signal);
+      throwIfCancelled();
       new Notice("Đã dịch song ngữ thành công!");
       this.close();
     } catch (err: any) {
-      if (this.abortController.signal.aborted || err?.message?.includes("aborted")) {
+      if (!isCurrentOperation()) return;
+      if (controller.signal.aborted || err?.message?.includes("aborted")) {
         new Notice("Đã hủy quá trình dịch song ngữ.");
       } else {
         new Notice(`Lỗi khi dịch song ngữ: ${err?.message || "Không xác định"}`);
@@ -200,9 +216,11 @@ export class BilingualTranslationModal extends Modal {
   }
 
   onClose(): void {
+    this.isClosed = true;
     if (this.abortController && !this.abortController.signal.aborted) {
       this.abortController.abort();
     }
+    this.abortController = null;
     this.contentEl.empty();
   }
 }

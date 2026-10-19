@@ -3,6 +3,12 @@ import { FloatingTrigger } from "../../src/ui/FloatingTrigger";
 import { FloatingPopover, PopoverCallbacks } from "../../src/ui/FloatingPopover";
 import { LookupResult } from "../../src/types";
 
+// This suite installs plain-object DOM doubles rather than browser elements.
+function asMockElement(element: HTMLElement | null | undefined): any { return element; }
+function dispatchMockEvent(target: Window | Document, event: Record<string, unknown>): void {
+  target.dispatchEvent(event as unknown as Event);
+}
+
 // Helper to create a mock DOM element
 function createMockElement(tag: string = "div"): any {
   const listeners: Record<string, ((...args: any[]) => void)[]> = {};
@@ -267,7 +273,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       );
 
       expect(trigger.isVisible()).toBe(true);
-      const el = trigger.getElement();
+      const el = asMockElement(trigger.getElement());
       expect(el).not.toBeNull();
       expect(el?.className).toContain("english-study-trigger");
       expect(el?.style.position).toBe("fixed");
@@ -283,7 +289,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       // Hide trigger
       trigger.hide();
       expect(trigger.isVisible()).toBe(false);
-      expect(trigger.getElement()).toBeNull();
+      expect(asMockElement(trigger.getElement())).toBeNull();
     });
 
     it("should flip below selection when rect.top is near top of screen", () => {
@@ -293,7 +299,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         vi.fn()
       );
 
-      const el = trigger.getElement();
+      const el = asMockElement(trigger.getElement());
       expect(el?.style.top).toBe("29px"); // 25 + 4
       trigger.hide();
     });
@@ -334,7 +340,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       );
 
       expect(popover.isVisible()).toBe(true);
-      const el = popover.getElement();
+      const el = asMockElement(popover.getElement());
       expect(el).not.toBeNull();
 
       const queryEl = el?.querySelector(".vocab-query");
@@ -367,7 +373,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       expect(el.style.maxHeight).toBeDefined();
       const maxHeight = parseInt(el.style.maxHeight, 10);
       const top = parseInt(el.style.top, 10);
@@ -394,7 +400,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         callbacks
       );
 
-      const el = popover.getElement();
+      const el = asMockElement(popover.getElement());
       const saveBtn = el?.querySelector(".vocab-btn-save");
       expect(saveBtn).not.toBeNull();
 
@@ -422,7 +428,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         callbacks
       );
 
-      const el = popover.getElement();
+      const el = asMockElement(popover.getElement());
       const pinBtn = el?.querySelector(".popover-btn-pin");
       expect(pinBtn).not.toBeNull();
 
@@ -453,7 +459,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(popover.isVisible()).toBe(true);
 
       // Dispatch Escape key
-      document.dispatchEvent({
+      dispatchMockEvent(document, {
         type: "keydown",
         key: "Escape",
       });
@@ -470,7 +476,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement();
+      const el = asMockElement(popover.getElement());
       const copyBtn = el?.querySelector(".vocab-btn-copy");
       expect(copyBtn).not.toBeNull();
 
@@ -492,7 +498,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement();
+      const el = asMockElement(popover.getElement());
       const dragHandle = el?.querySelector(".popover-drag-handle");
       expect(dragHandle).not.toBeNull();
       popover.hide();
@@ -506,7 +512,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const header = el.querySelector(".popover-header");
       expect(header).not.toBeNull();
 
@@ -525,7 +531,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       });
 
       // Move mouse by (+50, +30)
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mousemove",
         clientX: 350,
         clientY: 230,
@@ -537,7 +543,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(el.classList.contains("is-dragging")).toBe(true);
 
       // Mouse up to end drag
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mouseup",
         clientX: 350,
         clientY: 230,
@@ -555,7 +561,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const header = el.querySelector(".popover-header");
 
       // Start drag
@@ -570,7 +576,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       });
 
       // Move way beyond top-left (negative coordinates)
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mousemove",
         clientX: -500,
         clientY: -500,
@@ -581,7 +587,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(parseInt(el.style.top, 10)).toBe(8);
 
       // Move way beyond bottom-right
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mousemove",
         clientX: 2000,
         clientY: 2000,
@@ -591,7 +597,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(parseInt(el.style.left, 10)).toBeLessThanOrEqual(window.innerWidth - 380 - 8);
       expect(parseInt(el.style.top, 10)).toBeLessThanOrEqual(window.innerHeight - 280 - 8);
 
-      window.dispatchEvent({ type: "mouseup" });
+      dispatchMockEvent(window, { type: "mouseup" });
       popover.hide();
     });
 
@@ -603,7 +609,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const audioBtn = el.querySelector(".audio-btn");
       expect(audioBtn).not.toBeNull();
 
@@ -622,7 +628,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       });
 
       // Mouse move
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mousemove",
         clientX: 400,
         clientY: 300,
@@ -644,7 +650,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onClose: vi.fn() }
       );
 
-      const el = popover.getElement();
+      const el = asMockElement(popover.getElement());
       expect(el).not.toBeNull();
       expect(el?.classList.contains("popover-loading")).toBe(true);
 
@@ -669,7 +675,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onClose }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const closeBtn = el.querySelector(".popover-btn-close");
       expect(closeBtn).not.toBeNull();
 
@@ -688,7 +694,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       const rect = { top: 100, bottom: 120, left: 200, right: 280 };
       popover.showLoading(rect, "authentication", { onClose: vi.fn() });
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const header = el.querySelector(".popover-header")!;
       const initialLeft = parseInt(el.style.left, 10);
       const initialTop = parseInt(el.style.top, 10);
@@ -703,12 +709,12 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         preventDefault: vi.fn(),
         stopPropagation: vi.fn(),
       });
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mousemove",
         clientX: 450,
         clientY: 300,
       });
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mouseup",
         clientX: 450,
         clientY: 300,
@@ -720,7 +726,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       // Now lookup finishes and calls show() with result
       popover.show(rect, mockResult, { onSave: vi.fn() });
 
-      const newEl = popover.getElement()!;
+      const newEl = asMockElement(popover.getElement())!;
       // New element must stay at the dragged position, NOT snap back to rect!
       expect(parseInt(newEl.style.left, 10)).toBe(initialLeft + 150);
       expect(parseInt(newEl.style.top, 10)).toBe(initialTop + 100);
@@ -736,7 +742,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn() }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const header = el.querySelector(".popover-header")!;
 
       expect(popover.isUserDragging()).toBe(false);
@@ -756,7 +762,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(popover.isUserDragging()).toBe(true);
 
       // End drag
-      window.dispatchEvent({
+      dispatchMockEvent(window, {
         type: "mouseup",
         clientX: 300,
         clientY: 200,
@@ -786,7 +792,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         jaResult,
         { onSave: vi.fn() }
       );
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const badge = el.querySelector(".vocab-lang-badge");
       expect(badge).toBeDefined();
       expect(badge?.textContent).toContain("JA");
@@ -826,7 +832,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         jaResult,
         { onSave: vi.fn() }
       );
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const audioBtn = el.querySelector(".audio-btn") as any;
       audioBtn.dispatchEvent({
         type: "click",
@@ -859,7 +865,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { enableAiGrammar: false, enableAiTranslation: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const aiNote = el.querySelector(".vocab-ai-note");
       expect(aiNote).toBeNull();
 
@@ -885,7 +891,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { enableAiGrammar: false, enableAiTranslation: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const viMeaning = el.querySelector(".vocab-meaning-vi");
       expect(viMeaning).not.toBeNull();
       const aiBadge = viMeaning?.querySelector(".vocab-ai-badge-inline");
@@ -915,7 +921,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { enableAiGrammar: true, enableAiTranslation: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const aiNote = el.querySelector(".vocab-ai-note");
       expect(aiNote).not.toBeNull();
       expect(aiNote?.classList.contains("vocab-ai-loading")).toBe(true);
@@ -942,7 +948,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { enableAiGrammar: true, enableAiTranslation: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const viMeaningInitial = el.querySelector(".vocab-meaning-vi");
       expect(viMeaningInitial?.textContent).toContain("đường ống");
       const loadingChipInitial = viMeaningInitial?.querySelector(".vocab-ai-loading-chip");
@@ -992,7 +998,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { enableAiGrammar: false, enableAiTranslation: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const viMeaning = el.querySelector(".vocab-meaning-vi");
       expect(viMeaning?.querySelector(".vocab-ai-loading-chip")).not.toBeNull();
 
@@ -1043,7 +1049,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { enableAiGrammar: false, enableAiTranslation: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const viMeaning = el.querySelector(".vocab-meaning-vi");
       expect(viMeaning?.textContent).toContain("kiến trúc hệ thống");
 
@@ -1060,7 +1066,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { isReadingMode: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const highlightBtn = el.querySelector(".popover-btn-highlight");
       expect(highlightBtn).not.toBeNull();
 
@@ -1096,7 +1102,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         mockResult,
         { onSave: vi.fn(), onHighlight }
       );
-      expect(popover.getElement()!.querySelector(".popover-btn-highlight")).toBeNull();
+      expect(asMockElement(popover.getElement())!.querySelector(".popover-btn-highlight")).toBeNull();
       popover.hide();
 
       // Explicit isReadingMode: false
@@ -1106,7 +1112,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { onSave: vi.fn(), onHighlight },
         { isReadingMode: false }
       );
-      expect(popover.getElement()!.querySelector(".popover-btn-highlight")).toBeNull();
+      expect(asMockElement(popover.getElement())!.querySelector(".popover-btn-highlight")).toBeNull();
       popover.hide();
     });
 
@@ -1120,7 +1126,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { isReadingMode: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const palette = el.querySelector(".popover-highlight-palette")!;
       const greenDot = el.querySelector(".dot-green");
       expect(greenDot).not.toBeNull();
@@ -1159,7 +1165,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
         { isReadingMode: true }
       );
 
-      const el = popover.getElement()!;
+      const el = asMockElement(popover.getElement())!;
       const highlightBtn = el.querySelector(".popover-btn-highlight")!;
       const preventDefaultMock = vi.fn();
 

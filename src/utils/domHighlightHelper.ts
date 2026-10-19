@@ -93,7 +93,7 @@ export function wrapRangeWithHighlight(
     if (sOffset >= eOffset) continue;
 
     let targetNode = textNode;
-    if (eOffset < targetNode.nodeValue.length) {
+    if (eOffset < targetNode.data.length) {
       targetNode.splitText(eOffset);
     }
     if (sOffset > 0) {
@@ -152,6 +152,24 @@ export function unwrapHighlightsByText(
   }
 
   return unwrappedCount;
+}
+
+export function unwrapHighlightsByIds(
+  container: HTMLElement,
+  ids: readonly string[]
+): number {
+  if (!container || ids.length === 0) return 0;
+  const wanted = new Set(ids);
+  const marks = Array.from(container.querySelectorAll<HTMLElement>(".polyglot-reading-highlight"));
+  let count = 0;
+  for (const mark of marks) {
+    const id = mark.getAttribute("data-highlight-id");
+    if (id !== null && wanted.has(id)) {
+      unwrapHighlightElement(mark);
+      count++;
+    }
+  }
+  return count;
 }
 
 export function unwrapAllHighlights(container: HTMLElement): number {
