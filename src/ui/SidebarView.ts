@@ -1,21 +1,64 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { LookupResult } from "../types";
+import { LookupResult, TutorSession } from "../types";
 import { LRUCache } from "../utils/lruCache";
 import { getLanguageMeta } from "../utils/languageHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
+import { AiTutorChatService } from "../services/ai/AiTutorChatService";
+import { GeminiService } from "../services/provider/GeminiService";
 
 export const VIEW_TYPE_ENGLISH_STUDY = "english-study-sidebar";
+
+function safeSetIcon(element: HTMLElement, iconId: string, fallbackText: string): void {
+  try {
+    setIcon(element, iconId);
+  } catch {
+    // ignore
+  }
+  if (!element.innerHTML || !element.innerHTML.trim()) {
+    if (typeof (element as any).setText === "function") {
+      (element as any).setText(fallbackText);
+    } else {
+      element.textContent = fallbackText;
+    }
+  }
+}
 
 export class EnglishStudySidebar extends ItemView {
   private currentResult: LookupResult | null = null;
   private cache: LRUCache<LookupResult> | null = null;
-  private activeTab: "deep-dive" | "history" = "deep-dive";
+  private activeTab: "deep-dive" | "history" | "ai-tutor" = "deep-dive";
   private onSaveCallback?: (result: LookupResult) => Promise<void> | void;
   private isPlayingAudio: boolean = false;
   private currentAudio: HTMLAudioElement | null = null;
 
+  private activeTutorSession: TutorSession | null = null;
+  private tutorChatService: AiTutorChatService | null = null;
+  private geminiService: GeminiService | null = null;
+  private geminiApiKey: string = "";
+  private isTutorLoading: boolean = false;
+
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
+  }
+
+  setTutorDependencies(
+    chatService: AiTutorChatService,
+    geminiService: GeminiService,
+    apiKey: string
+  ): void {
+    this.tutorChatService = chatService;
+    this.geminiService = geminiService;
+    this.geminiApiKey = apiKey;
+  }
+
+  openTutorSession(session: TutorSession): void {
+    this.activeTutorSession = session;
+    this.activeTab = "ai-tutor";
+    this.render();
+  }
+
+  getActiveTutorSession(): TutorSession | null {
+    return this.activeTutorSession;
   }
 
   getViewType(): string {
@@ -98,6 +141,16 @@ export class EnglishStudySidebar extends ItemView {
       this.render();
     });
 
+    const tutorBtn = tabsGroup.createEl("button", {
+      cls: `sidebar-tab-btn tab-btn-ai-tutor ${this.activeTab === "ai-tutor" ? "active" : ""}`,
+      text: "Gia sư AI 💬",
+    });
+    tutorBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      this.activeTab = "ai-tutor";
+      this.render();
+    });
+
     const clearBtn = nav.createEl("button", {
       cls: "sidebar-btn-clear btn-clear-history",
       text: "Xóa lịch sử",
@@ -116,8 +169,10 @@ export class EnglishStudySidebar extends ItemView {
 
     if (this.activeTab === "deep-dive") {
       this.renderDeepDiveTab(body);
-    } else {
+    } else if (this.activeTab === "history") {
       this.renderHistoryTab(body);
+    } else if (this.activeTab === "ai-tutor") {
+      this.renderAiTutorTab(body);
     }
   }
 
@@ -433,6 +488,258 @@ export class EnglishStudySidebar extends ItemView {
         this.render();
       });
     });
+  }
+
+  private renderAiTutorTab(parent: HTMLElement): void {
+    const tutorContainer = parent.createDiv({ cls: "sidebar-tutor-container" });
+
+    if (!this.activeTutorSession) {
+      const emptyState = tutorContainer.createDiv({
+        cls: "sidebar-tutor-empty empty-state",
+      });
+      const iconEl = emptyState.createDiv({
+        cls: "sidebar-tutor-empty-icon empty-state-icon",
+      });
+      safeSetIcon(iconEl, "bot", "🤖");
+      emptyState.createEl("p", {
+        cls: "sidebar-tutor-empty-text",
+        text: "Chưa có phiên học Gia sư AI nào. Hãy chọn từ trong ghi chú hoặc nhấn 'Hỏi sâu Gia sư AI' từ cửa sổ tra từ.",
+      });
+      return;
+    }
+
+    const session = this.activeTutorSession;
+
+    // Header: Query + Context Excerpt + Clear Chat
+    const header = tutorContainer.createDiv({ cls: "sidebar-tutor-header" });
+    const headerInfo = header.createDiv({ cls: "sidebar-tutor-header-info" });
+
+    headerInfo.createSpan({
+      cls: "sidebar-tutor-query",
+      text: session.query,
+    });
+
+    if (session.contextSentence) {
+      headerInfo.createSpan({
+        cls: "sidebar-tutor-context",
+        text: `"${session.contextSentence}"`,
+      });
+    }
+
+    const clearBtn = header.createEl("button", {
+      cls: "sidebar-tutor-clear-btn btn-clear-chat",
+      attr: { type: "button", title: "Xóa đoạn chat", "aria-label": "Xóa đoạn chat" },
+    });
+    safeSetIcon(clearBtn, "trash-2", "🗑️");
+    clearBtn.addEventListener("click", (e: MouseEvent) => {
+      e?.preventDefault?.();
+      if (this.activeTutorSession) {
+        if (this.tutorChatService) {
+          this.tutorChatService.clearSession(this.activeTutorSession.id);
+        }
+        this.activeTutorSession.messages = [];
+      }
+      this.render();
+    });
+
+    // Quick Chips Bar
+    const chipsBar = tutorContainer.createDiv({ cls: "sidebar-tutor-chips" });
+    const chips = this.tutorChatService ? this.tutorChatService.getQuickPromptChips() : [];
+    for (const chip of chips) {
+      const chipBtn = chipsBar.createEl("button", {
+        cls: "quick-prompt-chip sidebar-tutor-chip",
+        attr: { type: "button", "data-chip-id": chip.id },
+      });
+      if (chip.icon) {
+        const iconSpan = chipBtn.createSpan({ cls: "chip-icon" });
+        safeSetIcon(iconSpan, chip.icon, "");
+      }
+      chipBtn.createSpan({ cls: "chip-label", text: chip.label });
+
+      chipBtn.addEventListener("click", () => {
+        if (this.isTutorLoading) return;
+        const prompt = chip.promptTemplate(
+          this.activeTutorSession?.query || "",
+          this.activeTutorSession?.contextSentence || ""
+        );
+        this.sendTutorMessage(prompt, messagesContainer, textarea, sendBtn);
+      });
+    }
+
+    // Messages Container
+    const messagesContainer = tutorContainer.createDiv({
+      cls: "sidebar-tutor-messages",
+    });
+    for (const msg of session.messages) {
+      if (msg.role === "user") {
+        const userBubble = messagesContainer.createDiv({ cls: "tutor-message-user" });
+        userBubble.setText(msg.content);
+      } else if (msg.role === "model") {
+        const modelBubble = messagesContainer.createDiv({ cls: "tutor-message-model" });
+        renderMarkdownToElement(msg.content, modelBubble);
+      }
+    }
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Input row
+    const inputRow = tutorContainer.createDiv({ cls: "sidebar-tutor-input-row" });
+    const textarea = inputRow.createEl("textarea", {
+      cls: "sidebar-tutor-textarea",
+      attr: {
+        placeholder: "Hỏi thêm gia sư AI... (Enter để gửi, Shift+Enter xuống dòng)",
+        rows: "1",
+      },
+    }) as HTMLTextAreaElement;
+
+    const sendBtn = inputRow.createEl("button", {
+      cls: "sidebar-tutor-send-btn",
+      attr: { type: "button", title: "Gửi tin nhắn", "aria-label": "Gửi tin nhắn" },
+    }) as HTMLButtonElement;
+    safeSetIcon(sendBtn, "send", "➤");
+
+    textarea.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e?.preventDefault?.();
+        const text = (textarea.value || "").trim();
+        if (text && !this.isTutorLoading) {
+          textarea.value = "";
+          this.sendTutorMessage(text, messagesContainer, textarea, sendBtn);
+        }
+      }
+    });
+
+    sendBtn.addEventListener("click", () => {
+      const text = (textarea.value || "").trim();
+      if (text && !this.isTutorLoading) {
+        textarea.value = "";
+        this.sendTutorMessage(text, messagesContainer, textarea, sendBtn);
+      }
+    });
+  }
+
+  private async sendTutorMessage(
+    content: string,
+    messagesContainer: HTMLElement,
+    textarea?: HTMLTextAreaElement,
+    sendBtn?: HTMLButtonElement
+  ): Promise<void> {
+    if (this.isTutorLoading) return;
+
+    if (!this.activeTutorSession) {
+      if (this.tutorChatService) {
+        this.activeTutorSession = this.tutorChatService.createSession({
+          query: content,
+          contextSentence: "",
+        });
+      } else {
+        const now = Date.now();
+        this.activeTutorSession = {
+          id: `tutor_${now}`,
+          query: content,
+          contextSentence: "",
+          messages: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+      }
+    }
+
+    const session = this.activeTutorSession;
+
+    // 1. Add user message
+    if (this.tutorChatService) {
+      this.tutorChatService.addMessage(session.id, "user", content);
+    } else {
+      session.messages.push({
+        id: `msg_${Date.now()}`,
+        role: "user",
+        content,
+        timestamp: Date.now(),
+      });
+    }
+
+    const userBubble = messagesContainer.createDiv({ cls: "tutor-message-user" });
+    userBubble.setText(content);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // 2. Loading state
+    this.isTutorLoading = true;
+    if (textarea) textarea.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+
+    const loadingBubble = messagesContainer.createDiv({ cls: "tutor-message-loading" });
+    loadingBubble.setText("Gia sư AI đang suy nghĩ...");
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // 3. Dispatch to Gemini
+    try {
+      if (this.geminiService) {
+        const systemPrompt = this.tutorChatService
+          ? this.tutorChatService.buildSystemInstruction(session)
+          : undefined;
+        const reply = await this.geminiService.chatWithTutor(
+          session,
+          this.geminiApiKey,
+          "gemini-flash-latest",
+          systemPrompt
+        );
+
+        if (typeof loadingBubble.remove === "function") {
+          loadingBubble.remove();
+        } else if (loadingBubble.parentElement) {
+          loadingBubble.parentElement.removeChild(loadingBubble);
+        }
+
+        if (reply && reply.trim()) {
+          const trimmedReply = reply.trim();
+          if (this.tutorChatService) {
+            this.tutorChatService.addMessage(session.id, "model", trimmedReply);
+          } else {
+            session.messages.push({
+              id: `msg_${Date.now()}`,
+              role: "model",
+              content: trimmedReply,
+              timestamp: Date.now(),
+            });
+          }
+          const modelBubble = messagesContainer.createDiv({ cls: "tutor-message-model" });
+          renderMarkdownToElement(trimmedReply, modelBubble);
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+          const errorBubble = messagesContainer.createDiv({
+            cls: "tutor-message-model tutor-message-error",
+          });
+          errorBubble.setText(
+            "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng."
+          );
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+      } else {
+        if (typeof loadingBubble.remove === "function") {
+          loadingBubble.remove();
+        } else if (loadingBubble.parentElement) {
+          loadingBubble.parentElement.removeChild(loadingBubble);
+        }
+      }
+    } catch {
+      if (typeof loadingBubble.remove === "function") {
+        loadingBubble.remove();
+      } else if (loadingBubble.parentElement) {
+        loadingBubble.parentElement.removeChild(loadingBubble);
+      }
+      const errorBubble = messagesContainer.createDiv({
+        cls: "tutor-message-model tutor-message-error",
+      });
+      errorBubble.setText(
+        "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng."
+      );
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    } finally {
+      this.isTutorLoading = false;
+      if (textarea) textarea.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+      textarea?.focus?.();
+    }
   }
 
   private toggleAudio(
