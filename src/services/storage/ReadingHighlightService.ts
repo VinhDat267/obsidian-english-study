@@ -44,7 +44,7 @@ export class ReadingHighlightService {
     filePath: string,
     text: string,
     color: HighlightColorKey
-  ): { action: "added" | "updated" | "removed"; item?: ReadingHighlightItem } {
+  ): { action: "added" | "updated" | "removed"; item?: ReadingHighlightItem; oldColor?: HighlightColorKey } {
     const norm = this.normalizePath(filePath);
     const trimmedText = text.trim();
     if (!norm || norm.includes("\0") || !trimmedText || trimmedText.length < 2) return { action: "removed" };
@@ -67,10 +67,11 @@ export class ReadingHighlightService {
         return { action: "removed", item: existing };
       } else {
         // Update color
+        const oldColor = existing.color;
         existing.color = color;
         existing.timestamp = Date.now();
         this.triggerSave();
-        return { action: "updated", item: existing };
+        return { action: "updated", item: existing, oldColor };
       }
     }
 
@@ -83,6 +84,24 @@ export class ReadingHighlightService {
     list.push(newItem);
     this.triggerSave();
     return { action: "added", item: newItem };
+  }
+
+  restoreHighlights(filePath: string, items: ReadingHighlightItem[]): void {
+    const norm = this.normalizePath(filePath);
+    if (!norm || norm.includes("\0") || !Array.isArray(items) || items.length === 0) return;
+    if (!this.highlights[norm]) {
+      this.highlights[norm] = [];
+    }
+    const list = this.highlights[norm];
+    for (const item of items) {
+      const existingIdx = list.findIndex(h => h.id === item.id || h.text.toLowerCase() === item.text.toLowerCase());
+      if (existingIdx !== -1) {
+        list[existingIdx] = { ...item };
+      } else {
+        list.push({ ...item });
+      }
+    }
+    this.triggerSave();
   }
 
   removeHighlight(filePath: string, textOrId: string): boolean {

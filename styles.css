@@ -1561,6 +1561,37 @@ mark.polyglot-reading-highlight:hover {
   box-shadow: 0 0 0 2px var(--interactive-accent); /* taste-skill-ignore: focus ring */
 }
 
+.polyglot-pen-pill .pen-pill-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+
+.polyglot-pen-pill .pen-pill-history-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.polyglot-pen-pill .pen-pill-history-btn:hover:not(.is-disabled) {
+  background-color: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.polyglot-pen-pill .pen-pill-history-btn.is-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .polyglot-pen-pill .pen-pill-close-btn {
   background: transparent;
   border: none;

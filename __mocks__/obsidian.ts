@@ -234,6 +234,7 @@ export function createMockObsidianElement(tag: string = "div"): any {
       attributes[name] = val;
     },
     getAttribute: (name: string) => attributes[name] || null,
+    removeAttribute: (name: string) => { delete attributes[name]; },
     appendChild: (child: any) => {
       child.parentElement = el;
       children.push(child);

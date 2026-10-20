@@ -50,6 +50,7 @@ describe("HighlighterPenPill", () => {
         attributes[k] = v;
       },
       getAttribute: (k: string) => attributes[k] || null,
+      removeAttribute: (k: string) => { delete attributes[k]; },
       appendChild: (child: any) => {
         child.parentElement = el;
         children.push(child);
@@ -270,5 +271,75 @@ describe("HighlighterPenPill", () => {
     expect(pill.getAction()).toBe("green");
     expect(pill.getColor()).toBe("green");
     expect(pill.isEraser()).toBe(false);
+  });
+  it("should render undo and redo buttons with disabled state by default", () => {
+    const pill = new HighlighterPenPill();
+    pill.show("yellow", {
+      onColorChange: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+    const el = asMockElement(pill.getElement())!;
+    const undoBtn = el.querySelector(".pen-pill-undo-btn");
+    const redoBtn = el.querySelector(".pen-pill-redo-btn");
+
+    expect(undoBtn).not.toBeNull();
+    expect(redoBtn).not.toBeNull();
+    expect(undoBtn.classList.contains("is-disabled")).toBe(true);
+    expect(redoBtn.classList.contains("is-disabled")).toBe(true);
+    expect(undoBtn.getAttribute("aria-disabled")).toBe("true");
+    expect(redoBtn.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("setHistoryState toggles disabled state and aria attributes on undo/redo buttons", () => {
+    const pill = new HighlighterPenPill();
+    pill.show("yellow", {
+      onColorChange: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+    const el = asMockElement(pill.getElement())!;
+    const undoBtn = el.querySelector(".pen-pill-undo-btn");
+    const redoBtn = el.querySelector(".pen-pill-redo-btn");
+
+    pill.setHistoryState(true, false);
+    expect(undoBtn.classList.contains("is-disabled")).toBe(false);
+    expect(undoBtn.getAttribute("aria-disabled")).toBeNull();
+    expect(redoBtn.classList.contains("is-disabled")).toBe(true);
+
+    pill.setHistoryState(false, true);
+    expect(undoBtn.classList.contains("is-disabled")).toBe(true);
+    expect(redoBtn.classList.contains("is-disabled")).toBe(false);
+    expect(redoBtn.getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("clicking undo and redo triggers callbacks only when enabled", () => {
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    const pill = new HighlighterPenPill();
+    pill.show("yellow", {
+      onColorChange: vi.fn(),
+      onClose: vi.fn(),
+      onUndo,
+      onRedo,
+    });
+
+    const el = asMockElement(pill.getElement())!;
+    const undoBtn = el.querySelector(".pen-pill-undo-btn");
+    const redoBtn = el.querySelector(".pen-pill-redo-btn");
+
+    // Disabled initially: clicks ignored
+    undoBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+    redoBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+    expect(onUndo).not.toHaveBeenCalled();
+    expect(onRedo).not.toHaveBeenCalled();
+
+    // Enable both
+    pill.setHistoryState(true, true);
+    undoBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+    expect(onUndo).toHaveBeenCalledTimes(1);
+
+    redoBtn.dispatchEvent({ type: "click", stopPropagation: vi.fn(), preventDefault: vi.fn() });
+    expect(onRedo).toHaveBeenCalledTimes(1);
   });
 });

@@ -30,7 +30,9 @@ import {
   wrapRangeWithHighlight,
   unwrapHighlightsByIds,
   unwrapAllHighlights,
+  updateHighlightColorInElement,
 } from "./src/utils/domHighlightHelper";
+import { HighlightHistoryManager } from "./src/services/history/HighlightHistoryManager";
 import { RightClickPenHandler } from "./src/reading/RightClickPenHandler";
 import { AiTutorChatService } from "./src/services/ai/AiTutorChatService";
 
@@ -47,6 +49,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   floatingPopover!: FloatingPopover;
   floatingHighlightToolbar!: FloatingHighlightToolbar;
   penPill!: HighlighterPenPill;
+  highlightHistory: HighlightHistoryManager = new HighlightHistoryManager();
   rightClickPenHandler!: RightClickPenHandler;
   isPenModeActive: boolean = false;
   currentPenAction: HighlightAction = "yellow";
@@ -305,6 +308,40 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
+    // 3.11. Hoàn tác highlight khi đọc (Undo)
+    this.addCommand({
+      id: "undo-reading-highlight",
+      name: "Hoàn tác highlight khi đọc (Undo)",
+      checkCallback: (checking: boolean) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const isPreview = Boolean(
+          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+        );
+        if (checking) return isPreview;
+        if (isPreview && view) {
+          this.undoReadingHighlight(view);
+        }
+        return true;
+      },
+    });
+
+    // 3.12. Làm lại thao tác highlight khi đọc (Redo)
+    this.addCommand({
+      id: "redo-reading-highlight",
+      name: "Làm lại thao tác highlight khi đọc (Redo)",
+      checkCallback: (checking: boolean) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const isPreview = Boolean(
+          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+        );
+        if (checking) return isPreview;
+        if (isPreview && view) {
+          this.redoReadingHighlight(view);
+        }
+        return true;
+      },
+    });
+
     // 4. Đăng ký Context Menus cho Editor và File Explorer
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view) => {
@@ -378,6 +415,28 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
         if (e.key === "Escape" && this.isPenModeActive) {
           this.togglePenMode(false);
+          return;
+        }
+
+        const target = e.target as HTMLElement | null;
+        const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+        if (!isInput) {
+          const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+          const isPreview = activeView && (activeView.getMode ? activeView.getMode() === "preview" : (activeView as any).mode === "preview");
+          if (isPreview) {
+            const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z");
+            const isRedo = ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) ||
+                           ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "z" || e.key === "Z"));
+            if (isUndo) {
+              e.preventDefault();
+              e.stopPropagation();
+              this.undoReadingHighlight(activeView);
+            } else if (isRedo) {
+              e.preventDefault();
+              e.stopPropagation();
+              this.redoReadingHighlight(activeView);
+            }
+          }
         }
       });
 
@@ -405,6 +464,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.app.workspace.on("active-leaf-change", (leaf: any) => {
         this.dismissFloatingUi();
         this.restoreHighlightsForActiveView(leaf?.view);
+        this.updatePenPillHistoryState(leaf?.view?.file?.path);
       })
     );
 
@@ -412,6 +472,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.app.workspace.on("file-open", () => {
         this.dismissFloatingUi();
         this.restoreHighlightsForActiveView();
+        this.updatePenPillHistoryState();
       })
     );
 
@@ -795,21 +856,38 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (!file || !file.path || !selectedText || selectedText.trim().length < 2) return false;
 
     // 1. Lưu vào service
-    const { action, item } = this.readingHighlightService.addHighlight(file.path, selectedText, color);
+    const { action, item, oldColor } = this.readingHighlightService.addHighlight(file.path, selectedText, color);
     const highlightId = item?.id || `hl-${Date.now()}`;
     const bg = HIGHLIGHT_COLORS[color]?.bg || "rgba(250, 204, 21, 0.4)";
 
-    // 2. Live DOM Wrap (Mượt mà 0ms, không reload)
+    // 2. Live DOM Wrap / Color Update / Unwrap (Mượt mà 0ms, không reload)
     if (action === "removed") {
       if (activeView?.contentEl && item) unwrapHighlightsByIds(activeView.contentEl, [item.id]);
+      if (item) {
+        this.highlightHistory.recordRemove(file.path, [item]);
+      }
+    } else if (action === "updated") {
+      if (activeView?.contentEl && item) {
+        const count = updateHighlightColorInElement(activeView.contentEl, item.id, color);
+        if (count === 0) {
+          applyHighlightsToElement(activeView.contentEl, [item]);
+        }
+      }
+      if (item && oldColor) {
+        this.highlightHistory.recordUpdate(file.path, item.id, oldColor, color, item.text);
+      }
     } else {
       if (range) {
         wrapRangeWithHighlight(range, highlightId, color, bg);
-      } else if (activeView?.contentEl) {
-        applyHighlightsToElement(activeView.contentEl, this.readingHighlightService.getHighlights(file.path));
+      } else if (activeView?.contentEl && item) {
+        applyHighlightsToElement(activeView.contentEl, [item]);
+      }
+      if (item) {
+        this.highlightHistory.recordAdd(file.path, item);
       }
     }
 
+    this.updatePenPillHistoryState(file.path);
     this.floatingHighlightToolbar?.hide();
     return true;
   }
@@ -842,6 +920,10 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (activeView?.contentEl) {
       unwrapHighlightsByIds(activeView.contentEl, removed.map(item => item.id));
     }
+    if (removed.length > 0) {
+      this.highlightHistory.recordRemove(file.path, removed);
+      this.updatePenPillHistoryState(file.path);
+    }
     this.floatingHighlightToolbar?.hide();
     return true;
   }
@@ -854,14 +936,128 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
     if (!file || !file.path) return false;
 
-    this.readingHighlightService.clearHighlightsForFile(file.path);
-    if (activeView?.contentEl) {
-      unwrapAllHighlights(activeView.contentEl);
+    const currentHighlights = this.readingHighlightService.getHighlights(file.path);
+    if (currentHighlights.length > 0) {
+      this.highlightHistory.recordClearAll(file.path, currentHighlights);
+      this.readingHighlightService.clearHighlightsForFile(file.path);
+      if (activeView?.contentEl) {
+        unwrapAllHighlights(activeView.contentEl);
+      }
+      this.updatePenPillHistoryState(file.path);
     }
     this.floatingHighlightToolbar?.hide();
     new Notice("Đã xóa toàn bộ highlight trong ghi chú hiện tại.", 2500);
     return true;
   }
+  /**
+   * Hoàn tác thao tác highlight gần nhất (Undo)
+   */
+  undoReadingHighlight(customView?: MarkdownView): boolean {
+    const view = customView || this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || !view.file) return false;
+    const filePath = view.file.path;
+    const action = this.highlightHistory.undo(filePath);
+    if (!action) {
+      new Notice("Không có thao tác highlight nào để hoàn tác.");
+      return false;
+    }
+
+    switch (action.type) {
+      case "add": {
+        this.readingHighlightService.removeHighlight(filePath, action.item.id);
+        if (view.contentEl) unwrapHighlightsByIds(view.contentEl, [action.item.id]);
+        break;
+      }
+      case "remove": {
+        this.readingHighlightService.restoreHighlights(filePath, action.items);
+        if (view.contentEl) applyHighlightsToElement(view.contentEl, action.items);
+        break;
+      }
+      case "update": {
+        this.readingHighlightService.restoreHighlights(filePath, [{
+          id: action.itemId,
+          text: action.text,
+          color: action.oldColor,
+          timestamp: Date.now(),
+        }]);
+        if (view.contentEl) updateHighlightColorInElement(view.contentEl, action.itemId, action.oldColor);
+        break;
+      }
+      case "clear-all": {
+        this.readingHighlightService.restoreHighlights(filePath, action.items);
+        if (view.contentEl) applyHighlightsToElement(view.contentEl, action.items);
+        break;
+      }
+    }
+
+    this.updatePenPillHistoryState(filePath);
+    new Notice("Đã hoàn tác thao tác highlight.");
+    return true;
+  }
+
+  /**
+   * Làm lại thao tác highlight vừa hoàn tác (Redo)
+   */
+  redoReadingHighlight(customView?: MarkdownView): boolean {
+    const view = customView || this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || !view.file) return false;
+    const filePath = view.file.path;
+    const action = this.highlightHistory.redo(filePath);
+    if (!action) {
+      new Notice("Không có thao tác highlight nào để làm lại.");
+      return false;
+    }
+
+    switch (action.type) {
+      case "add": {
+        this.readingHighlightService.restoreHighlights(filePath, [action.item]);
+        if (view.contentEl) applyHighlightsToElement(view.contentEl, [action.item]);
+        break;
+      }
+      case "remove": {
+        for (const item of action.items) {
+          this.readingHighlightService.removeHighlight(filePath, item.id);
+        }
+        if (view.contentEl) unwrapHighlightsByIds(view.contentEl, action.items.map(i => i.id));
+        break;
+      }
+      case "update": {
+        this.readingHighlightService.restoreHighlights(filePath, [{
+          id: action.itemId,
+          text: action.text,
+          color: action.newColor,
+          timestamp: Date.now(),
+        }]);
+        if (view.contentEl) updateHighlightColorInElement(view.contentEl, action.itemId, action.newColor);
+        break;
+      }
+      case "clear-all": {
+        this.readingHighlightService.clearHighlightsForFile(filePath);
+        if (view.contentEl) unwrapHighlightsByIds(view.contentEl, action.items.map(i => i.id));
+        break;
+      }
+    }
+
+    this.updatePenPillHistoryState(filePath);
+    new Notice("Đã làm lại thao tác highlight.");
+    return true;
+  }
+
+  /**
+   * Cập nhật trạng thái Undo / Redo cho HighlighterPenPill
+   */
+  updatePenPillHistoryState(filePath?: string): void {
+    if (!this.penPill?.isVisible()) return;
+    const path = filePath || this.app.workspace.getActiveViewOfType(MarkdownView)?.file?.path;
+    if (!path) {
+      this.penPill.setHistoryState(false, false);
+      return;
+    }
+    const canUndo = this.highlightHistory.canUndo(path);
+    const canRedo = this.highlightHistory.canRedo(path);
+    this.penPill.setHistoryState(canUndo, canRedo);
+  }
+
 
   /**
    * Khôi phục highlight cho view đang mở (Reading Mode)
@@ -924,7 +1120,14 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         onClose: () => {
           this.togglePenMode(false);
         },
+        onUndo: () => {
+          this.undoReadingHighlight();
+        },
+        onRedo: () => {
+          this.redoReadingHighlight();
+        },
       });
+      this.updatePenPillHistoryState();
       const modeLabel = HIGHLIGHT_COLORS[this.settings.highlighterPenColor || "yellow"]?.label || "Vàng";
       new Notice(
         `Đã BẬT chế độ bút dạ quang (${modeLabel}). Quét CHUỘT PHẢI để tô/tẩy highlight, Chuột trái bôi đen để tra từ dịch! (Nhấn Esc để tắt)`,

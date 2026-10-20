@@ -135,8 +135,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.ribbonIcons[1].icon).toBe("highlighter");
       expect(plugin.ribbonIcons[1].title).toBe("Bật/Tắt chế độ bút dạ quang (Reading)");
 
-      // Commands (12 commands)
-      expect(plugin.commands.length).toBe(12);
+      // Commands (14 commands)
+      expect(plugin.commands.length).toBe(14);
       const commandIds = plugin.commands.map((c) => c.id);
       expect(commandIds).toContain("lookup-selected-text");
       expect(commandIds).toContain("save-to-vocabulary");
@@ -149,6 +149,8 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(commandIds).toContain("highlight-selection-yellow");
       expect(commandIds).toContain("clear-highlight-selection");
       expect(commandIds).toContain("clear-all-reading-highlights");
+      expect(commandIds).toContain("undo-reading-highlight");
+      expect(commandIds).toContain("redo-reading-highlight");
 
       // DOM events (mousedown, mousemove, contextmenu, mouseup, keyup, keydown, scroll)
       expect(plugin.domEvents.length).toBe(7);
@@ -1484,5 +1486,208 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       );
     });
   });
-});
+  describe("Highlight Undo & Redo Integration", () => {
+    let mockView: MarkdownView;
+    let mockFile: any;
 
+    beforeEach(async () => {
+      await plugin.onload();
+      const leaf = new WorkspaceLeaf();
+      mockView = new MarkdownView(leaf);
+      mockFile = { path: "Reading/UndoRedoTest.md" };
+      mockView.file = mockFile;
+      mockView.mode = "preview";
+      mockView.contentEl = createMockObsidianElement("div");
+      mockView.contentEl.closest = vi.fn(() => null);
+      app.workspace.activeLeaf = leaf;
+      vi.spyOn(app.workspace, "getActiveViewOfType").mockReturnValue(mockView);
+      plugin.readingHighlightService.clearHighlightsForFile("Reading/UndoRedoTest.md");
+      plugin.highlightHistory.clear("Reading/UndoRedoTest.md");
+    });
+
+    it("should register undo-reading-highlight and redo-reading-highlight commands with preview checkCallback", () => {
+      const undoCmd = plugin.commands.find((c) => c.id === "undo-reading-highlight");
+      const redoCmd = plugin.commands.find((c) => c.id === "redo-reading-highlight");
+
+      expect(undoCmd).toBeDefined();
+      expect(redoCmd).toBeDefined();
+
+      // Check callback returns false in edit mode
+      mockView.mode = "source";
+      expect(undoCmd!.checkCallback!(true)).toBe(false);
+      expect(redoCmd!.checkCallback!(true)).toBe(false);
+
+      // Check callback returns true in preview mode
+      mockView.mode = "preview";
+      expect(undoCmd!.checkCallback!(true)).toBe(true);
+      expect(redoCmd!.checkCallback!(true)).toBe(true);
+    });
+
+    it("undo and redo: reverts addition and then restores it", () => {
+      // 1. Add highlight
+      plugin.applyLiveReadingHighlight("yellow", "machine learning", null, mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(1);
+      expect(plugin.highlightHistory.canUndo("Reading/UndoRedoTest.md")).toBe(true);
+      expect(plugin.highlightHistory.canRedo("Reading/UndoRedoTest.md")).toBe(false);
+
+      // 2. Undo addition
+      const undoRes = plugin.undoReadingHighlight(mockView);
+      expect(undoRes).toBe(true);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(0);
+      expect(plugin.highlightHistory.canUndo("Reading/UndoRedoTest.md")).toBe(false);
+      expect(plugin.highlightHistory.canRedo("Reading/UndoRedoTest.md")).toBe(true);
+
+      // 3. Redo addition
+      const redoRes = plugin.redoReadingHighlight(mockView);
+      expect(redoRes).toBe(true);
+      const restored = plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md");
+      expect(restored).toHaveLength(1);
+      expect(restored[0].text).toBe("machine learning");
+      expect(restored[0].color).toBe("yellow");
+      expect(plugin.highlightHistory.canUndo("Reading/UndoRedoTest.md")).toBe(true);
+      expect(plugin.highlightHistory.canRedo("Reading/UndoRedoTest.md")).toBe(false);
+    });
+
+    it("undo and redo: reverts color update and then restores new color", () => {
+      // 1. Add initial yellow highlight
+      plugin.applyLiveReadingHighlight("yellow", "Neural network", null, mockView);
+      // 2. Update to green highlight
+      plugin.applyLiveReadingHighlight("green", "Neural network", null, mockView);
+
+      let current = plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md");
+      expect(current).toHaveLength(1);
+      expect(current[0].color).toBe("green");
+
+      // 3. Undo: reverts color back to yellow
+      plugin.undoReadingHighlight(mockView);
+      current = plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md");
+      expect(current[0].color).toBe("yellow");
+
+      // 4. Redo: reapplies green color
+      plugin.redoReadingHighlight(mockView);
+      current = plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md");
+      expect(current[0].color).toBe("green");
+    });
+
+    it("undo and redo: reverts clearLiveReadingHighlight removal", () => {
+      plugin.applyLiveReadingHighlight("pink", "architectures", null, mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(1);
+
+      // Remove via eraser / clear
+      plugin.clearLiveReadingHighlight("architectures", mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(0);
+
+      // Undo removal
+      plugin.undoReadingHighlight(mockView);
+      const afterUndo = plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md");
+      expect(afterUndo).toHaveLength(1);
+      expect(afterUndo[0].text).toBe("architectures");
+      expect(afterUndo[0].color).toBe("pink");
+
+      // Redo removal
+      plugin.redoReadingHighlight(mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(0);
+    });
+
+    it("undo and redo: reverts clearAllReadingHighlights", () => {
+      plugin.applyLiveReadingHighlight("yellow", "Neural network", null, mockView);
+      plugin.applyLiveReadingHighlight("blue", "inference", null, mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(2);
+
+      // Clear all
+      plugin.clearAllReadingHighlights(mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(0);
+
+      // Undo clear all
+      plugin.undoReadingHighlight(mockView);
+      const restored = plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md");
+      expect(restored).toHaveLength(2);
+
+      // Redo clear all
+      plugin.redoReadingHighlight(mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(0);
+    });
+
+    it("returns false and shows notice when there is nothing to undo or redo", () => {
+      expect(plugin.undoReadingHighlight(mockView)).toBe(false);
+      expect(plugin.redoReadingHighlight(mockView)).toBe(false);
+    });
+
+    it("intercepts keyboard shortcuts Ctrl+Z and Ctrl+Y in reading mode", () => {
+      plugin.applyLiveReadingHighlight("orange", "inference", null, mockView);
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(1);
+
+      const keydownEvent = plugin.domEvents.find((e) => e.type === "keydown");
+      expect(keydownEvent).toBeDefined();
+
+      const preventDefaultUndo = vi.fn();
+      const stopPropagationUndo = vi.fn();
+
+      // Trigger Ctrl+Z
+      keydownEvent!.callback({
+        ctrlKey: true,
+        key: "z",
+        target: document.createElement("div"),
+        preventDefault: preventDefaultUndo,
+        stopPropagation: stopPropagationUndo,
+      });
+
+      expect(preventDefaultUndo).toHaveBeenCalled();
+      expect(stopPropagationUndo).toHaveBeenCalled();
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(0);
+
+      // Trigger Ctrl+Y
+      const preventDefaultRedo = vi.fn();
+      const stopPropagationRedo = vi.fn();
+
+      keydownEvent!.callback({
+        ctrlKey: true,
+        key: "y",
+        target: document.createElement("div"),
+        preventDefault: preventDefaultRedo,
+        stopPropagation: stopPropagationRedo,
+      });
+
+      expect(preventDefaultRedo).toHaveBeenCalled();
+      expect(stopPropagationRedo).toHaveBeenCalled();
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(1);
+    });
+
+    it("does NOT intercept Ctrl+Z when focus is inside an input or textarea element", () => {
+      plugin.applyLiveReadingHighlight("orange", "inference", null, mockView);
+
+      const keydownEvent = plugin.domEvents.find((e) => e.type === "keydown");
+      const inputEl = document.createElement("input");
+      const preventDefault = vi.fn();
+
+      keydownEvent!.callback({
+        ctrlKey: true,
+        key: "z",
+        target: inputEl,
+        preventDefault,
+        stopPropagation: vi.fn(),
+      });
+
+      expect(preventDefault).not.toHaveBeenCalled();
+      // Highlight was not undone
+      expect(plugin.readingHighlightService.getHighlights("Reading/UndoRedoTest.md")).toHaveLength(1);
+    });
+
+    it("updates HighlighterPenPill history buttons state after operations", () => {
+      const setHistorySpy = vi.spyOn(plugin.penPill, "setHistoryState");
+      plugin.togglePenMode(true);
+
+      // Add highlight
+      plugin.applyLiveReadingHighlight("green", "inference", null, mockView);
+      expect(setHistorySpy).toHaveBeenCalledWith(true, false);
+
+      // Undo
+      plugin.undoReadingHighlight(mockView);
+      expect(setHistorySpy).toHaveBeenCalledWith(false, true);
+
+      // Redo
+      plugin.redoReadingHighlight(mockView);
+      expect(setHistorySpy).toHaveBeenCalledWith(true, false);
+    });
+  });
+});

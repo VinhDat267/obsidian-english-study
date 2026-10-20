@@ -1,3 +1,4 @@
+import { HIGHLIGHT_COLORS, HighlightColorKey } from "./textHighlighter";
 export function wrapRangeWithHighlight(
   range: Range,
   id: string,
@@ -185,3 +186,20 @@ export function unwrapAllHighlights(container: HTMLElement): number {
   return marks.length;
 }
 
+export function updateHighlightColorInElement(
+  container: HTMLElement,
+  id: string,
+  newColor: HighlightColorKey
+): number {
+  if (!container || !id) return 0;
+  const marks = Array.from(
+    container.querySelectorAll<HTMLElement>(`.polyglot-reading-highlight[data-highlight-id="${id}"]`)
+  );
+  const colorDef = HIGHLIGHT_COLORS[newColor];
+  const bg = colorDef?.bg || "rgba(250, 204, 21, 0.4)";
+  for (const mark of marks) {
+    mark.setAttribute("data-color", newColor);
+    mark.style.backgroundColor = bg;
+  }
+  return marks.length;
+}
