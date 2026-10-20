@@ -310,4 +310,94 @@ describe("AiTutorChatService", () => {
       expect(instruction).toContain("Tiếng Anh");
     });
   });
+
+  describe("Session Synchronization (getOrCreateSession, getLatestSession, getSessionForQuery)", () => {
+    it.each([
+      { contextSentence: "We sat on the river bank." },
+      { targetLang: "ja" },
+      { sourceLang: "fr" },
+      { docContext: { noteTitle: "Nature", folderPath: "Reading" } },
+      { docContext: { noteTitle: "Finance", folderPath: "Other" } },
+      { docContext: { noteTitle: "Finance", folderPath: "Reading", heading: "Loans" } },
+    ])("isolates the same query when lookup identity changes: %j", changed => {
+      const original = { query: "bank", contextSentence: "The bank approved a loan.", sourceLang: "en", targetLang: "vi", docContext: { noteTitle: "Finance", folderPath: "Reading" } };
+      const first = service.getOrCreateSession(original);
+      service.addMessage(first.id, "user", "Explain the loan.");
+      const second = service.getOrCreateSession({ ...original, ...changed });
+      expect(second.id).not.toBe(first.id);
+      expect(second.messages).toEqual([]);
+      expect(second).toMatchObject({ ...original, ...changed });
+      expect(service.getOrCreateSession(original)).toBe(first);
+      expect(first.messages[0].content).toBe("Explain the loan.");
+    });
+
+    it("deleting an older same-query session preserves the newer context's index", () => {
+      const old = service.createSession({ query: "bank", contextSentence: "A lender." });
+      const current = service.createSession({ query: "bank", contextSentence: "A river bank." });
+      service.deleteSession(old.id);
+      expect(service.getSessionForQuery("bank")).toBe(current);
+      expect(service.getOrCreateSession({ query: "bank", contextSentence: "A river bank." })).toBe(current);
+    });
+
+    it("snapshots caller-owned document metadata before it can change session identity", () => {
+      const docContext = { noteTitle: "Finance", tags: ["loans"] };
+      const first = service.getOrCreateSession({ query: "bank", contextSentence: "A lender.", docContext });
+      docContext.noteTitle = "Nature"; docContext.tags.push("river");
+      expect(first.docContext).toEqual({ noteTitle: "Finance", tags: ["loans"] });
+    });
+
+    it("should retrieve existing session if query matches case-insensitively, preserving messages", () => {
+      const session1 = service.getOrCreateSession({
+        query: "Photosynthesis",
+        contextSentence: "Plants use photosynthesis to make food.",
+      });
+
+      service.addMessage(session1.id, "user", "Giải thích cơ chế?");
+      service.addMessage(session1.id, "model", "Quang hợp gồm pha sáng và pha tối.");
+
+      const session2 = service.getOrCreateSession({
+        query: "photosynthesis",
+        contextSentence: "Plants use photosynthesis to make food.",
+      });
+
+      expect(session2.id).toBe(session1.id);
+      expect(session2.messages.length).toBe(2);
+      expect(session2.messages[0].content).toBe("Giải thích cơ chế?");
+    });
+
+    it("should create new session if query is different", () => {
+      const session1 = service.getOrCreateSession({
+        query: "mitochondria",
+        contextSentence: "Powerhouse of the cell.",
+      });
+
+      const session2 = service.getOrCreateSession({
+        query: "ribosome",
+        contextSentence: "Protein factory of the cell.",
+      });
+
+      expect(session1.id).not.toBe(session2.id);
+      expect(service.getLatestSession()?.id).toBe(session2.id);
+    });
+
+    it("should return the latest active session via getLatestSession()", () => {
+      expect(service.getLatestSession()).toBeNull();
+
+      const sessionA = service.createSession({ query: "wordA", contextSentence: "Sentence A" });
+      expect(service.getLatestSession()?.id).toBe(sessionA.id);
+
+      const sessionB = service.createSession({ query: "wordB", contextSentence: "Sentence B" });
+      expect(service.getLatestSession()?.id).toBe(sessionB.id);
+    });
+
+    it("should lookup session by query via getSessionForQuery()", () => {
+      service.createSession({ query: "Epiphany", contextSentence: "He had an epiphany." });
+
+      const found = service.getSessionForQuery("epiphany");
+      expect(found).not.toBeNull();
+      expect(found?.query).toBe("Epiphany");
+
+      expect(service.getSessionForQuery("unknown")).toBeNull();
+    });
+  });
 });

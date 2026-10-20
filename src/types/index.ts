@@ -3,6 +3,7 @@ export type VocabFormat = "table" | "callout";
 export type TriggerMode = "icon" | "hotkey-only" | "auto-popup";
 export type PreferredAccent = "us" | "uk";
 export type ReadingEngine = "google" | "gemini";
+export type PopoverFontSize = "small" | "medium" | "large";
 
 export interface DictDefinition {
   partOfSpeech: string;
@@ -45,6 +46,7 @@ export interface PluginSettings {
   // Nhóm 1: Tương tác đọc
   autoTranslateOnSelection: boolean;
   triggerMode: TriggerMode;
+  popoverFontSize: PopoverFontSize;
 
   // Nhóm Ngôn ngữ học tập (Multilingual)
   sourceLanguage: string;
@@ -133,6 +135,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   readingTranslationEngine: "google",
   autoTranslateOnSelection: false,
   triggerMode: "icon",
+  popoverFontSize: "medium",
   sourceLanguage: "auto",
   targetLanguage: "vi",
   separateVocabFileByLanguage: false,

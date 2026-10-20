@@ -6,6 +6,7 @@ describe("GeminiService", () => {
   let service: GeminiService;
 
   beforeEach(() => {
+    vi.mocked(requestUrl).mockReset();
     vi.clearAllMocks();
     service = new GeminiService();
   });
@@ -345,6 +346,35 @@ describe("GeminiService", () => {
       const prompt = body.contents[0].parts[0].text;
       expect(prompt).toContain("IT Software Project Management");
       expect(prompt).toContain("ngữ pháp");
+    });
+  });
+
+  describe("getPhonetic", () => {
+    it("should fetch IPA phonetic transcription from Gemini", async () => {
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "/fəˈsɪlɪteɪts/" }],
+              },
+            },
+          ],
+        },
+        text: "",
+      });
+
+      const res = await service.getPhonetic("facilitates", "test-key");
+      expect(res).toBe("/fəˈsɪlɪteɪts/");
+    });
+
+    it("should return null if apiKey or word is empty or longer than 4 words", async () => {
+      expect(await service.getPhonetic("", "key")).toBeNull();
+      expect(await service.getPhonetic("word", "")).toBeNull();
+      expect(await service.getPhonetic("one two three four five", "key")).toBeNull();
     });
   });
 

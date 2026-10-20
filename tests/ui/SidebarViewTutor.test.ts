@@ -4,6 +4,7 @@ import { EnglishStudySidebar } from "../../src/ui/SidebarView";
 import { AiTutorChatService } from "../../src/services/ai/AiTutorChatService";
 import { GeminiService } from "../../src/services/provider/GeminiService";
 import { TutorSession } from "../../src/types";
+import { deferred } from "../helpers/reading";
 
 function clickElement(el: any) {
   if (!el) throw new Error("Element is null");
@@ -55,7 +56,48 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
     vi.restoreAllMocks();
   });
 
-  it("1. nav bar displays 3 tabs including 'Gia sư AI 💬'", () => {
+  it("F07: a cleared sidebar turn cannot repopulate the shared session", async () => {
+    const reply = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValue(reply.promise);
+    sidebar.openTutorSession(session);
+    const messages = sidebar.contentEl.querySelector(".sidebar-tutor-messages")!;
+    const sending = (sidebar as any).sendTutorMessage("Old question", messages);
+    clickElement(sidebar.contentEl.querySelector(".sidebar-tutor-clear-btn"));
+    reply.resolve("Stale sidebar answer"); await sending;
+    expect(session.messages).toEqual([]);
+    expect(sidebar.contentEl.textContent).not.toContain("Stale sidebar answer");
+  });
+
+  it("F07: switching sessions lets the new sidebar conversation send immediately", async () => {
+    const old = deferred<string>(), current = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    sidebar.openTutorSession(session);
+    const first = (sidebar as any).sendTutorMessage("Old question", sidebar.contentEl.querySelector(".sidebar-tutor-messages"));
+    const nextSession = chatService.createSession({ query: "river", contextSentence: "A river bank." });
+    sidebar.openTutorSession(nextSession);
+    const second = (sidebar as any).sendTutorMessage("Current question", sidebar.contentEl.querySelector(".sidebar-tutor-messages"));
+    expect(nextSession.messages.map(message => message.content)).toEqual(["Current question"]);
+    old.resolve("Stale answer"); await first;
+    current.resolve("Current answer"); await second;
+    expect(nextSession.messages.map(message => message.content)).toEqual(["Current question", "Current answer"]);
+    expect(session.messages.some(message => message.role === "model")).toBe(false);
+  });
+
+  it("F07: a pending answer reconciles the current Tutor controls after switching tabs", async () => {
+    const reply = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValue(reply.promise);
+    sidebar.openTutorSession(session);
+    const sending = (sidebar as any).sendTutorMessage("Question", sidebar.contentEl.querySelector(".sidebar-tutor-messages"));
+    clickElement(sidebar.contentEl.querySelector(".tab-btn-deep-dive"));
+    clickElement(sidebar.contentEl.querySelector(".tab-btn-ai-tutor"));
+    reply.resolve("Visible answer after tab switching"); await sending;
+    expect(sidebar.contentEl.querySelector(".sidebar-tutor-textarea").disabled).toBe(false);
+    expect(sidebar.contentEl.querySelector(".sidebar-tutor-send-btn").disabled).toBe(false);
+    expect(sidebar.contentEl.querySelector(".tutor-message-loading")).toBeNull();
+    expect(sidebar.contentEl.textContent).toContain("Visible answer after tab switching");
+  });
+
+  it("1. nav bar displays 3 tabs including 'Gia sư AI'", () => {
     sidebar.render();
 
     const tabButtons = sidebar.contentEl.querySelectorAll(".sidebar-tab-btn");
@@ -63,7 +105,7 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
 
     const tutorBtn = sidebar.contentEl.querySelector(".tab-btn-ai-tutor");
     expect(tutorBtn).not.toBeNull();
-    expect(tutorBtn.textContent).toContain("Gia sư AI 💬");
+    expect(tutorBtn.textContent).toContain("Gia sư AI");
 
     const deepDiveBtn = sidebar.contentEl.querySelector(".tab-btn-deep-dive");
     expect(deepDiveBtn).not.toBeNull();
@@ -202,5 +244,63 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
 
     const sessionHistory = chatService.getSession(session.id);
     expect(sessionHistory?.messages.length).toBe(0);
+  });
+
+  it("7. automatically synchronizes active tutor session when setResult is called or query was already looked up", () => {
+    // Simulate user looking up a word in popover and chatting with AI
+    const result = {
+      query: "ubiquitous",
+      type: "word" as const,
+      contextSentence: "Smartphones are ubiquitous in modern life.",
+      contextSentenceClean: "Smartphones are ubiquitous in modern life.",
+      vietnameseTranslation: "phổ biến, có mặt khắp nơi",
+      timestamp: Date.now(),
+    };
+
+    // User chats in popover (which uses getOrCreateSession)
+    const popoverSession = chatService.getOrCreateSession({
+      query: result.query,
+      contextSentence: result.contextSentence,
+    });
+    chatService.addMessage(popoverSession.id, "user", "Tại sao lại dùng từ này?");
+    chatService.addMessage(popoverSession.id, "model", "Vì nó mang sắc thái phổ biến ở khắp mọi nơi.");
+
+    // Sidebar receives setResult
+    sidebar.setResult(result);
+
+    // User now switches to 'ai-tutor' tab in the sidebar
+    const tutorBtn = sidebar.contentEl.querySelector(".tab-btn-ai-tutor");
+    clickElement(tutorBtn);
+
+    // Sidebar should NOT show empty state; it should show the conversation from popover!
+    const emptyState = sidebar.contentEl.querySelector(".sidebar-tutor-empty");
+    expect(emptyState).toBeNull();
+
+    const queryEl = sidebar.contentEl.querySelector(".sidebar-tutor-query");
+    expect(queryEl?.textContent).toBe("ubiquitous");
+
+    const messages = sidebar.contentEl.querySelectorAll(".tutor-message-user, .tutor-message-model");
+    expect(messages.length).toBe(2);
+    expect(messages[0].textContent).toContain("Tại sao lại dùng từ này?");
+  });
+
+  it("8. automatically falls back to latest active session when switching to 'ai-tutor' tab even if currentResult was not set", () => {
+    // New sidebar without currentResult
+    const newSidebar = new EnglishStudySidebar(leaf);
+    newSidebar.setTutorDependencies(chatService, geminiService, apiKey);
+    newSidebar.render();
+
+    // Latest session exists in chatService (session 'ephemeral')
+    chatService.addMessage(session.id, "user", "Giải thích giúp tôi");
+
+    // Click 'ai-tutor' tab
+    const tutorBtn = newSidebar.contentEl.querySelector(".tab-btn-ai-tutor");
+    clickElement(tutorBtn);
+
+    const emptyState = newSidebar.contentEl.querySelector(".sidebar-tutor-empty");
+    expect(emptyState).toBeNull();
+
+    const queryEl = newSidebar.contentEl.querySelector(".sidebar-tutor-query");
+    expect(queryEl?.textContent).toBe("ephemeral");
   });
 });

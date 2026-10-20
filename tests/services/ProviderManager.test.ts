@@ -142,6 +142,15 @@ describe("ProviderManager", () => {
   });
 
   describe("lookup: 3-Tier Execution", () => {
+    it("uses lemma definitions after a 404 without claiming the lemma's pronunciation for the query", async () => {
+      vi.spyOn((manager as any).freeDict, "lookup").mockResolvedValue({ word: "run", originalQuery: "running", isStemFallback: true, phonetic: "/rʌn/", audioUrl: "https://example.test/run.mp3", definitions: [{ partOfSpeech: "verb", meaningEn: "Move swiftly on foot." }] });
+      vi.spyOn((manager as any).googleTranslate, "translateWithMeta").mockResolvedValue({ translation: "đang chạy", detectedLang: "en" });
+      const result = await manager.lookup("running", "She is running.");
+      expect(result.query).toBe("running");
+      expect(result.definitions?.[0].meaningEn).toBe("Move swiftly on foot.");
+      expect(result.phonetic).toBeUndefined();
+      expect(result.audioUrl).toBeUndefined();
+    });
     describe("Tier 1: 'word'", () => {
       it("should execute FreeDict and GoogleTranslate in parallel and assemble result", async () => {
         const freeDictData = [

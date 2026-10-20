@@ -120,6 +120,7 @@ export class FreeDictService extends BaseProvider {
     if (res && res.status === 200 && Array.isArray(json) && json.length > 0) {
       const parsed = this.parseEntries(json, cleanWord, accent);
       if (parsed) {
+        // Missing pronunciation stays missing; a lemma's sound is not the inflected word.
         return parsed;
       }
     }

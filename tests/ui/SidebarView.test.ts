@@ -226,7 +226,7 @@ describe("EnglishStudySidebar", () => {
     expect(translit?.textContent).toContain("Benkyō");
   });
 
-  it("should display loading chip when aiLoading is true and update to ✨ AI when aiTranslation is set", () => {
+  it("should display loading chip when aiLoading is true and update to AI when aiTranslation is set", () => {
     const loadingResult: LookupResult = {
       query: "paradigm",
       type: "word",

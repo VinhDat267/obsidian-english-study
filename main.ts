@@ -30,7 +30,9 @@ import {
   wrapRangeWithHighlight,
   unwrapHighlightsByIds,
   unwrapAllHighlights,
+  updateHighlightColorInElement,
 } from "./src/utils/domHighlightHelper";
+import { HighlightHistoryManager } from "./src/services/history/HighlightHistoryManager";
 import { RightClickPenHandler } from "./src/reading/RightClickPenHandler";
 import { AiTutorChatService } from "./src/services/ai/AiTutorChatService";
 
@@ -47,6 +49,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   floatingPopover!: FloatingPopover;
   floatingHighlightToolbar!: FloatingHighlightToolbar;
   penPill!: HighlighterPenPill;
+  highlightHistory: HighlightHistoryManager = new HighlightHistoryManager();
   rightClickPenHandler!: RightClickPenHandler;
   isPenModeActive: boolean = false;
   currentPenAction: HighlightAction = "yellow";
@@ -55,6 +58,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   private lastLookupResult: LookupResult | null = null;
   private selectionDebounceTimer: any = null;
   private lookupGeneration = 0;
+  private lookupInputKey = "";
   private lookupDisposed = false;
   private settingsWrite: Promise<void> = Promise.resolve();
 
@@ -74,9 +78,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.readingHighlightService.migrateLegacyPaths(this.app.vault.getMarkdownFiles().map(file => file.path));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.readingHighlightService.renamePath(oldPath, file.path);
+      this.highlightHistory.renamePath(oldPath, file.path);
+      this.updatePenPillHistoryState();
     }));
     this.registerEvent(this.app.vault.on("delete", file => {
       this.readingHighlightService.removePath(file.path);
+      this.highlightHistory.removePath(file.path);
+      this.updatePenPillHistoryState();
     }));
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
@@ -305,6 +313,41 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
     });
 
+    // 3.11. Hoàn tác highlight khi đọc (Undo)
+    this.addCommand({
+      id: "undo-reading-highlight",
+      name: "Hoàn tác highlight khi đọc (Undo)",
+      hotkeys: [
+        { modifiers: ["Mod"], key: "z" },
+      ],
+      checkCallback: (checking: boolean) => {
+        const view = this.getActiveReadingView();
+        if (checking) return Boolean(view);
+        if (view) {
+          this.undoReadingHighlight(view);
+        }
+        return true;
+      },
+    });
+
+    // 3.12. Làm lại thao tác highlight khi đọc (Redo)
+    this.addCommand({
+      id: "redo-reading-highlight",
+      name: "Làm lại thao tác highlight khi đọc (Redo)",
+      hotkeys: [
+        { modifiers: ["Mod", "Shift"], key: "z" },
+        { modifiers: ["Mod"], key: "y" },
+      ],
+      checkCallback: (checking: boolean) => {
+        const view = this.getActiveReadingView();
+        if (checking) return Boolean(view);
+        if (view) {
+          this.redoReadingHighlight(view);
+        }
+        return true;
+      },
+    });
+
     // 4. Đăng ký Context Menus cho Editor và File Explorer
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu: any, editor: Editor, view) => {
@@ -375,11 +418,48 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         }
       });
 
-      this.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
-        if (e.key === "Escape" && this.isPenModeActive) {
-          this.togglePenMode(false);
-        }
-      });
+      this.registerDomEvent(
+        window,
+        "keydown",
+        (e: KeyboardEvent) => {
+          if (e.key === "Escape" && this.isPenModeActive) {
+            this.togglePenMode(false);
+            return;
+          }
+
+          const target = e.target as HTMLElement | null;
+          const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+          if (!isInput) {
+            const activeView = this.getActiveReadingView();
+            if (activeView) {
+              const keyLower = (e.key || "").toLowerCase();
+              const code = e.code || "";
+              const isZ = keyLower === "z" || code === "KeyZ";
+              const isY = keyLower === "y" || code === "KeyY";
+
+              const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && isZ;
+              const isRedo = (e.ctrlKey || e.metaKey) && !e.altKey && (isY || (e.shiftKey && isZ));
+
+              if (isUndo) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === "function") {
+                  e.stopImmediatePropagation();
+                }
+                this.undoReadingHighlight(activeView);
+              } else if (isRedo) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === "function") {
+                  e.stopImmediatePropagation();
+                }
+                this.redoReadingHighlight(activeView);
+              }
+            }
+          }
+        },
+        true
+      );
 
       this.registerDomEvent(
         document,
@@ -394,7 +474,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           ) {
             return;
           }
-          this.dismissFloatingUi();
+          this.dismissFloatingUi(false, true);
         },
         true
       );
@@ -405,6 +485,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.app.workspace.on("active-leaf-change", (leaf: any) => {
         this.dismissFloatingUi();
         this.restoreHighlightsForActiveView(leaf?.view);
+        this.updatePenPillHistoryState(leaf?.view?.file?.path);
       })
     );
 
@@ -412,6 +493,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       this.app.workspace.on("file-open", () => {
         this.dismissFloatingUi();
         this.restoreHighlightsForActiveView();
+        this.updatePenPillHistoryState();
       })
     );
 
@@ -428,6 +510,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   async onunload(): Promise<void> {
     this.lookupDisposed = true;
     this.readingTranslationController?.unload();
+    this.floatingPopover?.hide(true);
     this.dismissFloatingUi();
     this.penPill?.hide();
     if (this.selectionDebounceTimer) {
@@ -496,6 +579,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           this.providerManager.getGeminiService(),
           this.settings.geminiApiKey
         );
+        if (!this.sidebarView.getCurrentResult() && this.lastLookupResult) {
+          this.sidebarView.setResult(this.lastLookupResult);
+        }
+        const latestSession = this.aiTutorChatService.getLatestSession();
+        if (latestSession && !this.sidebarView.getActiveTutorSession()) {
+          this.sidebarView.setActiveTutorSession(latestSession);
+        }
       }
     }
   }
@@ -514,7 +604,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (!selectedText || !selectedText.trim()) {
       return null;
     }
+    const { paragraph, cursorOffset } = this.extractEditorLookupContext(editor, selectedText);
+    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset, editor);
+  }
 
+  private extractEditorLookupContext(editor: Editor, selectedText: string): { paragraph: string; cursorOffset: number } {
     let paragraph = "";
     let cursorOffset = 0;
 
@@ -554,7 +648,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       paragraph = selectedText;
     }
 
-    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset, editor);
+    return { paragraph, cursorOffset };
   }
 
   /**
@@ -666,15 +760,20 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
 
     const rect = this.getSelectionBoundingRect();
+    const docContext = this.extractDocumentContext(editor);
+    this.lookupInputKey = this.createLookupInputKey(selectedText, paragraph, cursorOffset, docContext);
 
     // Hiển thị ngay trạng thái Loading tại vị trí vùng chọn
-    this.floatingPopover.showLoading(rect, selectedText, {
-      onClose: () => {
-        if (isCurrent()) this.invalidateLookup();
+    this.floatingPopover.showLoading(
+      rect,
+      selectedText,
+      {
+        onClose: () => {
+          if (isCurrent()) this.invalidateLookup();
+        },
       },
-    });
-
-    const docContext = this.extractDocumentContext(editor);
+      { popoverFontSize: this.settings.popoverFontSize || "medium" }
+    );
 
     let result: LookupResult;
     try {
@@ -725,6 +824,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         },
         onPinToSidebar: (res: LookupResult) => {
           if (!isCurrent()) return;
+          this.floatingPopover?.hide(true);
           this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
             if (!isCurrent()) return;
@@ -734,8 +834,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           });
         },
         onPinToSidebarChat: (session: TutorSession) => {
+          if (!isCurrent()) return;
+          const pendingTurn = this.floatingPopover?.handoffChatToSidebar?.();
+          this.floatingPopover?.hide(true);
           this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
+            if (!isCurrent()) return;
             if (this.sidebarView) {
               this.sidebarView.setTutorDependencies(
                 this.aiTutorChatService,
@@ -743,6 +847,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
                 this.settings.geminiApiKey
               );
               this.sidebarView.openTutorSession(session);
+              if (pendingTurn) this.sidebarView.followPendingTutorTurn(session, pendingTurn);
             }
           });
         },
@@ -762,6 +867,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         chatService: this.aiTutorChatService,
         geminiService: this.providerManager.getGeminiService(),
         apiKey: this.settings.geminiApiKey,
+        popoverFontSize: this.settings.popoverFontSize || "medium",
       }
     );
     shown = true;
@@ -788,21 +894,38 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (!file || !file.path || !selectedText || selectedText.trim().length < 2) return false;
 
     // 1. Lưu vào service
-    const { action, item } = this.readingHighlightService.addHighlight(file.path, selectedText, color);
+    const { action, item, oldColor } = this.readingHighlightService.addHighlight(file.path, selectedText, color);
     const highlightId = item?.id || `hl-${Date.now()}`;
     const bg = HIGHLIGHT_COLORS[color]?.bg || "rgba(250, 204, 21, 0.4)";
 
-    // 2. Live DOM Wrap (Mượt mà 0ms, không reload)
+    // 2. Live DOM Wrap / Color Update / Unwrap (Mượt mà 0ms, không reload)
     if (action === "removed") {
       if (activeView?.contentEl && item) unwrapHighlightsByIds(activeView.contentEl, [item.id]);
+      if (item) {
+        this.highlightHistory.recordRemove(file.path, [item]);
+      }
+    } else if (action === "updated") {
+      if (activeView?.contentEl && item) {
+        const count = updateHighlightColorInElement(activeView.contentEl, item.id, color);
+        if (count === 0) {
+          applyHighlightsToElement(activeView.contentEl, [item]);
+        }
+      }
+      if (item && oldColor) {
+        this.highlightHistory.recordUpdate(file.path, item.id, oldColor, color, item.text);
+      }
     } else {
       if (range) {
         wrapRangeWithHighlight(range, highlightId, color, bg);
-      } else if (activeView?.contentEl) {
-        applyHighlightsToElement(activeView.contentEl, this.readingHighlightService.getHighlights(file.path));
+      } else if (activeView?.contentEl && item) {
+        applyHighlightsToElement(activeView.contentEl, [item]);
+      }
+      if (item) {
+        this.highlightHistory.recordAdd(file.path, item);
       }
     }
 
+    this.updatePenPillHistoryState(file.path);
     this.floatingHighlightToolbar?.hide();
     return true;
   }
@@ -835,6 +958,10 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (activeView?.contentEl) {
       unwrapHighlightsByIds(activeView.contentEl, removed.map(item => item.id));
     }
+    if (removed.length > 0) {
+      this.highlightHistory.recordRemove(file.path, removed);
+      this.updatePenPillHistoryState(file.path);
+    }
     this.floatingHighlightToolbar?.hide();
     return true;
   }
@@ -847,14 +974,155 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     const file = activeView?.file || (this.app.workspace.getActiveFile && this.app.workspace.getActiveFile());
     if (!file || !file.path) return false;
 
-    this.readingHighlightService.clearHighlightsForFile(file.path);
-    if (activeView?.contentEl) {
-      unwrapAllHighlights(activeView.contentEl);
+    const currentHighlights = this.readingHighlightService.getHighlights(file.path);
+    if (currentHighlights.length > 0) {
+      this.highlightHistory.recordClearAll(file.path, currentHighlights);
+      this.readingHighlightService.clearHighlightsForFile(file.path);
+      if (activeView?.contentEl) {
+        unwrapAllHighlights(activeView.contentEl);
+      }
+      this.updatePenPillHistoryState(file.path);
     }
     this.floatingHighlightToolbar?.hide();
     new Notice("Đã xóa toàn bộ highlight trong ghi chú hiện tại.", 2500);
     return true;
   }
+  getActiveReadingView(): MarkdownView | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (view && this.isReadingMode(view)) return view;
+
+    const leafView = this.app.workspace.activeLeaf?.view;
+    if (leafView instanceof MarkdownView && this.isReadingMode(leafView)) return leafView;
+
+    const leaves = this.app.workspace.getLeavesOfType ? this.app.workspace.getLeavesOfType("markdown") : [];
+    for (const leaf of leaves) {
+      if (leaf.view instanceof MarkdownView && this.isReadingMode(leaf.view)) {
+        return leaf.view;
+      }
+    }
+    return null;
+  }
+
+  isReadingMode(view: MarkdownView): boolean {
+    return Boolean(
+      view.file &&
+      (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+    );
+  }
+
+  /**
+   * Hoàn tác thao tác highlight gần nhất (Undo)
+   */
+  undoReadingHighlight(customView?: MarkdownView): boolean {
+    const view = customView || this.getActiveReadingView();
+    if (!view || !view.file) return false;
+    const filePath = view.file.path;
+    const action = this.highlightHistory.undo(filePath);
+    if (!action) {
+      new Notice("Không có thao tác highlight nào để hoàn tác.");
+      return false;
+    }
+
+    const targetEl = (view as any).previewMode?.containerEl || view.contentEl;
+
+    switch (action.type) {
+      case "add": {
+        this.readingHighlightService.removeHighlight(filePath, action.item.id);
+        if (targetEl) unwrapHighlightsByIds(targetEl, [action.item.id]);
+        break;
+      }
+      case "remove": {
+        this.readingHighlightService.restoreHighlights(filePath, action.items);
+        if (targetEl) applyHighlightsToElement(targetEl, action.items);
+        break;
+      }
+      case "update": {
+        this.readingHighlightService.restoreHighlights(filePath, [{
+          id: action.id,
+          text: action.text,
+          color: action.oldColor,
+          timestamp: Date.now(),
+        }]);
+        if (targetEl) updateHighlightColorInElement(targetEl, action.id, action.oldColor);
+        break;
+      }
+      case "clear-all": {
+        this.readingHighlightService.restoreHighlights(filePath, action.items);
+        if (targetEl) applyHighlightsToElement(targetEl, action.items);
+        break;
+      }
+    }
+
+    this.updatePenPillHistoryState(filePath);
+    new Notice("Đã hoàn tác thao tác highlight.");
+    return true;
+  }
+
+  /**
+   * Làm lại thao tác highlight vừa hoàn tác (Redo)
+   */
+  redoReadingHighlight(customView?: MarkdownView): boolean {
+    const view = customView || this.getActiveReadingView();
+    if (!view || !view.file) return false;
+    const filePath = view.file.path;
+    const action = this.highlightHistory.redo(filePath);
+    if (!action) {
+      new Notice("Không có thao tác highlight nào để làm lại.");
+      return false;
+    }
+
+    const targetEl = (view as any).previewMode?.containerEl || view.contentEl;
+
+    switch (action.type) {
+      case "add": {
+        this.readingHighlightService.restoreHighlights(filePath, [action.item]);
+        if (targetEl) applyHighlightsToElement(targetEl, [action.item]);
+        break;
+      }
+      case "remove": {
+        for (const item of action.items) {
+          this.readingHighlightService.removeHighlight(filePath, item.id);
+        }
+        if (targetEl) unwrapHighlightsByIds(targetEl, action.items.map(i => i.id));
+        break;
+      }
+      case "update": {
+        this.readingHighlightService.restoreHighlights(filePath, [{
+          id: action.id,
+          text: action.text,
+          color: action.newColor,
+          timestamp: Date.now(),
+        }]);
+        if (targetEl) updateHighlightColorInElement(targetEl, action.id, action.newColor);
+        break;
+      }
+      case "clear-all": {
+        this.readingHighlightService.clearHighlightsForFile(filePath);
+        if (targetEl) unwrapHighlightsByIds(targetEl, action.items.map(i => i.id));
+        break;
+      }
+    }
+
+    this.updatePenPillHistoryState(filePath);
+    new Notice("Đã làm lại thao tác highlight.");
+    return true;
+  }
+
+  /**
+   * Cập nhật trạng thái Undo / Redo cho HighlighterPenPill
+   */
+  updatePenPillHistoryState(filePath?: string): void {
+    if (!this.penPill?.isVisible()) return;
+    const path = filePath || this.app.workspace.getActiveViewOfType(MarkdownView)?.file?.path;
+    if (!path) {
+      this.penPill.setHistoryState(false, false);
+      return;
+    }
+    const canUndo = this.highlightHistory.canUndo(path);
+    const canRedo = this.highlightHistory.canRedo(path);
+    this.penPill.setHistoryState(canUndo, canRedo);
+  }
+
 
   /**
    * Khôi phục highlight cho view đang mở (Reading Mode)
@@ -917,7 +1185,14 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         onClose: () => {
           this.togglePenMode(false);
         },
+        onUndo: () => {
+          this.undoReadingHighlight();
+        },
+        onRedo: () => {
+          this.redoReadingHighlight();
+        },
       });
+      this.updatePenPillHistoryState();
       const modeLabel = HIGHLIGHT_COLORS[this.settings.highlighterPenColor || "yellow"]?.label || "Vàng";
       new Notice(
         `Đã BẬT chế độ bút dạ quang (${modeLabel}). Quét CHUỘT PHẢI để tô/tẩy highlight, Chuột trái bôi đen để tra từ dịch! (Nhấn Esc để tắt)`,
@@ -1064,12 +1339,40 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return;
     }
 
-    // 3. Nếu Popover đang hiển thị và đã chứa nội dung tra cứu của chính từ/câu này -> giữ nguyên vị trí, không re-lookup
+    const context = isEditorMode && activeView.editor
+      ? this.extractEditorLookupContext(activeView.editor, selectedText)
+      : readingContext || { paragraph: selectedText, cursorOffset: 0 };
+    const inputKey = this.createLookupInputKey(selectedText, context.paragraph, context.cursorOffset,
+      this.extractDocumentContext(isEditorMode ? activeView.editor : undefined));
+
+    // Repeated mouseup events may reuse the same lookup; a new context must be looked up.
     if (
       this.floatingPopover &&
       this.floatingPopover.isVisible() &&
-      this.floatingPopover.getCurrentQuery() === selectedText
+      this.floatingPopover.getCurrentQuery() === selectedText &&
+      this.lookupInputKey === inputKey
     ) {
+      return;
+    }
+
+    const performFn = () => {
+      if (isEditorMode && activeView.editor) {
+        return this.performLookup(activeView.editor);
+      } else {
+        return this.performLookupFromReading(
+          selectedText,
+          readingContext?.paragraph || selectedText,
+          readingContext?.cursorOffset || 0
+        );
+      }
+    };
+    const isAutoTranslate =
+      Boolean(this.settings.autoTranslateOnSelection) ||
+      this.settings.triggerMode === "auto-popup";
+    if (isAutoTranslate) {
+      this.dismissFloatingTrigger();
+      this.floatingHighlightToolbar?.hide();
+      performFn();
       return;
     }
 
@@ -1115,28 +1418,6 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         );
         return;
       }
-    }
-
-    const performFn = () => {
-      if (isEditorMode && activeView.editor) {
-        return this.performLookup(activeView.editor);
-      } else {
-        return this.performLookupFromReading(
-          selectedText,
-          readingContext?.paragraph || selectedText,
-          readingContext?.cursorOffset || 0
-        );
-      }
-    };
-
-    const isAutoTranslate =
-      Boolean(this.settings.autoTranslateOnSelection) ||
-      this.settings.triggerMode === "auto-popup";
-
-    if (isAutoTranslate) {
-      this.dismissFloatingTrigger();
-      performFn();
-      return;
     }
 
     if (this.settings.triggerMode === "icon") {
@@ -1188,15 +1469,22 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
   }
 
+  private createLookupInputKey(text: string, paragraph: string, cursorOffset: number, docContext: DocumentContextMeta): string {
+    return JSON.stringify([
+      this.app.workspace.getActiveViewOfType(MarkdownView)?.file?.path,
+      text, paragraph, cursorOffset, this.settings.sourceLanguage, this.settings.targetLanguage, docContext,
+    ]);
+  }
+
   /**
    * Ẩn các UI nổi (Trigger Icon và Popover) khi scroll hoặc đổi tab
    */
-  dismissFloatingUi(cancelLookup = true): void {
+  dismissFloatingUi(cancelLookup = true, keepPopover = false): void {
     if (cancelLookup) this.invalidateLookup();
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
     }
-    if (this.floatingPopover) {
+    if (this.floatingPopover && !keepPopover && !this.floatingPopover.isPinnedPopover?.()) {
       this.floatingPopover.hide();
     }
     if (this.floatingHighlightToolbar) {

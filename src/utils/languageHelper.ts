@@ -10,7 +10,7 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageMeta> = {
   auto: {
     code: "auto",
     nameVi: "Tự động nhận diện",
-    badge: "🌐 Auto",
+    badge: "🌐 Auto", /* taste-skill-ignore: language meta badge */
     speechLocale: "en-US",
     vocabTag: "#vocab/multilingual",
   },
@@ -111,7 +111,7 @@ export function getLanguageMeta(langCode?: string): LanguageMeta {
   return {
     code: clean,
     nameVi: clean.toUpperCase(),
-    badge: `🌐 ${clean.toUpperCase()}`,
+    badge: `🌐 ${clean.toUpperCase()}`, /* taste-skill-ignore: fallback language globe badge */
     speechLocale: "en-US",
     vocabTag: `#vocab/${clean}`,
   };

@@ -281,4 +281,35 @@ describe("ReadingHighlightService", () => {
     expect(removed).toBe(true);
     expect(service.getHighlights("doc.md")).toHaveLength(0);
   });
+
+  it("returns oldColor when updating an existing highlight to a new color", () => {
+    const service = new ReadingHighlightService();
+    const res1 = service.addHighlight("doc.md", "ephemeral", "yellow");
+    expect(res1.action).toBe("added");
+    expect(res1.oldColor).toBeUndefined();
+
+    const res2 = service.addHighlight("doc.md", "ephemeral", "blue");
+    expect(res2.action).toBe("updated");
+    expect(res2.oldColor).toBe("yellow");
+    expect(res2.item?.color).toBe("blue");
+  });
+
+  it("restores exact highlight items via restoreHighlights preserving IDs and order", () => {
+    const saveFn = vi.fn();
+    const service = new ReadingHighlightService({}, saveFn);
+
+    const item1 = service.addHighlight("doc.md", "word1", "yellow").item!;
+    const item2 = service.addHighlight("doc.md", "word2", "green").item!;
+
+    service.removeHighlights("doc.md", "word1");
+    expect(service.getHighlights("doc.md")).toHaveLength(1);
+
+    saveFn.mockClear();
+    service.restoreHighlights("doc.md", [item1]);
+
+    expect(saveFn).toHaveBeenCalledOnce();
+    const current = service.getHighlights("doc.md");
+    expect(current).toHaveLength(2);
+    expect(current.find(h => h.id === item1.id)).toEqual(item1);
+  });
 });

@@ -13,6 +13,7 @@ function dispatchMockEvent(target: Window | Document, event: Record<string, unkn
 function createMockElement(tag: string = "div"): any {
   const listeners: Record<string, ((...args: any[]) => void)[]> = {};
   const attributes: Record<string, string> = {};
+  const dataset: Record<string, string> = {};
   const classListSet = new Set<string>();
   const children: any[] = [];
   let textContent = "";
@@ -22,6 +23,7 @@ function createMockElement(tag: string = "div"): any {
   const el = {
     tagName: tag.toUpperCase(),
     style: {} as Record<string, string>,
+    dataset,
     get textContent() {
       if (children.length > 0) {
         return children.map((c) => c.textContent || "").join("");
@@ -466,6 +468,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       expect(popover.isVisible()).toBe(false);
       expect(onClose).toHaveBeenCalled();
+      vi.useRealTimers();
     });
 
     it("should copy text to clipboard when clicking copy button", () => {
@@ -872,7 +875,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.hide();
     });
 
-    it("should render [✨ AI] badge when aiTranslation is present", () => {
+    it("should render [AI] badge when aiTranslation is present", () => {
       const popover = new FloatingPopover();
       const mockResult: LookupResult = {
         query: "deployment",
@@ -896,7 +899,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(viMeaning).not.toBeNull();
       const aiBadge = viMeaning?.querySelector(".vocab-ai-badge-inline");
       expect(aiBadge).not.toBeNull();
-      expect(aiBadge?.textContent).toBe("✨ AI");
+      expect(aiBadge?.textContent?.trim()).toBe("AI");
       expect(viMeaning?.textContent).toContain("triển khai phần mềm");
 
       popover.hide();
@@ -1016,6 +1019,40 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(viMeaning?.querySelector(".vocab-ai-loading-chip")).toBeNull();
       expect(viMeaning?.textContent).toContain("đủ điều kiện");
 
+      popover.hide();
+    });
+
+    it("should update phonetic progressively via updateAiContent if initially absent", () => {
+      const popover = new FloatingPopover();
+      const initialResult: LookupResult = {
+        query: "facilitates",
+        type: "word",
+        contextSentence: "ScrumMaster facilitates.",
+        contextSentenceClean: "ScrumMaster facilitates.",
+        vietnameseTranslation: "điều phối",
+        timestamp: Date.now(),
+        aiLoading: true,
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        initialResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      expect(el.querySelector(".vocab-phonetic")).toBeNull();
+
+      popover.updateAiContent({
+        ...initialResult,
+        phonetic: "/fəˈsɪl.ɪ.teɪt/",
+        aiTranslation: "hỗ trợ điều phối",
+        aiLoading: false,
+      });
+
+      const phoneticEl = el.querySelector(".vocab-phonetic");
+      expect(phoneticEl).not.toBeNull();
+      expect(phoneticEl.textContent).toBe("/fəˈsɪl.ɪ.teɪt/");
       popover.hide();
     });
 
@@ -1189,7 +1226,253 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       popover.hide();
     });
+    it("should render window pin button (.popover-btn-pin-window) and report isPinnedPopover", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      const pinWindowBtn = el.querySelector(".popover-btn-pin-window");
+      expect(pinWindowBtn).not.toBeNull();
+      expect(pinWindowBtn?.getAttribute("title")).toContain("Ghim");
+      expect(popover.isPinnedPopover()).toBe(false);
+
+      popover.hide();
+    });
+
+    it("should toggle pinned state when pin button is clicked", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      const pinWindowBtn = el.querySelector(".popover-btn-pin-window")!;
+
+      pinWindowBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isPinnedPopover()).toBe(true);
+      expect(pinWindowBtn.classList.contains("is-pinned")).toBe(true);
+      expect(pinWindowBtn.getAttribute("title")).toContain("Bỏ ghim");
+
+      pinWindowBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isPinnedPopover()).toBe(false);
+      expect(pinWindowBtn.classList.contains("is-pinned")).toBe(false);
+
+      popover.hide();
+    });
+
+    it("should NOT hide on outside click when pinned, but hide when unpinned", () => {
+      vi.useFakeTimers();
+      const popover = new FloatingPopover();
+      const onClose = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onClose }
+      );
+
+      popover.setPinned(true);
+      vi.runAllTimers();
+
+      const outsideEl = createMockElement("div");
+      (global as any).document.dispatchEvent({
+        type: "mousedown",
+        target: outsideEl,
+      });
+
+      expect(popover.isVisible()).toBe(true);
+      expect(onClose).not.toHaveBeenCalled();
+
+      // Unpin and trigger outside click
+      popover.setPinned(false);
+      (global as any).document.dispatchEvent({
+        type: "mousedown",
+        target: outsideEl,
+      });
+
+      expect(popover.isVisible()).toBe(false);
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("should preserve pinned state when updating popover with new search result", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+      popover.setPinned(true);
+
+      const nextResult: LookupResult = {
+        query: "transformer",
+        type: "word",
+        contextSentence: "A transformer model.",
+        contextSentenceClean: "A transformer model.",
+        vietnameseTranslation: "mô hình transformer",
+        definitions: [],
+        timestamp: Date.now(),
+      };
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        nextResult,
+        { onSave: vi.fn() }
+      );
+
+      expect(popover.isPinnedPopover()).toBe(true);
+      const el = asMockElement(popover.getElement())!;
+      const pinWindowBtn = el.querySelector(".popover-btn-pin-window")!;
+      expect(pinWindowBtn.classList.contains("is-pinned")).toBe(true);
+
+      popover.hide();
+    });
+
+    it("should unpin and hide when close button is clicked", () => {
+      const popover = new FloatingPopover();
+      const onClose = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onClose }
+      );
+      popover.setPinned(true);
+
+      const el = asMockElement(popover.getElement())!;
+      const closeBtn = el.querySelector(".popover-btn-close")!;
+
+      closeBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isVisible()).toBe(false);
+      expect(popover.isPinnedPopover()).toBe(false);
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("should render clean top bar (.popover-top-bar) containing drag handle, badge, and action buttons", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onPinToSidebar: vi.fn(), onClose: vi.fn(), onHighlight: vi.fn() },
+        { isReadingMode: true }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      const header = el.querySelector(".popover-header");
+      expect(header).not.toBeNull();
+
+      const topBar = el.querySelector(".popover-top-bar");
+      expect(topBar).not.toBeNull();
+
+      const topLeft = el.querySelector(".popover-top-left");
+      expect(topLeft).not.toBeNull();
+      expect(topLeft.querySelector(".popover-drag-handle")).not.toBeNull();
+      expect(topLeft.querySelector(".vocab-lang-badge")).not.toBeNull();
+
+      const headerActions = el.querySelector(".popover-header-actions");
+      expect(headerActions).not.toBeNull();
+      expect(topBar.querySelector(".popover-header-actions")).not.toBeNull();
+
+      // Title group is separate from topBar
+      const titleGroup = el.querySelector(".popover-title-group");
+      expect(titleGroup).not.toBeNull();
+      expect(titleGroup.querySelector(".vocab-query")).not.toBeNull();
+
+      popover.hide();
+    });
+
+    it("should mark long query with is-long-query and has-long-query when query is a long sentence or paragraph", () => {
+      const popover = new FloatingPopover();
+      const longQuery = "On Day 9 of a ten-day Sprint, remaining effort has fallen sharply, but the main booking flow still fails integration tests. What is the best progress report and next action?\nA. Mark the Sprint Goal achieved...\nB. Report lower estimated remaining work...";
+      const longResult: LookupResult = {
+        query: longQuery,
+        type: "sentence",
+        contextSentence: longQuery,
+        contextSentenceClean: longQuery,
+        vietnameseTranslation: "Bản dịch câu hỏi...",
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        longResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      expect(el.classList.contains("has-long-query")).toBe(true);
+
+      const queryEl = el.querySelector(".vocab-query")!;
+      expect(queryEl.classList.contains("is-long-query")).toBe(true);
+
+      popover.hide();
+    });
+
+    it("should NOT mark short query with is-long-query when query is a single word", () => {
+      const popover = new FloatingPopover();
+      const shortResult: LookupResult = {
+        query: "apple",
+        type: "word",
+        contextSentence: "I ate an apple.",
+        contextSentenceClean: "I ate an apple.",
+        vietnameseTranslation: "quả táo",
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        shortResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      expect(el.classList.contains("has-long-query")).toBe(false);
+
+      const queryEl = el.querySelector(".vocab-query")!;
+      expect(queryEl.classList.contains("is-long-query")).toBe(false);
+
+      popover.hide();
+    });
+
+    it("should apply data-font-size attribute and dataset matching popoverFontSize option", () => {
+      const popoverSmall = new FloatingPopover();
+      popoverSmall.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { popoverFontSize: "small" as any }
+      );
+      const elSmall = asMockElement(popoverSmall.getElement())!;
+      expect(elSmall.getAttribute("data-font-size") || elSmall.dataset?.fontSize).toBe("small");
+      popoverSmall.hide();
+
+      const popoverLarge = new FloatingPopover();
+      popoverLarge.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { popoverFontSize: "large" as any }
+      );
+      const elLarge = asMockElement(popoverLarge.getElement())!;
+      expect(elLarge.getAttribute("data-font-size") || elLarge.dataset?.fontSize).toBe("large");
+      popoverLarge.hide();
+    });
   });
 });
-
-

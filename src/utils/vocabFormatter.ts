@@ -172,54 +172,37 @@ export function formatCallout(result: LookupResult): string {
   ].join("\n");
 }
 
-/**
- * Inserts a new row at the end of the markdown table:
- * - Finds the last row of the existing table (lines starting with '|')
- * - Inserts 'row' right after the last table row
- * - Preserves any trailing content, subheadings, or blank lines
- * - If markdown does not have a table, initializes with getDefaultTemplate() + row
- */
+/** Locate only the generated five-column schema, outside fenced examples. */
+function findVocabTables(lines: string[]): Array<{ start: number; end: number }> {
+  const headers = ["từ / cụm từ", "loại từ & phiên âm", "nghĩa tiếng việt", "câu ngữ cảnh", "ngày"];
+  const cells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map(cell => cell.trim().toLowerCase());
+  const tables: Array<{ start: number; end: number }> = [];
+  let fence: string | undefined;
+  for (let i = 0; i < lines.length; i++) {
+    const marker = lines[i].match(/^\s*(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = undefined;
+      continue;
+    }
+    if (marker) { fence = marker[1]; continue; }
+    if (!lines[i].trim().startsWith("|")) continue;
+    const header = cells(lines[i]);
+    const delimiter = cells(lines[i + 1] || "");
+    if (header.length !== 5 || !headers.every((value, column) => header[column] === value) ||
+      delimiter.length !== 5 || !delimiter.every(value => /^:?-{3,}:?$/.test(value))) continue;
+    const start = i;
+    i++;
+    while (i + 1 < lines.length && lines[i + 1].trim().startsWith("|")) i++;
+    tables.push({ start, end: i });
+  }
+  return tables;
+}
+
+/** Append to the vocabulary table, or create one without modifying other tables. */
 export function insertRowAtTableEnd(markdown: string, row: string): string {
   const lines = markdown.split(/\r?\n/);
-
-  // Identify contiguous table blocks
-  interface TableBlock {
-    start: number;
-    end: number;
-    hasVocabHeader: boolean;
-  }
-
-  const blocks: TableBlock[] = [];
-  let currentBlock: TableBlock | null = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const isTableLine = lines[i].trim().startsWith("|");
-    if (isTableLine) {
-      if (!currentBlock) {
-        currentBlock = { start: i, end: i, hasVocabHeader: false };
-      } else {
-        currentBlock.end = i;
-      }
-      if (
-        lines[i].toLowerCase().includes("từ / cụm từ") ||
-        lines[i].toLowerCase().includes("loại từ & phiên âm")
-      ) {
-        currentBlock.hasVocabHeader = true;
-      }
-    } else {
-      if (currentBlock) {
-        blocks.push(currentBlock);
-        currentBlock = null;
-      }
-    }
-  }
-
-  if (currentBlock) {
-    blocks.push(currentBlock);
-  }
-
-  // If no table exists, initialize with default template
-  if (blocks.length === 0) {
+  const targetBlock = findVocabTables(lines)[0];
+  if (!targetBlock) {
     const template = getDefaultTemplate().trimEnd();
     const trimmedMarkdown = markdown.trim();
     if (!trimmedMarkdown) {
@@ -227,9 +210,6 @@ export function insertRowAtTableEnd(markdown: string, row: string): string {
     }
     return `${markdown.trimEnd()}\n\n${template}\n${row}\n`;
   }
-
-  // Pick target table block (vocab table preferred, otherwise first block)
-  const targetBlock = blocks.find((b) => b.hasVocabHeader) || blocks[0];
 
   lines.splice(targetBlock.end + 1, 0, row);
   return lines.join("\n");
@@ -249,7 +229,8 @@ export function isWordInContent(markdown: string, query: string): boolean {
 
   // Table row check
   const tableRegex = new RegExp(`^[ \\t]*\\|[ \\t]*\\*\\*[ \\t]*${escapedQuery}[ \\t]*\\*\\*`, "im");
-  if (tableRegex.test(markdown)) {
+  const lines = markdown.split(/\r?\n/);
+  if (findVocabTables(lines).some(table => tableRegex.test(lines.slice(table.start + 2, table.end + 1).join("\n")))) {
     return true;
   }
 
@@ -273,6 +254,9 @@ export function appendContextToExisting(markdown: string, result: LookupResult):
 
   const queryLower = result.query.trim().toLowerCase();
   const lines = markdown.split(/\r?\n/);
+  const vocabRows = new Set(findVocabTables(lines).flatMap(table =>
+    Array.from({ length: table.end - table.start - 1 }, (_, i) => table.start + 2 + i)
+  ));
   let updated = false;
 
   let newSentence = result.contextSentence || "";
@@ -286,7 +270,7 @@ export function appendContextToExisting(markdown: string, result: LookupResult):
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (line.trim().startsWith("|")) {
+    if (vocabRows.has(i)) {
       const match = line.match(/^[ \t]*\|[ \t]*\*\*[ \t]*(.+?)[ \t]*\*\*/i);
       if (match && match[1].trim().toLowerCase() === queryLower) {
         // Split columns by unescaped pipe

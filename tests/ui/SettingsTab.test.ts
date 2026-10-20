@@ -118,6 +118,23 @@ describe("EnglishStudySettingTab", () => {
   });
 
   describe("Group 1: Trigger & Display", () => {
+    it("should update popoverFontSize dropdown and call saveSettings", async () => {
+      settingsTab.display();
+
+      const fontSetting = Setting.instances.find(
+        (s) => s.name.includes("Cỡ chữ") || s.name.includes("popoverFontSize")
+      );
+      expect(fontSetting).toBeDefined();
+
+      const dropdown = fontSetting!.dropdownComponents[0];
+      expect(dropdown).toBeDefined();
+      expect(dropdown._value).toBe("medium");
+
+      await dropdown._onChange("small");
+      expect(pluginMock.settings.popoverFontSize).toBe("small");
+      expect(pluginMock.saveSettings).toHaveBeenCalled();
+    });
+
     it("should update triggerMode and call saveSettings", async () => {
       settingsTab.display();
 

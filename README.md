@@ -4,7 +4,7 @@
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vitest](https://img.shields.io/badge/Tests-583%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
+[![Vitest](https://img.shields.io/badge/Tests-729%20Passed-FCC72B?logo=vitest&logoColor=black)](https://vitest.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -74,7 +74,8 @@ File export checks cancellation and source conflicts before committing. If the s
 - **Tier 1: Single Word**:
   - **English**: Queries Free Dictionary API for phonetic IPA (`/haɪˈpɑː.θə.sɪs/`), parts of speech (*n., v., adj.*), definitions, and example sentences.
   - **All Languages**: Concurrently queries Google Translate for primary meaning and native transliteration.
-  - **Inflection & Stemming Fallback**: Automatically strips suffixes (`-ing`, `-ed`, `-es`, `-s`) to resolve base lemmas.
+- **Inflection & Stemming Fallback**: Automatically strips suffixes (`-ing`, `-ed`, `-es`, `-s`) to resolve base lemmas.
+  - Lemma fallback supplies definitions; its IPA/audio is not presented as the pronunciation of the inflected query. Missing audio falls back to TTS for the original query.
 - **Tier 2: Phrasal Verbs & Idioms**:
   - Prioritizes idiom dictionary entries before falling back to phrase translation.
 - **Tier 3: Sentences & Deep Context Analysis**:
@@ -193,7 +194,7 @@ cd obsidian-polyglot-study
 # 2. Install dependencies
 npm ci
 
-# 3. Run full test suite (583 tests)
+# 3. Run full test suite (729 tests)
 npm test
 
 # 4. Build production bundle
@@ -245,7 +246,7 @@ Open **Settings > Polyglot Study Assistant** to customize your environment:
 The project is built on strict **Test-Driven Development (TDD)** principles:
 
 ```bash
-# Run 583 tests across 34 test suites
+# Run 729 tests across 43 test files
 npm test
 
 # Typecheck application and tests, then all production code against real Obsidian types
@@ -270,6 +271,8 @@ npx vitest run --coverage
 - `main`: Full plugin lifecycle, ribbon icons, commands, Edit and Reading mode lookups.
 
 Verification limits: automated tests use a mocked Obsidian host and HTTP. All production code and the reading module pass checks against the installed real Obsidian API types; the full application/test typecheck also passes. Version 1.1.1 includes audit regression tests for safe file commits, cancellation, cache isolation, AI language targets and highlight persistence. Browser fixture checks from the original reading feature cover representative light/dark themes, narrow panes, and 200% CSS zoom. Actual Obsidian and live-provider acceptance remain separate and were not run for the audit fixes. See [the remediation record](docs/audits/2026-10-19-remediation.md).
+
+The [2026-10-20 follow-up fixes](docs/audits/2026-10-20-remediation.md) cover scroll-safe lookups, highlight history on rename/delete, Tutor context isolation and pending-chat handoff, vocabulary table ownership, pronunciation provenance, Reading Mode auto-translation, and restored TypeScript checks. The 729-test result includes these regressions; live Obsidian/provider acceptance remains unrun.
 
 ---
 

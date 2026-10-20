@@ -1,23 +1,12 @@
-import { setIcon } from "obsidian";
 import { AiTutorChatService } from "../services/ai/AiTutorChatService";
 import { GeminiService } from "../services/provider/GeminiService";
 import { TutorSession } from "../types";
+import { safeSetIcon } from "../utils/domHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
 
 export interface PopoverChatDrawerCallbacks {
   onResize?: () => void;
   onPinToSidebar?: (session: TutorSession) => void;
-}
-
-function safeSetIcon(element: HTMLElement, iconId: string, fallbackText: string): void {
-  try {
-    setIcon(element, iconId);
-  } catch {
-    // fallback if setIcon fails in non-obsidian or mocked environment
-  }
-  if (!element.innerHTML.trim() && fallbackText) {
-    element.textContent = fallbackText;
-  }
 }
 
 export class PopoverChatDrawer {
@@ -34,6 +23,9 @@ export class PopoverChatDrawer {
 
   private expanded: boolean = false;
   private isLoading: boolean = false;
+  private requestGeneration = 0;
+  private pendingTurn: Promise<void> | null = null;
+  private handedOff = false;
 
   constructor(
     private chatService: AiTutorChatService,
@@ -47,6 +39,8 @@ export class PopoverChatDrawer {
    * If the drawer is already rendered, refreshes the message list.
    */
   setSession(session: TutorSession): void {
+    if (this.session !== session) this.invalidateRequest();
+    this.handedOff = false;
     this.session = session;
     if (this.messagesList) {
       this.renderMessages();
@@ -58,6 +52,20 @@ export class PopoverChatDrawer {
    */
   isExpanded(): boolean {
     return this.expanded;
+  }
+
+  /**
+   * Returns the active session attached to this drawer.
+   */
+  getSession(): TutorSession | null {
+    return this.session;
+  }
+
+  /**
+   * Returns whether this drawer has any messages recorded in its session.
+   */
+  hasMessages(): boolean {
+    return (this.session?.messages?.length ?? 0) > 0;
   }
 
   /**
@@ -111,7 +119,7 @@ export class PopoverChatDrawer {
 
     const chatIcon = document.createElement("span");
     chatIcon.className = "drawer-toggle-icon";
-    safeSetIcon(chatIcon, "message-square", "💬");
+    safeSetIcon(chatIcon, "message-square");
     toggleBtn.appendChild(chatIcon);
 
     const toggleText = document.createElement("span");
@@ -121,7 +129,7 @@ export class PopoverChatDrawer {
 
     const chevron = document.createElement("span");
     chevron.className = "drawer-toggle-chevron";
-    safeSetIcon(chevron, "chevron-down", "▼");
+    safeSetIcon(chevron, "chevron-down");
     this.chevronEl = chevron;
     toggleBtn.appendChild(chevron);
 
@@ -143,7 +151,7 @@ export class PopoverChatDrawer {
     titleGroup.className = "drawer-toolbar-title";
     const tutorBadgeIcon = document.createElement("span");
     tutorBadgeIcon.className = "drawer-title-icon";
-    safeSetIcon(tutorBadgeIcon, "bot", "🤖");
+    safeSetIcon(tutorBadgeIcon, "bot");
     titleGroup.appendChild(tutorBadgeIcon);
 
     const titleText = document.createElement("span");
@@ -161,7 +169,7 @@ export class PopoverChatDrawer {
     pinBtn.setAttribute("type", "button");
     pinBtn.setAttribute("title", "Ghim vào thanh bên");
     pinBtn.setAttribute("aria-label", "Ghim vào thanh bên");
-    safeSetIcon(pinBtn, "panel-right", "📌");
+    safeSetIcon(pinBtn, "panel-right", "Ghim vào thanh bên");
     pinBtn.addEventListener("click", () => {
       if (this.session) {
         this.callbacks?.onPinToSidebar?.(this.session);
@@ -175,8 +183,9 @@ export class PopoverChatDrawer {
     clearBtn.setAttribute("type", "button");
     clearBtn.setAttribute("title", "Xóa đoạn chat");
     clearBtn.setAttribute("aria-label", "Xóa đoạn chat");
-    safeSetIcon(clearBtn, "trash-2", "🗑️");
+    safeSetIcon(clearBtn, "trash-2", "Xóa đoạn chat");
     clearBtn.addEventListener("click", () => {
+      this.invalidateRequest();
       if (this.session) {
         this.chatService.clearSession(this.session.id);
       }
@@ -210,6 +219,15 @@ export class PopoverChatDrawer {
     textarea.className = "drawer-input-textarea";
     textarea.placeholder = "Hỏi thêm gia sư AI... (Enter để gửi)";
     textarea.rows = 1;
+
+    const adjustHeight = () => {
+      textarea.style.height = "auto";
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 32), 110);
+      textarea.style.height = `${newHeight}px`;
+      this.callbacks?.onResize?.();
+    };
+    textarea.addEventListener("input", adjustHeight);
+
     textarea.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -224,7 +242,7 @@ export class PopoverChatDrawer {
     sendBtn.setAttribute("type", "button");
     sendBtn.setAttribute("title", "Gửi tin nhắn");
     sendBtn.setAttribute("aria-label", "Gửi tin nhắn");
-    safeSetIcon(sendBtn, "send", "➤");
+    safeSetIcon(sendBtn, "send", "Gửi tin nhắn");
     sendBtn.addEventListener("click", () => this.handleSend());
     this.sendBtn = sendBtn;
     inputRow.appendChild(sendBtn);
@@ -239,6 +257,7 @@ export class PopoverChatDrawer {
    * Destroys component DOM and cleans up references.
    */
   destroy(): void {
+    if (!this.handedOff) this.invalidateRequest();
     if (this.containerEl && this.containerEl.parentElement) {
       this.containerEl.parentElement.removeChild(this.containerEl);
     }
@@ -311,10 +330,27 @@ export class PopoverChatDrawer {
     if (!text) return;
 
     this.textarea.value = "";
+    this.textarea.style.height = "";
+    this.callbacks?.onResize?.();
     this.sendMessage(text);
   }
 
-  private async sendMessage(content: string): Promise<void> {
+  /** Transfer a live turn with its shared session before disposing the drawer DOM. */
+  handoffPendingTurn(): Promise<void> | null {
+    this.handedOff = true;
+    return this.pendingTurn;
+  }
+
+  private sendMessage(content: string): Promise<void> {
+    if (this.isLoading) return Promise.resolve();
+    const turn = this.runMessage(content);
+    this.pendingTurn = turn;
+    const finish = () => { if (this.pendingTurn === turn) this.pendingTurn = null; };
+    void turn.then(finish, finish);
+    return turn;
+  }
+
+  private async runMessage(content: string): Promise<void> {
     if (this.isLoading) return;
 
     if (!this.session) {
@@ -323,9 +359,14 @@ export class PopoverChatDrawer {
         contextSentence: "",
       });
     }
+    const session = this.session;
+    const messages = session.messages;
+    const generation = ++this.requestGeneration;
+    const isCurrent = () => generation === this.requestGeneration && this.session === session &&
+      session.messages === messages && this.chatService.getSession(session.id) === session;
 
     // 1. Add user message to session & append to DOM
-    this.chatService.addMessage(this.session.id, "user", content);
+    this.chatService.addMessage(session.id, "user", content);
     this.appendUserBubble(content);
 
     // 2. Loading state & resize notification
@@ -335,18 +376,19 @@ export class PopoverChatDrawer {
 
     // 3. Dispatch to Gemini
     try {
-      const systemPrompt = this.chatService.buildSystemInstruction(this.session);
+      const systemPrompt = this.chatService.buildSystemInstruction(session);
       const reply = await this.geminiService.chatWithTutor(
-        this.session,
+        session,
         this.apiKey,
         "gemini-flash-latest",
         systemPrompt
       );
+      if (!isCurrent()) return;
 
       this.removeLoadingIndicator();
 
       if (reply && reply.trim()) {
-        this.chatService.addMessage(this.session.id, "model", reply.trim());
+        this.chatService.addMessage(session.id, "model", reply.trim());
         this.appendModelBubble(reply.trim());
       } else {
         this.appendErrorBubble(
@@ -354,14 +396,24 @@ export class PopoverChatDrawer {
         );
       }
     } catch {
+      if (!isCurrent()) return;
       this.removeLoadingIndicator();
       this.appendErrorBubble(
         "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng."
       );
     } finally {
-      this.setLoading(false);
-      this.callbacks?.onResize?.();
+      if (generation === this.requestGeneration) {
+        this.removeLoadingIndicator();
+        this.setLoading(false);
+        if (!this.handedOff) this.callbacks?.onResize?.();
+      }
     }
+  }
+
+  private invalidateRequest(): void {
+    this.requestGeneration++;
+    this.removeLoadingIndicator();
+    this.setLoading(false);
   }
 
   private appendUserBubble(content: string): void {
@@ -407,7 +459,18 @@ export class PopoverChatDrawer {
 
     const loadingEl = document.createElement("div");
     loadingEl.className = "tutor-message-loading";
-    loadingEl.textContent = "Gia sư AI đang suy nghĩ...";
+
+    const dots = document.createElement("span");
+    dots.className = "tutor-typing-dots";
+    dots.appendChild(document.createElement("span"));
+    dots.appendChild(document.createElement("span"));
+    dots.appendChild(document.createElement("span"));
+    loadingEl.appendChild(dots);
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = "Gia sư AI đang suy nghĩ...";
+    loadingEl.appendChild(textSpan);
+
     this.loadingEl = loadingEl;
     this.messagesList.appendChild(loadingEl);
     this.scrollToBottom();

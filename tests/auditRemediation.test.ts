@@ -123,7 +123,7 @@ describe("safe bilingual file commit", () => {
 function prepareLookup() {
   plugin.providerManager = new ProviderManager(plugin.settings);
   (plugin.providerManager as any).freeDict = { lookup: vi.fn(async () => null) };
-  plugin.floatingPopover = { showLoading: vi.fn(), show: vi.fn(), hide: vi.fn(), updateAiContent: vi.fn(), getElement: () => null } as any;
+  plugin.floatingPopover = { showLoading: vi.fn(), show: vi.fn(), hide: vi.fn(), updateAiContent: vi.fn(), getElement: () => null, isPinnedPopover: vi.fn(() => false) } as any;
   (plugin as any).getSelectionBoundingRect = () => ({ top: 0, left: 0, right: 20, bottom: 20, width: 20, height: 20 });
 }
 

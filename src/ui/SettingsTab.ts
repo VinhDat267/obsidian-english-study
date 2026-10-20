@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import {
   PluginSettings,
   TriggerMode,
+  PopoverFontSize,
   VocabFormat,
   PreferredAccent,
   BilingualStyle,
@@ -94,16 +95,31 @@ export class EnglishStudySettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
+      .setName("Cỡ chữ cửa sổ tra cứu nổi (Popover)")
+      .setDesc("Điều chỉnh tỷ lệ kích thước chữ hiển thị của Popover tra cứu khi đọc.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("small", "Nhỏ (Compact)")
+          .addOption("medium", "Vừa (Tiêu chuẩn)")
+          .addOption("large", "Lớn (Dễ đọc)")
+          .setValue(this.pluginInstance.settings.popoverFontSize || "medium")
+          .onChange(async (value: string) => {
+            this.pluginInstance.settings.popoverFontSize = value as PopoverFontSize;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Màu bút dạ quang mặc định")
       .setDesc("Màu sắc được sử dụng khi bật chế độ bút dạ quang (tự động highlight khi bôi đen trong Reading view).")
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("yellow", "🟡 Vàng (Mặc định)")
-          .addOption("green", "🟢 Xanh lá")
-          .addOption("blue", "🔵 Xanh lam")
-          .addOption("pink", "🌸 Hồng")
-          .addOption("purple", "🟣 Tím")
-          .addOption("orange", "🟠 Cam")
+          .addOption("yellow", "Vàng (Mặc định)")
+          .addOption("green", "Xanh lá")
+          .addOption("blue", "Xanh lam")
+          .addOption("pink", "Hồng")
+          .addOption("purple", "Tím")
+          .addOption("orange", "Cam")
           .setValue(this.pluginInstance.settings.highlighterPenColor || "yellow")
           .onChange(async (value: string) => {
             this.pluginInstance.settings.highlighterPenColor = value as any;
@@ -131,15 +147,15 @@ export class EnglishStudySettingTab extends PluginSettingTab {
       )
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("auto", "🌐 Tự động nhận diện (Tất cả ngôn ngữ - Khuyến nghị)")
-          .addOption("en", "🇬🇧 Tiếng Anh (English)")
-          .addOption("ja", "🇯🇵 Tiếng Nhật (Japanese)")
-          .addOption("zh", "🇨🇳 Tiếng Trung (Chinese)")
-          .addOption("ko", "🇰🇷 Tiếng Hàn (Korean)")
-          .addOption("fr", "🇫🇷 Tiếng Pháp (French)")
-          .addOption("de", "🇩🇪 Tiếng Đức (German)")
-          .addOption("es", "🇪🇸 Tiếng Tây Ban Nha (Spanish)")
-          .addOption("ru", "🇷🇺 Tiếng Nga (Russian)")
+          .addOption("auto", "Tự động nhận diện (Tất cả ngôn ngữ - Khuyến nghị)")
+          .addOption("en", "Tiếng Anh (English)")
+          .addOption("ja", "Tiếng Nhật (Japanese)")
+          .addOption("zh", "Tiếng Trung (Chinese)")
+          .addOption("ko", "Tiếng Hàn (Korean)")
+          .addOption("fr", "Tiếng Pháp (French)")
+          .addOption("de", "Tiếng Đức (German)")
+          .addOption("es", "Tiếng Tây Ban Nha (Spanish)")
+          .addOption("ru", "Tiếng Nga (Russian)")
           .setValue(this.pluginInstance.settings.sourceLanguage || "auto")
           .onChange(async (value: string) => {
             this.pluginInstance.settings.sourceLanguage = value;
@@ -152,10 +168,10 @@ export class EnglishStudySettingTab extends PluginSettingTab {
       .setDesc("Ngôn ngữ hiển thị bản dịch nghĩa khi bạn tra từ hoặc câu ngữ cảnh.")
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("vi", "🇻🇳 Tiếng Việt (Mặc định)")
-          .addOption("en", "🇬🇧 Tiếng Anh (English)")
-          .addOption("zh", "🇨🇳 Tiếng Trung (Chinese)")
-          .addOption("ja", "🇯🇵 Tiếng Nhật (Japanese)")
+          .addOption("vi", "Tiếng Việt (Mặc định)")
+          .addOption("en", "Tiếng Anh (English)")
+          .addOption("zh", "Tiếng Trung (Chinese)")
+          .addOption("ja", "Tiếng Nhật (Japanese)")
           .setValue(this.pluginInstance.settings.targetLanguage || "vi")
           .onChange(async (value: string) => {
             this.pluginInstance.settings.targetLanguage = value;
@@ -308,15 +324,15 @@ export class EnglishStudySettingTab extends PluginSettingTab {
               }
 
               if (ok) {
-                new Notice("✅ Kết nối Gemini API thành công! (Mô hình: gemini-flash-latest)");
+                new Notice("Kết nối Gemini API thành công! (Mô hình: gemini-flash-latest)");
               } else {
                 new Notice(
-                  `❌ Kết nối Gemini API thất bại! ${errorMsg || "Vui lòng kiểm tra lại API Key."}`
+                  `Kết nối Gemini API thất bại! ${errorMsg || "Vui lòng kiểm tra lại API Key."}`
                 );
               }
             } catch (err: any) {
               new Notice(
-                `❌ Kết nối Gemini API thất bại! ${err?.message || "Vui lòng kiểm tra lại API Key."}`
+                `Kết nối Gemini API thất bại! ${err?.message || "Vui lòng kiểm tra lại API Key."}`
               );
             } finally {
               button.setButtonText("Kiểm tra kết nối");

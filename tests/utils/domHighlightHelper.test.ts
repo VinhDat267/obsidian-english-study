@@ -6,6 +6,7 @@ import {
   unwrapHighlightsByText,
   unwrapHighlightsByIds,
   unwrapAllHighlights,
+  updateHighlightColorInElement,
 } from "../../src/utils/domHighlightHelper";
 
 describe("domHighlightHelper", () => {
@@ -143,6 +144,13 @@ describe("domHighlightHelper", () => {
     // Text content is completely preserved
     expect(container.textContent).toBe(initialText);
   });
+  it("updates highlight color and background in DOM elements matching ID", () => {
+    container.innerHTML = '<p><mark class="polyglot-reading-highlight" data-highlight-id="target-hl" data-color="yellow" style="background-color: yellow">text</mark></p>';
+    const count = updateHighlightColorInElement(container, "target-hl", "purple");
+
+    expect(count).toBe(1);
+    const mark = container.querySelector("mark")!;
+    expect(mark.getAttribute("data-color")).toBe("purple");
+    expect(mark.style.backgroundColor).toContain("rgba(168, 85, 247");
+  });
 });
-
-

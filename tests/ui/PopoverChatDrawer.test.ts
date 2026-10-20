@@ -4,6 +4,7 @@ import { PopoverChatDrawer, PopoverChatDrawerCallbacks } from "../../src/ui/Popo
 import { AiTutorChatService } from "../../src/services/ai/AiTutorChatService";
 import { GeminiService } from "../../src/services/provider/GeminiService";
 import { TutorSession } from "../../src/types";
+import { deferred } from "../helpers/reading";
 
 describe("PopoverChatDrawer", () => {
   let chatService: AiTutorChatService;
@@ -274,5 +275,46 @@ describe("PopoverChatDrawer", () => {
     expect(document.body.contains(el)).toBe(true);
     drawer.destroy();
     expect(document.body.contains(el)).toBe(false);
+  });
+
+  it("F07: clearing a pending turn allows a new turn and ignores the old response", async () => {
+    const old = deferred<string>(), current = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    const el = drawer.render(); document.body.appendChild(el);
+    const first = (drawer as any).sendMessage("Old question");
+    el.querySelector<HTMLButtonElement>(".btn-clear-chat")!.click();
+    const second = (drawer as any).sendMessage("Current question");
+    old.resolve("Stale answer"); await first;
+    expect(el.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(true);
+    expect(session.messages.map(message => message.content)).toEqual(["Current question"]);
+    current.resolve("Current answer"); await second;
+    expect(session.messages.map(message => message.content)).toEqual(["Current question", "Current answer"]);
+    expect(el.textContent).not.toContain("Stale answer");
+    expect(el.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(false);
+  });
+
+  it.each(["clear", "delete", "destroy"])("F07: ignores a response after %s outside the request", async action => {
+    const reply = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValue(reply.promise);
+    const el = drawer.render(); document.body.appendChild(el);
+    const sending = (drawer as any).sendMessage("Question");
+    if (action === "clear") chatService.clearSession(session.id);
+    if (action === "delete") chatService.deleteSession(session.id);
+    if (action === "destroy") drawer.destroy();
+    reply.resolve("Stale answer"); await sending;
+    expect(session.messages.some(message => message.role === "model")).toBe(false);
+    expect(el.querySelector(".tutor-message-model")).toBeNull();
+  });
+
+  it.each(["empty", "reject"])("F07: a cleared request cannot render a stale %s error", async mode => {
+    const reply = deferred<string | null>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValue(reply.promise);
+    const el = drawer.render(); document.body.appendChild(el);
+    const sending = (drawer as any).sendMessage("Question");
+    el.querySelector<HTMLButtonElement>(".btn-clear-chat")!.click();
+    if (mode === "empty") reply.resolve(null); else reply.reject(new Error("offline"));
+    await sending;
+    expect(session.messages).toEqual([]);
+    expect(el.querySelector(".tutor-message-error")).toBeNull();
   });
 });

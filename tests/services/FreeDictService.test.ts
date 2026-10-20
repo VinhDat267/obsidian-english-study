@@ -6,6 +6,7 @@ describe("FreeDictService", () => {
   let service: FreeDictService;
 
   beforeEach(() => {
+    vi.mocked(requestUrl).mockReset();
     vi.clearAllMocks();
     service = new FreeDictService();
   });
@@ -197,6 +198,56 @@ describe("FreeDictService", () => {
   });
 
   describe("lookup - Inflection / Stemming fallback (404)", () => {
+    it("keeps missing inflected pronunciation absent instead of borrowing the lemma's audio", async () => {
+      const facilitates200 = [
+        {
+          word: "facilitates",
+          phonetics: [],
+          meanings: [
+            {
+              partOfSpeech: "verb",
+              definitions: [{ definition: "To make easy or easier." }],
+            },
+          ],
+        },
+      ];
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: facilitates200,
+        text: JSON.stringify(facilitates200),
+      });
+
+      const facilitateStem200 = [
+        {
+          word: "facilitate",
+          phonetic: "/fəˈsɪl.ɪ.teɪt/",
+          phonetics: [
+            {
+              text: "/fəˈsɪl.ɪ.teɪt/",
+              audio: "https://api.dictionaryapi.dev/media/pronunciations/en/facilitate-us.mp3",
+            },
+          ],
+          meanings: [],
+        },
+      ];
+      vi.mocked(requestUrl).mockResolvedValueOnce({
+        status: 200,
+        headers: {},
+        arrayBuffer: new ArrayBuffer(0),
+        json: facilitateStem200,
+        text: JSON.stringify(facilitateStem200),
+      });
+
+      const result = await service.lookup("facilitates");
+      expect(result).not.toBeNull();
+      expect(result?.word).toBe("facilitates");
+      expect(result?.phonetic).toBeUndefined();
+      expect(result?.audioUrl).toBeUndefined();
+      expect(result?.definitions.length).toBe(1);
+    });
+
     it("should fallback from 'running' (-ing) to 'run' when running returns 404", async () => {
       // 1st call for 'running' returns 404
       vi.mocked(requestUrl).mockResolvedValueOnce({
