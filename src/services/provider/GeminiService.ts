@@ -77,6 +77,33 @@ ${formatRequirement}
   }
 
   /**
+   * 1.5. LẤY PHIÊN ÂM IPA CHUẨN QUỐC TẾ (AI Phonetic Fallback):
+   * Tự động sinh phiên âm IPA chuẩn khi từ điển không có phiên âm hoặc lỗi mạng
+   */
+  async getPhonetic(word: string, apiKey: string): Promise<string | null> {
+    const cleanKey = apiKey ? apiKey.trim() : "";
+    if (!cleanKey) return null;
+    const cleanWord = word ? word.trim() : "";
+    if (!cleanWord || cleanWord.split(/\s+/).length > 4) return null;
+
+    const prompt = `Provide ONLY the standard IPA phonetic transcription for the English word or term: "${cleanWord}".
+Format requirement: Return ONLY the IPA transcription enclosed in slashes, e.g. /həˈloʊ/ or /fəˈsɪlɪteɪts/.
+Do NOT include any extra words, explanations, or quotes.`;
+
+    const raw = await this.callGeminiApi(prompt, cleanKey);
+    if (!raw) return null;
+    const match = raw.match(/\/([^\/\n]+)\//);
+    if (match) {
+      return match[0].trim();
+    }
+    const clean = raw.trim().replace(/^['"`]+|['"`]+$/g, "");
+    if (clean.length > 0 && clean.length < 50 && !clean.includes("\n")) {
+      return clean.startsWith("/") ? clean : `/${clean}/`;
+    }
+    return null;
+  }
+
+  /**
    * 2. PHÂN TÍCH NGỮ PHÁP AI (AI Grammar Analysis):
    * Chỉ phân tích cấu trúc ngữ pháp, từ loại, thành ngữ.
    * Tối đa 2 gạch đầu dòng, dưới 40 từ. Tuyệt đối không lặp lại giải thích nghĩa.

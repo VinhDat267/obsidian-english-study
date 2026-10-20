@@ -737,6 +737,29 @@ export class FloatingPopover {
       ...updatedResult,
     } as LookupResult;
 
+    // 0. Cập nhật Phonetic nếu kết quả mới có phiên âm
+    if (updatedResult.phonetic) {
+      let phoneticEl = this.element.querySelector(".vocab-phonetic") as HTMLElement;
+      if (!phoneticEl) {
+        const titleGroup = this.element.querySelector(".popover-title-group");
+        if (titleGroup) {
+          phoneticEl = document.createElement("span");
+          phoneticEl.className = "vocab-phonetic vocab-fade-in";
+          const queryEl = titleGroup.querySelector(".vocab-query");
+          if (queryEl && queryEl.nextSibling) {
+            titleGroup.insertBefore(phoneticEl, queryEl.nextSibling);
+          } else {
+            titleGroup.appendChild(phoneticEl);
+          }
+        }
+      }
+      if (phoneticEl) {
+        phoneticEl.textContent = updatedResult.phonetic.startsWith("/")
+          ? updatedResult.phonetic
+          : `/${updatedResult.phonetic}/`;
+      }
+    }
+
     const body = this.element.querySelector(".popover-body");
     if (!body) return;
 

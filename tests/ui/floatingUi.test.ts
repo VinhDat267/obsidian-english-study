@@ -1022,6 +1022,40 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.hide();
     });
 
+    it("should update phonetic progressively via updateAiContent if initially absent", () => {
+      const popover = new FloatingPopover();
+      const initialResult: LookupResult = {
+        query: "facilitates",
+        type: "word",
+        contextSentence: "ScrumMaster facilitates.",
+        contextSentenceClean: "ScrumMaster facilitates.",
+        vietnameseTranslation: "điều phối",
+        timestamp: Date.now(),
+        aiLoading: true,
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        initialResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      expect(el.querySelector(".vocab-phonetic")).toBeNull();
+
+      popover.updateAiContent({
+        ...initialResult,
+        phonetic: "/fəˈsɪl.ɪ.teɪt/",
+        aiTranslation: "hỗ trợ điều phối",
+        aiLoading: false,
+      });
+
+      const phoneticEl = el.querySelector(".vocab-phonetic");
+      expect(phoneticEl).not.toBeNull();
+      expect(phoneticEl.textContent).toBe("/fəˈsɪl.ɪ.teɪt/");
+      popover.hide();
+    });
+
     it("should match query in updateAiContent even with whitespace padding", () => {
       const popover = new FloatingPopover();
       const initialResult: LookupResult = {

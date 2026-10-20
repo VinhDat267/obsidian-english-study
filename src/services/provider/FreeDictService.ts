@@ -120,6 +120,30 @@ export class FreeDictService extends BaseProvider {
     if (res && res.status === 200 && Array.isArray(json) && json.length > 0) {
       const parsed = this.parseEntries(json, cleanWord, accent);
       if (parsed) {
+        // Nếu từ inflected/chia thì (-s, -es, -ed, -ing) trả về 200 nhưng rỗng phonetic/audio
+        // -> tra cứu stem candidate (từ gốc) để bổ sung phiên âm & phát âm
+        if (!parsed.phonetic) {
+          const candidates = getStemCandidates(cleanWord);
+          for (const candidate of candidates) {
+            const stemUrl = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(candidate)}`;
+            const stemRes = await this.executeRequest(stemUrl);
+            const stemJson = this.extractJson(stemRes);
+            if (stemRes && stemRes.status === 200 && Array.isArray(stemJson) && stemJson.length > 0) {
+              const stemParsed = this.parseEntries(stemJson, candidate, accent);
+              if (stemParsed) {
+                if (!parsed.phonetic && stemParsed.phonetic) {
+                  parsed.phonetic = stemParsed.phonetic;
+                }
+                if (!parsed.audioUrl && stemParsed.audioUrl) {
+                  parsed.audioUrl = stemParsed.audioUrl;
+                }
+                if (parsed.phonetic && parsed.audioUrl) {
+                  break;
+                }
+              }
+            }
+          }
+        }
         return parsed;
       }
     }
