@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, WorkspaceLeaf } from "obsidian";
 import EnglishStudyPlugin from "../main";
 import { EnglishStudySidebar } from "../src/ui/SidebarView";
+import { ReadingHighlightService } from "../src/services/storage/ReadingHighlightService";
+import { createReadingHighlightPostProcessor } from "../src/reading/readingHighlightPostProcessor";
 import { deferred, flushPromises, makeReadingView } from "./helpers/reading";
 
 let app: App;
@@ -11,6 +13,32 @@ beforeEach(async () => {
   app = new App();
   plugin = new EnglishStudyPlugin(app, { id: "obsidian-english-study" } as any);
   await plugin.onload();
+});
+
+it("list selection stays one saved highlight through undo, redo and restoration", () => {
+  const html = '<ol>\n<li>First estimate.</li>\n<li>Unclear requirements.</li>\n<li>Estimating is a PM skill.</li>\n<li>Unproven technology.</li>\n</ol>';
+  const view = makeReadingView(app, html, "list.md");
+  const root = view.contentEl as HTMLElement;
+  const items = root.querySelectorAll("li");
+  const range = document.createRange();
+  range.setStart(items[0].firstChild!, 0);
+  range.setEnd(items[3].firstChild!, items[3].textContent!.length);
+  const text = "First estimate.\nUnclear requirements.\nEstimating is a PM skill.\nUnproven technology.";
+  plugin.applyLiveReadingHighlight("yellow", text, range, view);
+  const saved = plugin.readingHighlightService.getHighlights("list.md");
+  expect(saved).toHaveLength(1);
+  expect(view.contentEl.querySelectorAll("mark")).toHaveLength(4);
+  expect(plugin.undoReadingHighlight(view)).toBe(true);
+  expect(view.contentEl.querySelector("mark")).toBeNull();
+  expect(plugin.redoReadingHighlight(view)).toBe(true);
+  expect(view.contentEl.querySelectorAll("mark")).toHaveLength(4);
+
+  const reloaded = new ReadingHighlightService(JSON.parse(JSON.stringify(plugin.readingHighlightService.getAllHighlights())));
+  const restoredView = makeReadingView(app, html, "list.md");
+  const restoredRoot = restoredView.contentEl as HTMLElement;
+  createReadingHighlightPostProcessor(reloaded)(restoredRoot, { sourcePath: "list.md" } as any);
+  expect(Array.from(restoredRoot.querySelectorAll("mark"), mark => mark.dataset.highlightId)).toEqual([saved[0].id, saved[0].id, saved[0].id, saved[0].id]);
+  expect(Array.from(restoredRoot.querySelector("ol")!.children, child => child.tagName)).toEqual(["LI", "LI", "LI", "LI"]);
 });
 afterEach(async () => {
   await plugin.onunload();

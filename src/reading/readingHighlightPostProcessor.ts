@@ -2,7 +2,7 @@ import type { MarkdownPostProcessorContext } from "obsidian";
 import type { ReadingHighlightService } from "../services/storage/ReadingHighlightService";
 import { HIGHLIGHT_COLORS } from "../utils/textHighlighter";
 import type { ReadingHighlightItem } from "../types";
-import { wrapRangeWithHighlight } from "../utils/domHighlightHelper";
+import { wrapRangeWithHighlight, unwrapHighlightElement } from "../utils/domHighlightHelper";
 
 const EXCLUDED_SELECTOR =
   'script, style, pre, code, textarea, input, button, .cm-editor, [contenteditable]:not([contenteditable="false"])';
@@ -47,6 +47,12 @@ export function applyHighlightsToElement(
   highlights: ReadingHighlightItem[]
 ): void {
   if (!root || !highlights || highlights.length === 0) return;
+
+  // Older versions wrapped inter-block whitespace. Remove those empty boxes
+  // when restoring an already-rendered pane, while keeping text and saved IDs.
+  for (const mark of Array.from(root.querySelectorAll<HTMLElement>(".polyglot-reading-highlight"))) {
+    if (!mark.closest(EXCLUDED_SELECTOR) && !mark.textContent?.trim()) unwrapHighlightElement(mark);
+  }
 
   // Flatten queries (include line-split fallback for multi-paragraph selections)
   const expandedHighlights: ReadingHighlightItem[] = [];

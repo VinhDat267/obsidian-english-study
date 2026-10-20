@@ -92,6 +92,9 @@ export function wrapRangeWithHighlight(
     const eOffset = isEnd ? endOffset : textNode.nodeValue.length;
 
     if (sOffset >= eOffset) continue;
+    // Inter-block newlines are layout separators, not visible text. Wrapping
+    // them creates padded inline boxes between list items/paragraphs.
+    if (!textNode.data.slice(sOffset, eOffset).trim()) continue;
 
     let targetNode = textNode;
     if (eOffset < targetNode.data.length) {

@@ -299,4 +299,19 @@ describe("readingHighlightPostProcessor", () => {
     expect(marks[0].textContent).toBe("A. Option one");
     expect(marks[1].textContent).toBe("B. Option two");
   });
+
+  it("removes old empty list highlights during restoration without changing text or saved IDs", () => {
+    const service = new ReadingHighlightService();
+    const item = service.addHighlight("list.md", "First estimate.\nUnclear requirements.", "yellow").item!;
+    const root = mountReadingHtml('<ol><li><mark class="polyglot-reading-highlight" data-highlight-id="' + item.id + '">First estimate.</mark></li><mark class="polyglot-reading-highlight" data-highlight-id="' + item.id + '">\n</mark><li><mark class="polyglot-reading-highlight" data-highlight-id="' + item.id + '">Unclear requirements.</mark></li></ol>');
+    const originalText = root.textContent;
+
+    createReadingHighlightPostProcessor(service)(root, { sourcePath: "list.md" } as any);
+
+    expect(Array.from(root.querySelector("ol")!.children, child => child.tagName)).toEqual(["LI", "LI"]);
+    expect(root.querySelectorAll("mark")).toHaveLength(2);
+    expect(Array.from(root.querySelectorAll("mark"), mark => mark.dataset.highlightId)).toEqual([item.id, item.id]);
+    expect(root.textContent).toBe(originalText);
+    expect(service.getHighlights("list.md")).toEqual([item]);
+  });
 });

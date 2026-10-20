@@ -144,6 +144,48 @@ describe("domHighlightHelper", () => {
     // Text content is completely preserved
     expect(container.textContent).toBe(initialText);
   });
+
+  it.each([
+    '<ol>\n<li>First estimate.</li>\n<li>Unclear requirements.</li>\n<li>Estimating is a PM skill.</li>\n<li>Unproven technology.</li>\n</ol>',
+    '<ol>\n<li><p>First estimate.</p></li>\n\n<li><p>Unclear requirements.</p></li>\n\n<li><p>Estimating is a PM skill.</p></li>\n\n<li><p>Unproven technology.</p></li>\n</ol>',
+    '<ul> <li>First estimate.</li> <li>Unclear requirements.</li> <li>Estimating is a PM skill.</li> <li>Unproven technology.</li> </ul>',
+  ])("does not turn list separators into empty padded highlights: %s", html => {
+    container.innerHTML = html;
+    const originalHtml = container.innerHTML;
+    const originalText = container.textContent;
+    const list = container.querySelector("ol, ul")!;
+    const items = list.querySelectorAll("li");
+    const start = (items[0].querySelector("p") || items[0]).firstChild!;
+    const end = (items[3].querySelector("p") || items[3]).firstChild!;
+    const range = document.createRange();
+    range.setStart(start, 0); range.setEnd(end, end.nodeValue!.length);
+
+    wrapRangeWithHighlight(range, "list-selection", "yellow", "#facc15");
+
+    expect(Array.from(list.children, child => child.tagName)).toEqual(["LI", "LI", "LI", "LI"]);
+    const marks = Array.from(list.querySelectorAll("mark"));
+    expect(marks.map(mark => mark.textContent)).toEqual([
+      "First estimate.", "Unclear requirements.", "Estimating is a PM skill.", "Unproven technology.",
+    ]);
+    expect(marks.every(mark => mark.dataset.highlightId === "list-selection")).toBe(true);
+    expect(container.textContent).toBe(originalText);
+    unwrapHighlightsByIds(container, ["list-selection"]);
+    expect(container.innerHTML).toBe(originalHtml);
+  });
+
+  it("does not highlight whitespace-only boundary fragments in a cross-node selection", () => {
+    container.innerHTML = "<p>left <strong>middle</strong> right</p>";
+    const paragraph = container.querySelector("p")!;
+    const range = document.createRange();
+    range.setStart(paragraph.firstChild!, 4);
+    range.setEnd(paragraph.lastChild!, 1);
+
+    wrapRangeWithHighlight(range, "inline-boundaries", "yellow", "#facc15");
+
+    expect(Array.from(paragraph.querySelectorAll("mark"), mark => mark.textContent)).toEqual(["middle"]);
+    expect(paragraph.textContent).toBe("left middle right");
+    expect(paragraph.querySelector("strong")?.textContent).toBe("middle");
+  });
   it("updates highlight color and background in DOM elements matching ID", () => {
     container.innerHTML = '<p><mark class="polyglot-reading-highlight" data-highlight-id="target-hl" data-color="yellow" style="background-color: yellow">text</mark></p>';
     const count = updateHighlightColorInElement(container, "target-hl", "purple");
