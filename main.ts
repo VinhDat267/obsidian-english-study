@@ -312,13 +312,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.addCommand({
       id: "undo-reading-highlight",
       name: "Hoàn tác highlight khi đọc (Undo)",
+      hotkeys: [
+        { modifiers: ["Mod"], key: "z" },
+      ],
       checkCallback: (checking: boolean) => {
-        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        const isPreview = Boolean(
-          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
-        );
-        if (checking) return isPreview;
-        if (isPreview && view) {
+        const view = this.getActiveReadingView();
+        if (checking) return Boolean(view);
+        if (view) {
           this.undoReadingHighlight(view);
         }
         return true;
@@ -329,13 +329,14 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.addCommand({
       id: "redo-reading-highlight",
       name: "Làm lại thao tác highlight khi đọc (Redo)",
+      hotkeys: [
+        { modifiers: ["Mod", "Shift"], key: "z" },
+        { modifiers: ["Mod"], key: "y" },
+      ],
       checkCallback: (checking: boolean) => {
-        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        const isPreview = Boolean(
-          view?.file && (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
-        );
-        if (checking) return isPreview;
-        if (isPreview && view) {
+        const view = this.getActiveReadingView();
+        if (checking) return Boolean(view);
+        if (view) {
           this.redoReadingHighlight(view);
         }
         return true;
@@ -412,33 +413,48 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         }
       });
 
-      this.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
-        if (e.key === "Escape" && this.isPenModeActive) {
-          this.togglePenMode(false);
-          return;
-        }
+      this.registerDomEvent(
+        window,
+        "keydown",
+        (e: KeyboardEvent) => {
+          if (e.key === "Escape" && this.isPenModeActive) {
+            this.togglePenMode(false);
+            return;
+          }
 
-        const target = e.target as HTMLElement | null;
-        const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
-        if (!isInput) {
-          const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-          const isPreview = activeView && (activeView.getMode ? activeView.getMode() === "preview" : (activeView as any).mode === "preview");
-          if (isPreview) {
-            const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z");
-            const isRedo = ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) ||
-                           ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "z" || e.key === "Z"));
-            if (isUndo) {
-              e.preventDefault();
-              e.stopPropagation();
-              this.undoReadingHighlight(activeView);
-            } else if (isRedo) {
-              e.preventDefault();
-              e.stopPropagation();
-              this.redoReadingHighlight(activeView);
+          const target = e.target as HTMLElement | null;
+          const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+          if (!isInput) {
+            const activeView = this.getActiveReadingView();
+            if (activeView) {
+              const keyLower = (e.key || "").toLowerCase();
+              const code = e.code || "";
+              const isZ = keyLower === "z" || code === "KeyZ";
+              const isY = keyLower === "y" || code === "KeyY";
+
+              const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && isZ;
+              const isRedo = (e.ctrlKey || e.metaKey) && !e.altKey && (isY || (e.shiftKey && isZ));
+
+              if (isUndo) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === "function") {
+                  e.stopImmediatePropagation();
+                }
+                this.undoReadingHighlight(activeView);
+              } else if (isRedo) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === "function") {
+                  e.stopImmediatePropagation();
+                }
+                this.redoReadingHighlight(activeView);
+              }
             }
           }
-        }
-      });
+        },
+        true
+      );
 
       this.registerDomEvent(
         document,
@@ -949,11 +965,34 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     new Notice("Đã xóa toàn bộ highlight trong ghi chú hiện tại.", 2500);
     return true;
   }
+  getActiveReadingView(): MarkdownView | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (view && this.isReadingMode(view)) return view;
+
+    const leafView = this.app.workspace.activeLeaf?.view;
+    if (leafView instanceof MarkdownView && this.isReadingMode(leafView)) return leafView;
+
+    const leaves = this.app.workspace.getLeavesOfType ? this.app.workspace.getLeavesOfType("markdown") : [];
+    for (const leaf of leaves) {
+      if (leaf.view instanceof MarkdownView && this.isReadingMode(leaf.view)) {
+        return leaf.view;
+      }
+    }
+    return null;
+  }
+
+  isReadingMode(view: MarkdownView): boolean {
+    return Boolean(
+      view.file &&
+      (view.getMode ? view.getMode() === "preview" : (view as any).mode === "preview")
+    );
+  }
+
   /**
    * Hoàn tác thao tác highlight gần nhất (Undo)
    */
   undoReadingHighlight(customView?: MarkdownView): boolean {
-    const view = customView || this.app.workspace.getActiveViewOfType(MarkdownView);
+    const view = customView || this.getActiveReadingView();
     if (!view || !view.file) return false;
     const filePath = view.file.path;
     const action = this.highlightHistory.undo(filePath);
@@ -962,30 +1001,32 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return false;
     }
 
+    const targetEl = (view as any).previewMode?.containerEl || view.contentEl;
+
     switch (action.type) {
       case "add": {
         this.readingHighlightService.removeHighlight(filePath, action.item.id);
-        if (view.contentEl) unwrapHighlightsByIds(view.contentEl, [action.item.id]);
+        if (targetEl) unwrapHighlightsByIds(targetEl, [action.item.id]);
         break;
       }
       case "remove": {
         this.readingHighlightService.restoreHighlights(filePath, action.items);
-        if (view.contentEl) applyHighlightsToElement(view.contentEl, action.items);
+        if (targetEl) applyHighlightsToElement(targetEl, action.items);
         break;
       }
       case "update": {
         this.readingHighlightService.restoreHighlights(filePath, [{
-          id: action.itemId,
+          id: action.id,
           text: action.text,
           color: action.oldColor,
           timestamp: Date.now(),
         }]);
-        if (view.contentEl) updateHighlightColorInElement(view.contentEl, action.itemId, action.oldColor);
+        if (targetEl) updateHighlightColorInElement(targetEl, action.id, action.oldColor);
         break;
       }
       case "clear-all": {
         this.readingHighlightService.restoreHighlights(filePath, action.items);
-        if (view.contentEl) applyHighlightsToElement(view.contentEl, action.items);
+        if (targetEl) applyHighlightsToElement(targetEl, action.items);
         break;
       }
     }
@@ -999,7 +1040,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
    * Làm lại thao tác highlight vừa hoàn tác (Redo)
    */
   redoReadingHighlight(customView?: MarkdownView): boolean {
-    const view = customView || this.app.workspace.getActiveViewOfType(MarkdownView);
+    const view = customView || this.getActiveReadingView();
     if (!view || !view.file) return false;
     const filePath = view.file.path;
     const action = this.highlightHistory.redo(filePath);
@@ -1008,32 +1049,34 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return false;
     }
 
+    const targetEl = (view as any).previewMode?.containerEl || view.contentEl;
+
     switch (action.type) {
       case "add": {
         this.readingHighlightService.restoreHighlights(filePath, [action.item]);
-        if (view.contentEl) applyHighlightsToElement(view.contentEl, [action.item]);
+        if (targetEl) applyHighlightsToElement(targetEl, [action.item]);
         break;
       }
       case "remove": {
         for (const item of action.items) {
           this.readingHighlightService.removeHighlight(filePath, item.id);
         }
-        if (view.contentEl) unwrapHighlightsByIds(view.contentEl, action.items.map(i => i.id));
+        if (targetEl) unwrapHighlightsByIds(targetEl, action.items.map(i => i.id));
         break;
       }
       case "update": {
         this.readingHighlightService.restoreHighlights(filePath, [{
-          id: action.itemId,
+          id: action.id,
           text: action.text,
           color: action.newColor,
           timestamp: Date.now(),
         }]);
-        if (view.contentEl) updateHighlightColorInElement(view.contentEl, action.itemId, action.newColor);
+        if (targetEl) updateHighlightColorInElement(targetEl, action.id, action.newColor);
         break;
       }
       case "clear-all": {
         this.readingHighlightService.clearHighlightsForFile(filePath);
-        if (view.contentEl) unwrapHighlightsByIds(view.contentEl, action.items.map(i => i.id));
+        if (targetEl) unwrapHighlightsByIds(targetEl, action.items.map(i => i.id));
         break;
       }
     }

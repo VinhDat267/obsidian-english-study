@@ -209,6 +209,7 @@ export function createMockObsidianElement(tag: string = "div"): any {
       textContent = val.replace(/<[^>]*>/g, "");
     },
     parentElement: null as any,
+    closest: (selector: string) => null,
     classList: {
       add: (...classes: string[]) => {
         classes.forEach((cls) => classListSet.add(cls));

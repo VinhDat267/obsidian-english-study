@@ -102,7 +102,7 @@ function collectTextNodes(node: Node, results: Text[]): void {
 
   if (node.nodeType === Node.ELEMENT_NODE) {
     const el = node as HTMLElement;
-    if (el.closest(EXCLUDED_SELECTOR)) return;
+    if (typeof el.closest === "function" && el.closest(EXCLUDED_SELECTOR)) return;
     if (el.classList?.contains("polyglot-reading-highlight")) return;
 
     for (let i = 0; i < el.childNodes.length; i++) {
@@ -116,7 +116,7 @@ function processBlockElement(
   highlights: ReadingHighlightItem[]
 ): void {
   if (!blockEl) return;
-  if (blockEl.closest(EXCLUDED_SELECTOR)) return;
+  if (typeof blockEl.closest === "function" && blockEl.closest(EXCLUDED_SELECTOR)) return;
   if (blockEl.classList?.contains("polyglot-reading-highlight")) return;
 
   const textNodes: Text[] = [];
