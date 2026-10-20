@@ -264,8 +264,10 @@ export class ProviderManager {
       }
 
       if (dictSettled.status === "fulfilled" && dictSettled.value) {
-        phonetic = dictSettled.value.phonetic;
-        audioUrl = dictSettled.value.audioUrl;
+        if (dictSettled.value.word.trim().toLowerCase() === cleanText.toLowerCase()) {
+          phonetic = dictSettled.value.phonetic;
+          audioUrl = dictSettled.value.audioUrl;
+        }
         if (dictSettled.value.definitions && dictSettled.value.definitions.length > 0) {
           definitions = dictSettled.value.definitions;
         }

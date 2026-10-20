@@ -137,6 +137,32 @@ export class HighlightHistoryManager {
     return action;
   }
 
+  renamePath(oldPath: string, newPath: string): void {
+    const oldKey = this.normalizePath(oldPath);
+    const newKey = this.normalizePath(newPath);
+    if (!oldKey || !newKey || oldKey === newKey) return;
+    const moved = Array.from(this.fileStacks.entries()).filter(([path]) =>
+      path === oldKey || path.startsWith(`${oldKey}/`)
+    );
+    for (const [path] of moved) this.fileStacks.delete(path);
+    for (const [path, stacks] of moved) {
+      const destination = newKey + path.slice(oldKey.length);
+      const migrate = (action: HighlightHistoryAction): HighlightHistoryAction => ({ ...action, filePath: destination });
+      this.fileStacks.set(destination, {
+        undoStack: stacks.undoStack.map(migrate),
+        redoStack: stacks.redoStack.map(migrate),
+      });
+    }
+  }
+
+  removePath(filePath: string): void {
+    const path = this.normalizePath(filePath);
+    if (!path) return;
+    for (const key of this.fileStacks.keys()) {
+      if (key === path || key.startsWith(`${path}/`)) this.fileStacks.delete(key);
+    }
+  }
+
   clear(filePath?: string): void {
     if (filePath) {
       const norm = this.normalizePath(filePath);

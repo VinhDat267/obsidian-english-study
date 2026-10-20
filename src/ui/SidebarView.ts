@@ -22,6 +22,7 @@ export class EnglishStudySidebar extends ItemView {
   private geminiService: GeminiService | null = null;
   private geminiApiKey: string = "";
   private isTutorLoading: boolean = false;
+  private tutorRequestGeneration = 0;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -36,7 +37,7 @@ export class EnglishStudySidebar extends ItemView {
     this.geminiService = geminiService;
     this.geminiApiKey = apiKey;
     if (this.currentResult?.query) {
-      this.activeTutorSession = chatService.getOrCreateSession({
+      this.setActiveTutorSession(chatService.getOrCreateSession({
         query: this.currentResult.query,
         contextSentence:
           this.currentResult.contextSentence ||
@@ -45,12 +46,12 @@ export class EnglishStudySidebar extends ItemView {
         docContext: this.currentResult.docContext,
         sourceLang: this.currentResult.sourceLang,
         targetLang: this.currentResult.targetLang,
-      });
+      }));
     }
   }
 
   openTutorSession(session: TutorSession): void {
-    this.activeTutorSession = session;
+    this.setActiveTutorSession(session);
     this.activeTab = "ai-tutor";
     this.render();
   }
@@ -60,7 +61,24 @@ export class EnglishStudySidebar extends ItemView {
   }
 
   setActiveTutorSession(session: TutorSession): void {
+    if (this.activeTutorSession !== session) {
+      this.tutorRequestGeneration++;
+      this.isTutorLoading = false;
+    }
     this.activeTutorSession = session;
+  }
+
+  followPendingTutorTurn(session: TutorSession, turn: Promise<void>): void {
+    if (this.activeTutorSession !== session) return;
+    const generation = ++this.tutorRequestGeneration;
+    this.isTutorLoading = true;
+    this.render();
+    const finish = () => {
+      if (generation !== this.tutorRequestGeneration || this.activeTutorSession !== session) return;
+      this.isTutorLoading = false;
+      this.render();
+    };
+    void turn.then(finish, finish);
   }
 
   getCurrentResult(): LookupResult | null {
@@ -82,14 +100,14 @@ export class EnglishStudySidebar extends ItemView {
   setResult(result: LookupResult): void {
     this.currentResult = result;
     if (this.tutorChatService) {
-      this.activeTutorSession = this.tutorChatService.getOrCreateSession({
+      this.setActiveTutorSession(this.tutorChatService.getOrCreateSession({
         query: result.query,
         contextSentence:
           result.contextSentence || result.contextSentenceClean || "",
         docContext: result.docContext,
         sourceLang: result.sourceLang,
         targetLang: result.targetLang,
-      });
+      }));
     }
     this.activeTab = "deep-dive";
     this.render();
@@ -109,6 +127,8 @@ export class EnglishStudySidebar extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.tutorRequestGeneration++;
+    this.isTutorLoading = false;
     this.stopAudio();
   }
 
@@ -552,6 +572,8 @@ export class EnglishStudySidebar extends ItemView {
     safeSetIcon(clearBtn, "trash-2", "Xóa đoạn chat");
     clearBtn.addEventListener("click", (e: MouseEvent) => {
       e?.preventDefault?.();
+      this.tutorRequestGeneration++;
+      this.isTutorLoading = false;
       if (this.activeTutorSession) {
         if (this.tutorChatService) {
           this.tutorChatService.clearSession(this.activeTutorSession.id);
@@ -598,6 +620,9 @@ export class EnglishStudySidebar extends ItemView {
         renderMarkdownToElement(msg.content, modelBubble);
       }
     }
+    if (this.isTutorLoading) {
+      messagesContainer.createDiv({ cls: "tutor-message-loading", text: "Gia sư AI đang suy nghĩ..." });
+    }
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     // Input row
@@ -615,6 +640,8 @@ export class EnglishStudySidebar extends ItemView {
       attr: { type: "button", title: "Gửi tin nhắn", "aria-label": "Gửi tin nhắn" },
     }) as HTMLButtonElement;
     safeSetIcon(sendBtn, "send", "Gửi tin nhắn");
+    textarea.disabled = this.isTutorLoading;
+    sendBtn.disabled = this.isTutorLoading;
 
     const adjustTextareaHeight = () => {
       textarea.style.height = "auto";
@@ -673,6 +700,11 @@ export class EnglishStudySidebar extends ItemView {
     }
 
     const session = this.activeTutorSession;
+    const messages = session.messages;
+    const generation = ++this.tutorRequestGeneration;
+    const chatService = this.tutorChatService;
+    const isCurrent = () => generation === this.tutorRequestGeneration && this.activeTutorSession === session &&
+      session.messages === messages && (!chatService || chatService.getSession(session.id) === session);
 
     // 1. Add user message
     if (this.tutorChatService) {
@@ -704,6 +736,7 @@ export class EnglishStudySidebar extends ItemView {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     // 3. Dispatch to Gemini
+    let errorText: string | undefined;
     try {
       if (this.geminiService) {
         const systemPrompt = this.tutorChatService
@@ -715,6 +748,7 @@ export class EnglishStudySidebar extends ItemView {
           "gemini-flash-latest",
           systemPrompt
         );
+        if (!isCurrent()) return;
 
         if (typeof loadingBubble.remove === "function") {
           loadingBubble.remove();
@@ -738,12 +772,11 @@ export class EnglishStudySidebar extends ItemView {
           renderMarkdownToElement(trimmedReply, modelBubble);
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } else {
+          errorText = "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng.";
           const errorBubble = messagesContainer.createDiv({
             cls: "tutor-message-model tutor-message-error",
           });
-          errorBubble.setText(
-            "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng."
-          );
+          errorBubble.setText(errorText);
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
       } else {
@@ -754,6 +787,8 @@ export class EnglishStudySidebar extends ItemView {
         }
       }
     } catch {
+      if (!isCurrent()) return;
+      errorText = "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng.";
       if (typeof loadingBubble.remove === "function") {
         loadingBubble.remove();
       } else if (loadingBubble.parentElement) {
@@ -762,15 +797,25 @@ export class EnglishStudySidebar extends ItemView {
       const errorBubble = messagesContainer.createDiv({
         cls: "tutor-message-model tutor-message-error",
       });
-      errorBubble.setText(
-        "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng."
-      );
+      errorBubble.setText(errorText);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } finally {
-      this.isTutorLoading = false;
-      if (textarea) textarea.disabled = false;
-      if (sendBtn) sendBtn.disabled = false;
-      textarea?.focus?.();
+      if (typeof loadingBubble.remove === "function") loadingBubble.remove();
+      if (generation === this.tutorRequestGeneration) {
+        this.isTutorLoading = false;
+        if (textarea) textarea.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (isCurrent() && this.activeTab === "ai-tutor") {
+          if (this.contentEl.querySelector(".sidebar-tutor-messages") !== messagesContainer) {
+            this.render();
+            if (errorText) this.contentEl.querySelector(".sidebar-tutor-messages")?.createDiv({
+              cls: "tutor-message-model tutor-message-error", text: errorText,
+            });
+          }
+          const activeTextarea = this.contentEl.querySelector(".sidebar-tutor-textarea") as HTMLTextAreaElement | null;
+          activeTextarea?.focus?.();
+        }
+      }
     }
   }
 

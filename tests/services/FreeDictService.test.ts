@@ -198,7 +198,7 @@ describe("FreeDictService", () => {
   });
 
   describe("lookup - Inflection / Stemming fallback (404)", () => {
-    it("should enrich phonetic and audio from stem candidate when 200 OK has empty phonetic", async () => {
+    it("keeps missing inflected pronunciation absent instead of borrowing the lemma's audio", async () => {
       const facilitates200 = [
         {
           word: "facilitates",
@@ -241,11 +241,10 @@ describe("FreeDictService", () => {
       });
 
       const result = await service.lookup("facilitates");
-      expect(requestUrl).toHaveBeenCalledTimes(2);
       expect(result).not.toBeNull();
       expect(result?.word).toBe("facilitates");
-      expect(result?.phonetic).toBe("/fəˈsɪl.ɪ.teɪt/");
-      expect(result?.audioUrl).toBe("https://api.dictionaryapi.dev/media/pronunciations/en/facilitate-us.mp3");
+      expect(result?.phonetic).toBeUndefined();
+      expect(result?.audioUrl).toBeUndefined();
       expect(result?.definitions.length).toBe(1);
     });
 

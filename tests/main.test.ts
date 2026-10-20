@@ -182,7 +182,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(scrollEvent).toBeDefined();
 
       scrollEvent!.callback();
-      expect(dismissSpy).toHaveBeenCalledWith(true, true);
+      expect(dismissSpy).toHaveBeenCalledWith(false, true);
       expect(popoverHideSpy).not.toHaveBeenCalled();
     });
 
@@ -589,7 +589,11 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       plugin.settings.triggerMode = "auto-popup";
       editor.setSelectionText("authentication");
 
-      const performLookupSpy = vi.spyOn(plugin, "performLookup").mockResolvedValue(null);
+      vi.spyOn(plugin.providerManager, "lookup").mockResolvedValue({
+        query: "authentication", type: "word", contextSentence: "authentication", contextSentenceClean: "authentication",
+        vietnameseTranslation: "xác thực", timestamp: Date.now(),
+      });
+      const performLookupSpy = vi.spyOn(plugin, "performLookup");
 
       // Initial lookup
       plugin.handleSelectionDebounced();

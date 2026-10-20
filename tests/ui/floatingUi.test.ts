@@ -1283,7 +1283,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.show(
         { top: 100, bottom: 120, left: 200, right: 280 },
         mockResult,
-        { onClose }
+        { onSave: vi.fn(), onClose }
       );
 
       popover.setPinned(true);
@@ -1321,6 +1321,8 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       const nextResult: LookupResult = {
         query: "transformer",
         type: "word",
+        contextSentence: "A transformer model.",
+        contextSentenceClean: "A transformer model.",
         vietnameseTranslation: "mô hình transformer",
         definitions: [],
         timestamp: Date.now(),
@@ -1345,7 +1347,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.show(
         { top: 100, bottom: 120, left: 200, right: 280 },
         mockResult,
-        { onClose }
+        { onSave: vi.fn(), onClose }
       );
       popover.setPinned(true);
 
@@ -1368,8 +1370,8 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       popover.show(
         { top: 100, bottom: 120, left: 200, right: 280 },
         mockResult,
-        { onSave: vi.fn(), onPinToSidebar: vi.fn(), onClose: vi.fn() },
-        { isReadingMode: true, onHighlight: vi.fn() }
+        { onSave: vi.fn(), onPinToSidebar: vi.fn(), onClose: vi.fn(), onHighlight: vi.fn() },
+        { isReadingMode: true }
       );
 
       const el = asMockElement(popover.getElement())!;

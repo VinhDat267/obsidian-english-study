@@ -38,6 +38,7 @@ Polyglot Study Assistant hỗ trợ học ngoại ngữ trong ghi chú: tra từ
 - `docs/superpowers/specs/2026-10-18-immersive-reading-translation-design.md` ghi thiết kế cho yêu cầu mới.
 - Kiểm tra ở snapshot `515e7b0`: 337 test trên 21 file pass; typecheck hiện thất bại. Test dùng mock Obsidian/HTTP, không thay thế bằng chứng chạy trong Obsidian thật.
 - Snapshot trước sửa audit `d613051`: 477 test pass, full typecheck có 81 diagnostic và scoped reading check fail. Sau sửa 1.1.1: 583 test/34 file pass, full/production/reading typecheck và build pass; npm audit báo 0 vulnerability. Browser fixture sáng/tối/pane hẹp thuộc nghiệm thu reading ban đầu; không thay cho chạy Obsidian thật.
+- Sửa follow-up audit ngày 2026-10-20 trên baseline `346bfe4`: 729 test/43 file pass; full/production/reading typecheck và build pass. Đã xử lý F01–F08; xem `docs/audits/2026-10-20-remediation.md`. Obsidian/provider thật vẫn NOT_RUN.
 
 ## Product Principles
 

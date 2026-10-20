@@ -23,6 +23,9 @@ export class PopoverChatDrawer {
 
   private expanded: boolean = false;
   private isLoading: boolean = false;
+  private requestGeneration = 0;
+  private pendingTurn: Promise<void> | null = null;
+  private handedOff = false;
 
   constructor(
     private chatService: AiTutorChatService,
@@ -36,6 +39,8 @@ export class PopoverChatDrawer {
    * If the drawer is already rendered, refreshes the message list.
    */
   setSession(session: TutorSession): void {
+    if (this.session !== session) this.invalidateRequest();
+    this.handedOff = false;
     this.session = session;
     if (this.messagesList) {
       this.renderMessages();
@@ -180,6 +185,7 @@ export class PopoverChatDrawer {
     clearBtn.setAttribute("aria-label", "Xóa đoạn chat");
     safeSetIcon(clearBtn, "trash-2", "Xóa đoạn chat");
     clearBtn.addEventListener("click", () => {
+      this.invalidateRequest();
       if (this.session) {
         this.chatService.clearSession(this.session.id);
       }
@@ -251,6 +257,7 @@ export class PopoverChatDrawer {
    * Destroys component DOM and cleans up references.
    */
   destroy(): void {
+    if (!this.handedOff) this.invalidateRequest();
     if (this.containerEl && this.containerEl.parentElement) {
       this.containerEl.parentElement.removeChild(this.containerEl);
     }
@@ -328,7 +335,22 @@ export class PopoverChatDrawer {
     this.sendMessage(text);
   }
 
-  private async sendMessage(content: string): Promise<void> {
+  /** Transfer a live turn with its shared session before disposing the drawer DOM. */
+  handoffPendingTurn(): Promise<void> | null {
+    this.handedOff = true;
+    return this.pendingTurn;
+  }
+
+  private sendMessage(content: string): Promise<void> {
+    if (this.isLoading) return Promise.resolve();
+    const turn = this.runMessage(content);
+    this.pendingTurn = turn;
+    const finish = () => { if (this.pendingTurn === turn) this.pendingTurn = null; };
+    void turn.then(finish, finish);
+    return turn;
+  }
+
+  private async runMessage(content: string): Promise<void> {
     if (this.isLoading) return;
 
     if (!this.session) {
@@ -337,9 +359,14 @@ export class PopoverChatDrawer {
         contextSentence: "",
       });
     }
+    const session = this.session;
+    const messages = session.messages;
+    const generation = ++this.requestGeneration;
+    const isCurrent = () => generation === this.requestGeneration && this.session === session &&
+      session.messages === messages && this.chatService.getSession(session.id) === session;
 
     // 1. Add user message to session & append to DOM
-    this.chatService.addMessage(this.session.id, "user", content);
+    this.chatService.addMessage(session.id, "user", content);
     this.appendUserBubble(content);
 
     // 2. Loading state & resize notification
@@ -349,18 +376,19 @@ export class PopoverChatDrawer {
 
     // 3. Dispatch to Gemini
     try {
-      const systemPrompt = this.chatService.buildSystemInstruction(this.session);
+      const systemPrompt = this.chatService.buildSystemInstruction(session);
       const reply = await this.geminiService.chatWithTutor(
-        this.session,
+        session,
         this.apiKey,
         "gemini-flash-latest",
         systemPrompt
       );
+      if (!isCurrent()) return;
 
       this.removeLoadingIndicator();
 
       if (reply && reply.trim()) {
-        this.chatService.addMessage(this.session.id, "model", reply.trim());
+        this.chatService.addMessage(session.id, "model", reply.trim());
         this.appendModelBubble(reply.trim());
       } else {
         this.appendErrorBubble(
@@ -368,14 +396,24 @@ export class PopoverChatDrawer {
         );
       }
     } catch {
+      if (!isCurrent()) return;
       this.removeLoadingIndicator();
       this.appendErrorBubble(
         "Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại API Key hoặc mạng."
       );
     } finally {
-      this.setLoading(false);
-      this.callbacks?.onResize?.();
+      if (generation === this.requestGeneration) {
+        this.removeLoadingIndicator();
+        this.setLoading(false);
+        if (!this.handedOff) this.callbacks?.onResize?.();
+      }
     }
+  }
+
+  private invalidateRequest(): void {
+    this.requestGeneration++;
+    this.removeLoadingIndicator();
+    this.setLoading(false);
   }
 
   private appendUserBubble(content: string): void {

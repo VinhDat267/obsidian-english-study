@@ -4,6 +4,7 @@ import { EnglishStudySidebar } from "../../src/ui/SidebarView";
 import { AiTutorChatService } from "../../src/services/ai/AiTutorChatService";
 import { GeminiService } from "../../src/services/provider/GeminiService";
 import { TutorSession } from "../../src/types";
+import { deferred } from "../helpers/reading";
 
 function clickElement(el: any) {
   if (!el) throw new Error("Element is null");
@@ -53,6 +54,47 @@ describe("EnglishStudySidebar - AI Tutor Tab & Session Handoff", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("F07: a cleared sidebar turn cannot repopulate the shared session", async () => {
+    const reply = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValue(reply.promise);
+    sidebar.openTutorSession(session);
+    const messages = sidebar.contentEl.querySelector(".sidebar-tutor-messages")!;
+    const sending = (sidebar as any).sendTutorMessage("Old question", messages);
+    clickElement(sidebar.contentEl.querySelector(".sidebar-tutor-clear-btn"));
+    reply.resolve("Stale sidebar answer"); await sending;
+    expect(session.messages).toEqual([]);
+    expect(sidebar.contentEl.textContent).not.toContain("Stale sidebar answer");
+  });
+
+  it("F07: switching sessions lets the new sidebar conversation send immediately", async () => {
+    const old = deferred<string>(), current = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    sidebar.openTutorSession(session);
+    const first = (sidebar as any).sendTutorMessage("Old question", sidebar.contentEl.querySelector(".sidebar-tutor-messages"));
+    const nextSession = chatService.createSession({ query: "river", contextSentence: "A river bank." });
+    sidebar.openTutorSession(nextSession);
+    const second = (sidebar as any).sendTutorMessage("Current question", sidebar.contentEl.querySelector(".sidebar-tutor-messages"));
+    expect(nextSession.messages.map(message => message.content)).toEqual(["Current question"]);
+    old.resolve("Stale answer"); await first;
+    current.resolve("Current answer"); await second;
+    expect(nextSession.messages.map(message => message.content)).toEqual(["Current question", "Current answer"]);
+    expect(session.messages.some(message => message.role === "model")).toBe(false);
+  });
+
+  it("F07: a pending answer reconciles the current Tutor controls after switching tabs", async () => {
+    const reply = deferred<string>();
+    vi.mocked(geminiService.chatWithTutor).mockReturnValue(reply.promise);
+    sidebar.openTutorSession(session);
+    const sending = (sidebar as any).sendTutorMessage("Question", sidebar.contentEl.querySelector(".sidebar-tutor-messages"));
+    clickElement(sidebar.contentEl.querySelector(".tab-btn-deep-dive"));
+    clickElement(sidebar.contentEl.querySelector(".tab-btn-ai-tutor"));
+    reply.resolve("Visible answer after tab switching"); await sending;
+    expect(sidebar.contentEl.querySelector(".sidebar-tutor-textarea").disabled).toBe(false);
+    expect(sidebar.contentEl.querySelector(".sidebar-tutor-send-btn").disabled).toBe(false);
+    expect(sidebar.contentEl.querySelector(".tutor-message-loading")).toBeNull();
+    expect(sidebar.contentEl.textContent).toContain("Visible answer after tab switching");
   });
 
   it("1. nav bar displays 3 tabs including 'Gia sư AI'", () => {

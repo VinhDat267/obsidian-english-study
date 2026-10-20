@@ -1,7 +1,7 @@
 import { setIcon } from "obsidian";
 import { AiTutorChatService } from "../services/ai/AiTutorChatService";
 import { GeminiService } from "../services/provider/GeminiService";
-import { LookupResult, PopoverCallbacks, TutorSession } from "../types";
+import { LookupResult, PopoverCallbacks, PopoverFontSize, TutorSession } from "../types";
 import { calculatePosition, RectLike, safeSetIcon } from "../utils/domHelper";
 import { getLanguageMeta } from "../utils/languageHelper";
 import { renderMarkdownToElement } from "../utils/markdownHelper";
@@ -1077,6 +1077,10 @@ export class FloatingPopover {
 
   getChatDrawer(): PopoverChatDrawer | null {
     return this.chatDrawer;
+  }
+
+  handoffChatToSidebar(): Promise<void> | null {
+    return this.chatDrawer?.handoffPendingTurn() || null;
   }
 
   adjustBounds(): void {

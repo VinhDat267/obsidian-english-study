@@ -162,6 +162,38 @@ describe("VocabService", () => {
     });
   });
 
+  describe("F05: preserve non-vocabulary tables", () => {
+    it.each([false, true])("creates a separate vocabulary table (Daily Note: %s)", async useDailyNote => {
+      const settings = { ...defaultSettings, useDailyNote };
+      const path = service.getResolvedFilePath(settings);
+      const original = "# Tasks\n\n| Task | Status |\n| --- | --- |\n| Read | Done |\n";
+      const file = await app.vault.create(path, original);
+      expect((await service.saveVocab(sampleResult, settings)).success).toBe(true);
+      const saved = await app.vault.read(file);
+      expect(saved).toContain(original.trimEnd() + "\n\n## Sổ từ vựng");
+      expect(saved).toContain("| Từ / Cụm từ | Loại từ & Phiên âm | Nghĩa tiếng Việt | Câu ngữ cảnh | Ngày |");
+      expect(saved).toContain("| **ephemeral** | *adjective*");
+    });
+
+    it("does not treat a matching bold cell in another table as saved vocabulary", async () => {
+      const original = "| Task | Owner | Status | Notes | Due |\n| --- | --- | --- | --- | --- |\n| **ephemeral** | Alice | Done | Keep this cell | Friday |\n";
+      const file = await app.vault.create("Vocabulary.md", original);
+      const saved = await service.saveVocab(sampleResult);
+      expect(saved.isDuplicate).toBe(false);
+      expect(await app.vault.read(file)).toContain(original.trimEnd() + "\n\n## Sổ từ vựng");
+    });
+
+    it("merges context only into the vocabulary table when another table has the same query", async () => {
+      const unrelated = "| Task | Owner | Status | Notes | Due |\n| --- | --- | --- | --- | --- |\n| **ephemeral** | Alice | Done | Keep this cell | Friday |";
+      const vocab = "| Từ / Cụm từ | Loại từ & Phiên âm | Nghĩa tiếng Việt | Câu ngữ cảnh | Ngày |\n| --- | --- | --- | --- | --- |\n| **ephemeral** | adjective | phù du | Old context. | 2026-10-18 |";
+      const file = await app.vault.create("Vocabulary.md", unrelated + "\n\n" + vocab);
+      expect((await service.saveVocab(sampleResult)).isDuplicate).toBe(true);
+      const saved = await app.vault.read(file);
+      expect(saved).toContain(unrelated + "\n\n");
+      expect(saved).toContain("Old context.<br>• Fame in the modern world is fleeting and **ephemeral**.");
+    });
+  });
+
   describe("saveVocab - Table format", () => {
     it("should create new file with default template and insert first row if file does not exist", async () => {
       const result = await service.saveVocab(sampleResult);

@@ -58,6 +58,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   private lastLookupResult: LookupResult | null = null;
   private selectionDebounceTimer: any = null;
   private lookupGeneration = 0;
+  private lookupInputKey = "";
   private lookupDisposed = false;
   private settingsWrite: Promise<void> = Promise.resolve();
 
@@ -77,9 +78,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     this.readingHighlightService.migrateLegacyPaths(this.app.vault.getMarkdownFiles().map(file => file.path));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.readingHighlightService.renamePath(oldPath, file.path);
+      this.highlightHistory.renamePath(oldPath, file.path);
+      this.updatePenPillHistoryState();
     }));
     this.registerEvent(this.app.vault.on("delete", file => {
       this.readingHighlightService.removePath(file.path);
+      this.highlightHistory.removePath(file.path);
+      this.updatePenPillHistoryState();
     }));
     this.floatingTrigger = new FloatingTrigger();
     this.floatingPopover = new FloatingPopover();
@@ -469,7 +474,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           ) {
             return;
           }
-          this.dismissFloatingUi(true, true);
+          this.dismissFloatingUi(false, true);
         },
         true
       );
@@ -599,7 +604,11 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (!selectedText || !selectedText.trim()) {
       return null;
     }
+    const { paragraph, cursorOffset } = this.extractEditorLookupContext(editor, selectedText);
+    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset, editor);
+  }
 
+  private extractEditorLookupContext(editor: Editor, selectedText: string): { paragraph: string; cursorOffset: number } {
     let paragraph = "";
     let cursorOffset = 0;
 
@@ -639,7 +648,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       paragraph = selectedText;
     }
 
-    return this.executeLookupAndShow(selectedText.trim(), paragraph, cursorOffset, editor);
+    return { paragraph, cursorOffset };
   }
 
   /**
@@ -751,6 +760,8 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     }
 
     const rect = this.getSelectionBoundingRect();
+    const docContext = this.extractDocumentContext(editor);
+    this.lookupInputKey = this.createLookupInputKey(selectedText, paragraph, cursorOffset, docContext);
 
     // Hiển thị ngay trạng thái Loading tại vị trí vùng chọn
     this.floatingPopover.showLoading(
@@ -763,8 +774,6 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       },
       { popoverFontSize: this.settings.popoverFontSize || "medium" }
     );
-
-    const docContext = this.extractDocumentContext(editor);
 
     let result: LookupResult;
     try {
@@ -825,9 +834,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           });
         },
         onPinToSidebarChat: (session: TutorSession) => {
+          if (!isCurrent()) return;
+          const pendingTurn = this.floatingPopover?.handoffChatToSidebar?.();
           this.floatingPopover?.hide(true);
           this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
+            if (!isCurrent()) return;
             if (this.sidebarView) {
               this.sidebarView.setTutorDependencies(
                 this.aiTutorChatService,
@@ -835,6 +847,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
                 this.settings.geminiApiKey
               );
               this.sidebarView.openTutorSession(session);
+              if (pendingTurn) this.sidebarView.followPendingTutorTurn(session, pendingTurn);
             }
           });
         },
@@ -1326,12 +1339,40 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
       return;
     }
 
-    // 3. Nếu Popover đang hiển thị và đã chứa nội dung tra cứu của chính từ/câu này -> giữ nguyên vị trí, không re-lookup
+    const context = isEditorMode && activeView.editor
+      ? this.extractEditorLookupContext(activeView.editor, selectedText)
+      : readingContext || { paragraph: selectedText, cursorOffset: 0 };
+    const inputKey = this.createLookupInputKey(selectedText, context.paragraph, context.cursorOffset,
+      this.extractDocumentContext(isEditorMode ? activeView.editor : undefined));
+
+    // Repeated mouseup events may reuse the same lookup; a new context must be looked up.
     if (
       this.floatingPopover &&
       this.floatingPopover.isVisible() &&
-      this.floatingPopover.getCurrentQuery() === selectedText
+      this.floatingPopover.getCurrentQuery() === selectedText &&
+      this.lookupInputKey === inputKey
     ) {
+      return;
+    }
+
+    const performFn = () => {
+      if (isEditorMode && activeView.editor) {
+        return this.performLookup(activeView.editor);
+      } else {
+        return this.performLookupFromReading(
+          selectedText,
+          readingContext?.paragraph || selectedText,
+          readingContext?.cursorOffset || 0
+        );
+      }
+    };
+    const isAutoTranslate =
+      Boolean(this.settings.autoTranslateOnSelection) ||
+      this.settings.triggerMode === "auto-popup";
+    if (isAutoTranslate) {
+      this.dismissFloatingTrigger();
+      this.floatingHighlightToolbar?.hide();
+      performFn();
       return;
     }
 
@@ -1377,28 +1418,6 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         );
         return;
       }
-    }
-
-    const performFn = () => {
-      if (isEditorMode && activeView.editor) {
-        return this.performLookup(activeView.editor);
-      } else {
-        return this.performLookupFromReading(
-          selectedText,
-          readingContext?.paragraph || selectedText,
-          readingContext?.cursorOffset || 0
-        );
-      }
-    };
-
-    const isAutoTranslate =
-      Boolean(this.settings.autoTranslateOnSelection) ||
-      this.settings.triggerMode === "auto-popup";
-
-    if (isAutoTranslate) {
-      this.dismissFloatingTrigger();
-      performFn();
-      return;
     }
 
     if (this.settings.triggerMode === "icon") {
@@ -1448,6 +1467,13 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
     }
+  }
+
+  private createLookupInputKey(text: string, paragraph: string, cursorOffset: number, docContext: DocumentContextMeta): string {
+    return JSON.stringify([
+      this.app.workspace.getActiveViewOfType(MarkdownView)?.file?.path,
+      text, paragraph, cursorOffset, this.settings.sourceLanguage, this.settings.targetLanguage, docContext,
+    ]);
   }
 
   /**

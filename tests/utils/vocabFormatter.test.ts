@@ -205,6 +205,13 @@ describe("vocabFormatter", () => {
   });
 
   describe("insertRowAtTableEnd", () => {
+    it("ignores a vocabulary table shown as fenced code", () => {
+      const example = "```markdown\n| Từ / Cụm từ | Loại từ & Phiên âm | Nghĩa tiếng Việt | Câu ngữ cảnh | Ngày |\n| --- | --- | --- | --- | --- |\n```";
+      const row = "| **bank** | noun | ngân hàng | A bank. | 2026-10-20 |";
+      const updated = insertRowAtTableEnd(example, row);
+      expect(updated).toContain(example + "\n\n## Sổ từ vựng");
+      expect(updated.endsWith(row + "\n")).toBe(true);
+    });
     it("should insert row right after the last table row, preserving text and subheadings after table", () => {
       const initialMarkdown = [
         "## Sổ từ vựng tiếng Anh",
@@ -276,7 +283,7 @@ describe("vocabFormatter", () => {
 
   describe("isWordInContent", () => {
     it("should return true when word exists in table format '| **query**'", () => {
-      const content = "| **hypothesis** | *noun* | giả thuyết |";
+      const content = getDefaultTemplate() + "| **hypothesis** | *noun* | giả thuyết | Context. | 2026-10-20 |";
       expect(isWordInContent(content, "hypothesis")).toBe(true);
       expect(isWordInContent(content, "Hypothesis")).toBe(true);
       expect(isWordInContent(content, "HYPOTHESIS")).toBe(true);
