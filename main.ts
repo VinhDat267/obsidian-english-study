@@ -469,7 +469,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           ) {
             return;
           }
-          this.dismissFloatingUi();
+          this.dismissFloatingUi(true, true);
         },
         true
       );
@@ -505,6 +505,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   async onunload(): Promise<void> {
     this.lookupDisposed = true;
     this.readingTranslationController?.unload();
+    this.floatingPopover?.hide(true);
     this.dismissFloatingUi();
     this.penPill?.hide();
     if (this.selectionDebounceTimer) {
@@ -809,6 +810,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         },
         onPinToSidebar: (res: LookupResult) => {
           if (!isCurrent()) return;
+          this.floatingPopover?.hide(true);
           this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
             if (!isCurrent()) return;
@@ -818,6 +820,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
           });
         },
         onPinToSidebarChat: (session: TutorSession) => {
+          this.floatingPopover?.hide(true);
           this.dismissFloatingUi(false);
           this.activateSidebarView().then(() => {
             if (this.sidebarView) {
@@ -1444,12 +1447,12 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
   /**
    * Ẩn các UI nổi (Trigger Icon và Popover) khi scroll hoặc đổi tab
    */
-  dismissFloatingUi(cancelLookup = true): void {
+  dismissFloatingUi(cancelLookup = true, keepPopover = false): void {
     if (cancelLookup) this.invalidateLookup();
     if (this.floatingTrigger) {
       this.floatingTrigger.hide();
     }
-    if (this.floatingPopover) {
+    if (this.floatingPopover && !keepPopover && !this.floatingPopover.isPinnedPopover?.()) {
       this.floatingPopover.hide();
     }
     if (this.floatingHighlightToolbar) {

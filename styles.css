@@ -312,6 +312,7 @@
 }
 
 .english-study-popover .popover-btn-highlight,
+.english-study-popover .popover-btn-pin-window,
 .english-study-popover .popover-btn-pin,
 .english-study-popover .popover-btn-close {
   background: transparent;
@@ -332,6 +333,7 @@
 }
 
 .english-study-popover .popover-btn-highlight svg,
+.english-study-popover .popover-btn-pin-window svg,
 .english-study-popover .popover-btn-pin svg,
 .english-study-popover .popover-btn-close svg {
   width: 14px;
@@ -339,13 +341,24 @@
 }
 
 .english-study-popover .popover-btn-highlight:hover,
+.english-study-popover .popover-btn-pin-window:hover,
 .english-study-popover .popover-btn-pin:hover {
   color: var(--text-normal);
   background-color: var(--background-modifier-hover);
 }
 
-.english-study-popover .popover-btn-highlight:active {
+.english-study-popover .popover-btn-highlight:active,
+.english-study-popover .popover-btn-pin-window:active {
   transform: scale(0.92);
+}
+
+.english-study-popover .popover-btn-pin-window.is-pinned {
+  color: var(--interactive-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.english-study-popover .popover-btn-pin-window.is-pinned svg {
+  transform: rotate(-45deg);
 }
 
 /* Mini Color Palette Dropdown */

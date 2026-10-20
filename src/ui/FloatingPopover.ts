@@ -37,6 +37,8 @@ export class FloatingPopover {
   private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
   private outsideTimeout: any = null;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private isPinned: boolean = false;
+  private pinWindowBtnEl: HTMLElement | null = null;
   private dragMouseDownHandler: ((e: MouseEvent) => void) | null = null;
   private dragMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
   private dragMouseUpHandler: ((e?: MouseEvent) => void) | null = null;
@@ -73,9 +75,11 @@ export class FloatingPopover {
     callbacks: PopoverCallbacks,
     options?: FloatingPopoverOptions
   ): void {
+    const preservedPinned = this.isPinned;
     const preservedPosition = this.customPosition;
-    this.hide();
+    this.hide(false);
     this.customPosition = preservedPosition;
+    this.isPinned = preservedPinned;
 
     this.currentResult = result;
     this.currentQuery = result.query;
@@ -272,6 +276,34 @@ export class FloatingPopover {
       headerActions.appendChild(pinBtn);
     }
 
+    // Pin to Window Button (Ghim nổi trên màn hình)
+    const pinWindowBtn = document.createElement("button");
+    pinWindowBtn.className = "popover-btn-pin-window";
+    if (this.isPinned) {
+      pinWindowBtn.classList.add("is-pinned");
+    }
+    pinWindowBtn.setAttribute(
+      "title",
+      this.isPinned ? "Bỏ ghim cửa sổ nổi" : "Ghim cửa sổ nổi (Không tự đóng)"
+    );
+    pinWindowBtn.setAttribute(
+      "aria-label",
+      this.isPinned ? "Bỏ ghim cửa sổ nổi" : "Ghim cửa sổ nổi"
+    );
+    safeSetIcon(pinWindowBtn, "pin", "Ghim cửa sổ");
+
+    pinWindowBtn.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
+    pinWindowBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.setPinned(!this.isPinned);
+    });
+    headerActions.appendChild(pinWindowBtn);
+    this.pinWindowBtnEl = pinWindowBtn;
+
     const closeBtn = document.createElement("button");
     closeBtn.className = "popover-btn-close";
     closeBtn.setAttribute("title", "Đóng");
@@ -284,7 +316,7 @@ export class FloatingPopover {
     closeBtn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      this.hide();
+      this.hide(true);
       callbacks.onClose?.();
     });
     headerActions.appendChild(closeBtn);
@@ -627,8 +659,9 @@ export class FloatingPopover {
 
     // Outside click event listener
     this.outsideClickHandler = (e: MouseEvent) => {
+      if (this.isPinned) return;
       if (this.element && !this.element.contains(e.target as Node)) {
-        this.hide();
+        this.hide(true);
         callbacks.onClose?.();
       }
     };
@@ -641,7 +674,7 @@ export class FloatingPopover {
     // Escape key listener
     this.keydownHandler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        this.hide();
+        this.hide(true);
         callbacks.onClose?.();
       }
     };
@@ -778,9 +811,11 @@ export class FloatingPopover {
     if (this.currentQuery !== query) {
       this.customPosition = null;
     }
+    const preservedPinned = this.isPinned;
     const preservedPosition = this.customPosition;
-    this.hide();
+    this.hide(false);
     this.customPosition = preservedPosition;
+    this.isPinned = preservedPinned;
     this.currentQuery = query;
 
     const popover = document.createElement("div");
@@ -927,7 +962,12 @@ export class FloatingPopover {
     }
   }
 
-  hide(): void {
+  hide(resetPinned: boolean = true): void {
+    if (resetPinned) {
+      this.isPinned = false;
+    }
+    this.pinWindowBtnEl = null;
+
     if (this.chatDrawer) {
       try {
         this.chatDrawer.destroy();
@@ -1008,6 +1048,28 @@ export class FloatingPopover {
 
   getElement(): HTMLElement | null {
     return this.element;
+  }
+
+  isPinnedPopover(): boolean {
+    return this.isPinned;
+  }
+
+  setPinned(pinned: boolean): void {
+    this.isPinned = pinned;
+    if (this.element) {
+      this.element.classList.toggle("is-pinned", pinned);
+    }
+    if (this.pinWindowBtnEl) {
+      this.pinWindowBtnEl.classList.toggle("is-pinned", pinned);
+      this.pinWindowBtnEl.setAttribute(
+        "title",
+        pinned ? "Bỏ ghim cửa sổ nổi" : "Ghim cửa sổ nổi (Không tự đóng)"
+      );
+      this.pinWindowBtnEl.setAttribute(
+        "aria-label",
+        pinned ? "Bỏ ghim cửa sổ nổi" : "Ghim cửa sổ nổi"
+      );
+    }
   }
 
   getCurrentQuery(): string | null {

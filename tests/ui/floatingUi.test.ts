@@ -466,6 +466,7 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       expect(popover.isVisible()).toBe(false);
       expect(onClose).toHaveBeenCalled();
+      vi.useRealTimers();
     });
 
     it("should copy text to clipboard when clicking copy button", () => {
@@ -1189,7 +1190,141 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
 
       popover.hide();
     });
+    it("should render window pin button (.popover-btn-pin-window) and report isPinnedPopover", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      const pinWindowBtn = el.querySelector(".popover-btn-pin-window");
+      expect(pinWindowBtn).not.toBeNull();
+      expect(pinWindowBtn?.getAttribute("title")).toContain("Ghim");
+      expect(popover.isPinnedPopover()).toBe(false);
+
+      popover.hide();
+    });
+
+    it("should toggle pinned state when pin button is clicked", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      const pinWindowBtn = el.querySelector(".popover-btn-pin-window")!;
+
+      pinWindowBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isPinnedPopover()).toBe(true);
+      expect(pinWindowBtn.classList.contains("is-pinned")).toBe(true);
+      expect(pinWindowBtn.getAttribute("title")).toContain("Bỏ ghim");
+
+      pinWindowBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isPinnedPopover()).toBe(false);
+      expect(pinWindowBtn.classList.contains("is-pinned")).toBe(false);
+
+      popover.hide();
+    });
+
+    it("should NOT hide on outside click when pinned, but hide when unpinned", () => {
+      vi.useFakeTimers();
+      const popover = new FloatingPopover();
+      const onClose = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onClose }
+      );
+
+      popover.setPinned(true);
+      vi.runAllTimers();
+
+      const outsideEl = createMockElement("div");
+      (global as any).document.dispatchEvent({
+        type: "mousedown",
+        target: outsideEl,
+      });
+
+      expect(popover.isVisible()).toBe(true);
+      expect(onClose).not.toHaveBeenCalled();
+
+      // Unpin and trigger outside click
+      popover.setPinned(false);
+      (global as any).document.dispatchEvent({
+        type: "mousedown",
+        target: outsideEl,
+      });
+
+      expect(popover.isVisible()).toBe(false);
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("should preserve pinned state when updating popover with new search result", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() }
+      );
+      popover.setPinned(true);
+
+      const nextResult: LookupResult = {
+        query: "transformer",
+        type: "word",
+        vietnameseTranslation: "mô hình transformer",
+        definitions: [],
+        timestamp: Date.now(),
+      };
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        nextResult,
+        { onSave: vi.fn() }
+      );
+
+      expect(popover.isPinnedPopover()).toBe(true);
+      const el = asMockElement(popover.getElement())!;
+      const pinWindowBtn = el.querySelector(".popover-btn-pin-window")!;
+      expect(pinWindowBtn.classList.contains("is-pinned")).toBe(true);
+
+      popover.hide();
+    });
+
+    it("should unpin and hide when close button is clicked", () => {
+      const popover = new FloatingPopover();
+      const onClose = vi.fn();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onClose }
+      );
+      popover.setPinned(true);
+
+      const el = asMockElement(popover.getElement())!;
+      const closeBtn = el.querySelector(".popover-btn-close")!;
+
+      closeBtn.dispatchEvent({
+        type: "click",
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+
+      expect(popover.isVisible()).toBe(false);
+      expect(popover.isPinnedPopover()).toBe(false);
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 });
-
-

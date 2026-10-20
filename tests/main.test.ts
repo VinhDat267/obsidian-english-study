@@ -173,15 +173,17 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       expect(plugin.settingTabs.length).toBe(1);
     });
 
-    it("should dismiss floating UI on scroll event", async () => {
+    it("should dismiss floating UI on scroll event while preserving popover", async () => {
       await plugin.onload();
       const dismissSpy = vi.spyOn(plugin, "dismissFloatingUi");
+      const popoverHideSpy = vi.spyOn(plugin.floatingPopover, "hide");
 
       const scrollEvent = plugin.domEvents.find((e) => e.type === "scroll");
       expect(scrollEvent).toBeDefined();
 
       scrollEvent!.callback();
-      expect(dismissSpy).toHaveBeenCalled();
+      expect(dismissSpy).toHaveBeenCalledWith(true, true);
+      expect(popoverHideSpy).not.toHaveBeenCalled();
     });
 
     it("should NOT dismiss floating UI on scroll event originating from inside popover", async () => {
@@ -746,7 +748,7 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
   });
 
   describe("dismissFloatingUi()", () => {
-    it("should dismiss both floating trigger and popover", async () => {
+    it("should dismiss both floating trigger and popover when unpinned and keepPopover is false", async () => {
       await plugin.onload();
       const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
       const popoverHideSpy = vi.spyOn(plugin.floatingPopover, "hide");
@@ -754,6 +756,37 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
       plugin.dismissFloatingUi();
 
       expect(triggerHideSpy).toHaveBeenCalled();
+      expect(popoverHideSpy).toHaveBeenCalled();
+    });
+
+    it("should keep popover visible when keepPopover is true", async () => {
+      await plugin.onload();
+      const triggerHideSpy = vi.spyOn(plugin.floatingTrigger, "hide");
+      const popoverHideSpy = vi.spyOn(plugin.floatingPopover, "hide");
+
+      plugin.dismissFloatingUi(true, true);
+
+      expect(triggerHideSpy).toHaveBeenCalled();
+      expect(popoverHideSpy).not.toHaveBeenCalled();
+    });
+
+    it("should NOT dismiss popover if popover is pinned", async () => {
+      await plugin.onload();
+      vi.spyOn(plugin.floatingPopover, "isPinnedPopover").mockReturnValue(true);
+      const popoverHideSpy = vi.spyOn(plugin.floatingPopover, "hide");
+
+      plugin.dismissFloatingUi(true, false);
+
+      expect(popoverHideSpy).not.toHaveBeenCalled();
+    });
+
+    it("should dismiss popover if popover is NOT pinned", async () => {
+      await plugin.onload();
+      vi.spyOn(plugin.floatingPopover, "isPinnedPopover").mockReturnValue(false);
+      const popoverHideSpy = vi.spyOn(plugin.floatingPopover, "hide");
+
+      plugin.dismissFloatingUi(true, false);
+
       expect(popoverHideSpy).toHaveBeenCalled();
     });
   });
