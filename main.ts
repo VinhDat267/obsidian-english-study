@@ -753,11 +753,16 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
     const rect = this.getSelectionBoundingRect();
 
     // Hiển thị ngay trạng thái Loading tại vị trí vùng chọn
-    this.floatingPopover.showLoading(rect, selectedText, {
-      onClose: () => {
-        if (isCurrent()) this.invalidateLookup();
+    this.floatingPopover.showLoading(
+      rect,
+      selectedText,
+      {
+        onClose: () => {
+          if (isCurrent()) this.invalidateLookup();
+        },
       },
-    });
+      { popoverFontSize: this.settings.popoverFontSize || "medium" }
+    );
 
     const docContext = this.extractDocumentContext(editor);
 
@@ -849,6 +854,7 @@ export default class EnglishStudyPlugin extends Plugin implements PluginWithSett
         chatService: this.aiTutorChatService,
         geminiService: this.providerManager.getGeminiService(),
         apiKey: this.settings.geminiApiKey,
+        popoverFontSize: this.settings.popoverFontSize || "medium",
       }
     );
     shown = true;

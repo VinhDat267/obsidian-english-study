@@ -19,6 +19,7 @@ export interface FloatingPopoverOptions {
   chatService?: AiTutorChatService;
   geminiService?: GeminiService;
   apiKey?: string;
+  popoverFontSize?: PopoverFontSize;
 }
 
 export type { PopoverCallbacks };
@@ -97,9 +98,34 @@ export class FloatingPopover {
       e.stopPropagation();
     });
 
+    // Apply font size preference
+    const fontSize = options?.popoverFontSize || "medium";
+    popover.setAttribute("data-font-size", fontSize);
+    if ((popover as any).dataset) {
+      (popover as any).dataset.fontSize = fontSize;
+    }
+
+    // Detect long query for adaptive typography
+    const isLongQuery =
+      result.type === "sentence" ||
+      result.query.includes("\n") ||
+      result.query.trim().split(/\s+/).length >= 5 ||
+      result.query.trim().length > 45;
+
+    if (isLongQuery) {
+      popover.classList.add("has-long-query");
+    }
+
     // 1. Header
     const header = document.createElement("div");
     header.className = "popover-header";
+
+    // Top Bar (Row 1: Drag handle + Language Badge on left, Action buttons on right)
+    const topBar = document.createElement("div");
+    topBar.className = "popover-top-bar";
+
+    const topLeft = document.createElement("div");
+    topLeft.className = "popover-top-left";
 
     const dragHandle = document.createElement("div");
     dragHandle.className = "popover-drag-handle";
@@ -113,57 +139,16 @@ export class FloatingPopover {
     if (!dragHandle.innerHTML.trim()) {
       dragHandle.textContent = "⋮⋮";
     }
-    header.appendChild(dragHandle);
-
-    const titleGroup = document.createElement("div");
-    titleGroup.className = "popover-title-group";
+    topLeft.appendChild(dragHandle);
 
     const langMeta = getLanguageMeta(result.sourceLang || "en");
     const langBadge = document.createElement("span");
     langBadge.className = "vocab-lang-badge";
     langBadge.textContent = langMeta.badge;
     langBadge.setAttribute("title", langMeta.nameVi);
-    titleGroup.appendChild(langBadge);
+    topLeft.appendChild(langBadge);
 
-    const queryEl = document.createElement("span");
-    queryEl.className = "vocab-query";
-    queryEl.textContent = result.query;
-    titleGroup.appendChild(queryEl);
-
-    if (result.phonetic) {
-      const phoneticEl = document.createElement("span");
-      phoneticEl.className = "vocab-phonetic";
-      phoneticEl.textContent = result.phonetic.startsWith("/")
-        ? result.phonetic
-        : `/${result.phonetic}/`;
-      titleGroup.appendChild(phoneticEl);
-    }
-
-    if (result.transliteration) {
-      const translitEl = document.createElement("span");
-      translitEl.className = "vocab-transliteration";
-      translitEl.textContent = `[${result.transliteration}]`;
-      titleGroup.appendChild(translitEl);
-    }
-
-    // Audio Button
-    const audioBtn = document.createElement("button");
-    audioBtn.className = "audio-btn";
-    audioBtn.setAttribute("title", "Phát âm");
-    safeSetIcon(audioBtn, "volume-2", "Phát âm");
-
-    audioBtn.addEventListener("mousedown", (e: MouseEvent) => {
-      e.stopPropagation();
-    });
-
-    audioBtn.addEventListener("click", (e: MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.toggleAudio(result.query, result.audioUrl, audioBtn, result.sourceLang);
-    });
-    titleGroup.appendChild(audioBtn);
-
-    header.appendChild(titleGroup);
+    topBar.appendChild(topLeft);
 
     // Header Actions (Highlight, Pin, Close)
     const headerActions = document.createElement("div");
@@ -320,8 +305,53 @@ export class FloatingPopover {
       callbacks.onClose?.();
     });
     headerActions.appendChild(closeBtn);
+    topBar.appendChild(headerActions);
+    header.appendChild(topBar);
 
-    header.appendChild(headerActions);
+    // Title Group (Row 2: Query text + Phonetic + Audio button)
+    const titleGroup = document.createElement("div");
+    titleGroup.className = "popover-title-group";
+
+    const queryEl = document.createElement("span");
+    queryEl.className = isLongQuery ? "vocab-query is-long-query" : "vocab-query";
+    queryEl.textContent = result.query;
+    titleGroup.appendChild(queryEl);
+
+    if (result.phonetic) {
+      const phoneticEl = document.createElement("span");
+      phoneticEl.className = "vocab-phonetic";
+      phoneticEl.textContent = result.phonetic.startsWith("/")
+        ? result.phonetic
+        : `/${result.phonetic}/`;
+      titleGroup.appendChild(phoneticEl);
+    }
+
+    if (result.transliteration) {
+      const translitEl = document.createElement("span");
+      translitEl.className = "vocab-transliteration";
+      translitEl.textContent = `[${result.transliteration}]`;
+      titleGroup.appendChild(translitEl);
+    }
+
+    // Audio Button
+    const audioBtn = document.createElement("button");
+    audioBtn.className = "audio-btn";
+    audioBtn.setAttribute("title", "Phát âm");
+    safeSetIcon(audioBtn, "volume-2", "Phát âm");
+
+    audioBtn.addEventListener("mousedown", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
+    audioBtn.addEventListener("click", (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleAudio(result.query, result.audioUrl, audioBtn, result.sourceLang);
+    });
+    titleGroup.appendChild(audioBtn);
+
+    header.appendChild(titleGroup);
+
     this.setupDraggable(header, popover);
     popover.appendChild(header);
 
@@ -806,7 +836,8 @@ export class FloatingPopover {
   showLoading(
     rect: RectLike,
     query: string,
-    callbacks: { onClose?: () => void }
+    callbacks: { onClose?: () => void },
+    options?: { popoverFontSize?: PopoverFontSize }
   ): void {
     if (this.currentQuery !== query) {
       this.customPosition = null;

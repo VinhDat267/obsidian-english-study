@@ -163,13 +163,27 @@
    -------------------------------------------------------------------------- */
 .english-study-popover .popover-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   border-bottom: 1px solid var(--background-modifier-border); /* taste-skill-ignore: native pane header divider */
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   cursor: grab;
   user-select: none;
+}
+
+.english-study-popover .popover-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.english-study-popover .popover-top-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .english-study-popover.is-dragging {
@@ -219,6 +233,53 @@
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.4;
+}
+
+/* Adaptive Typography cho câu văn / đoạn văn dài */
+.english-study-popover.has-long-query .vocab-query,
+.english-study-popover .vocab-query.is-long-query {
+  font-size: var(--font-ui-small, 13.5px);
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--text-normal);
+  max-height: 130px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.english-study-popover .vocab-query.is-long-query::-webkit-scrollbar {
+  width: 4px;
+}
+.english-study-popover .vocab-query.is-long-query::-webkit-scrollbar-track {
+  background: transparent;
+}
+.english-study-popover .vocab-query.is-long-query::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: var(--english-study-radius-xs);
+}
+.english-study-popover .vocab-query.is-long-query::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+/* Font Size Scaling Options */
+.english-study-popover[data-font-size="small"] .vocab-query:not(.is-long-query) {
+  font-size: 15px;
+}
+.english-study-popover[data-font-size="small"] .vocab-query.is-long-query {
+  font-size: 12.5px;
+}
+.english-study-popover[data-font-size="small"] .vocab-meaning-vi {
+  font-size: 13.5px;
+}
+
+.english-study-popover[data-font-size="large"] .vocab-query:not(.is-long-query) {
+  font-size: 18.5px;
+}
+.english-study-popover[data-font-size="large"] .vocab-query.is-long-query {
+  font-size: 15px;
+}
+.english-study-popover[data-font-size="large"] .vocab-meaning-vi {
+  font-size: 16px;
 }
 
 .english-study-popover .vocab-phonetic {

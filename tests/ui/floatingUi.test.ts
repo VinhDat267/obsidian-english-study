@@ -13,6 +13,7 @@ function dispatchMockEvent(target: Window | Document, event: Record<string, unkn
 function createMockElement(tag: string = "div"): any {
   const listeners: Record<string, ((...args: any[]) => void)[]> = {};
   const attributes: Record<string, string> = {};
+  const dataset: Record<string, string> = {};
   const classListSet = new Set<string>();
   const children: any[] = [];
   let textContent = "";
@@ -22,6 +23,7 @@ function createMockElement(tag: string = "div"): any {
   const el = {
     tagName: tag.toUpperCase(),
     style: {} as Record<string, string>,
+    dataset,
     get textContent() {
       if (children.length > 0) {
         return children.map((c) => c.textContent || "").join("");
@@ -1325,6 +1327,116 @@ describe("UI Layer - FloatingTrigger & FloatingPopover", () => {
       expect(popover.isVisible()).toBe(false);
       expect(popover.isPinnedPopover()).toBe(false);
       expect(onClose).toHaveBeenCalled();
+    });
+
+    it("should render clean top bar (.popover-top-bar) containing drag handle, badge, and action buttons", () => {
+      const popover = new FloatingPopover();
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn(), onPinToSidebar: vi.fn(), onClose: vi.fn() },
+        { isReadingMode: true, onHighlight: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      const header = el.querySelector(".popover-header");
+      expect(header).not.toBeNull();
+
+      const topBar = el.querySelector(".popover-top-bar");
+      expect(topBar).not.toBeNull();
+
+      const topLeft = el.querySelector(".popover-top-left");
+      expect(topLeft).not.toBeNull();
+      expect(topLeft.querySelector(".popover-drag-handle")).not.toBeNull();
+      expect(topLeft.querySelector(".vocab-lang-badge")).not.toBeNull();
+
+      const headerActions = el.querySelector(".popover-header-actions");
+      expect(headerActions).not.toBeNull();
+      expect(topBar.querySelector(".popover-header-actions")).not.toBeNull();
+
+      // Title group is separate from topBar
+      const titleGroup = el.querySelector(".popover-title-group");
+      expect(titleGroup).not.toBeNull();
+      expect(titleGroup.querySelector(".vocab-query")).not.toBeNull();
+
+      popover.hide();
+    });
+
+    it("should mark long query with is-long-query and has-long-query when query is a long sentence or paragraph", () => {
+      const popover = new FloatingPopover();
+      const longQuery = "On Day 9 of a ten-day Sprint, remaining effort has fallen sharply, but the main booking flow still fails integration tests. What is the best progress report and next action?\nA. Mark the Sprint Goal achieved...\nB. Report lower estimated remaining work...";
+      const longResult: LookupResult = {
+        query: longQuery,
+        type: "sentence",
+        contextSentence: longQuery,
+        contextSentenceClean: longQuery,
+        vietnameseTranslation: "Bản dịch câu hỏi...",
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        longResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      expect(el.classList.contains("has-long-query")).toBe(true);
+
+      const queryEl = el.querySelector(".vocab-query")!;
+      expect(queryEl.classList.contains("is-long-query")).toBe(true);
+
+      popover.hide();
+    });
+
+    it("should NOT mark short query with is-long-query when query is a single word", () => {
+      const popover = new FloatingPopover();
+      const shortResult: LookupResult = {
+        query: "apple",
+        type: "word",
+        contextSentence: "I ate an apple.",
+        contextSentenceClean: "I ate an apple.",
+        vietnameseTranslation: "quả táo",
+        timestamp: Date.now(),
+      };
+
+      popover.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        shortResult,
+        { onSave: vi.fn() }
+      );
+
+      const el = asMockElement(popover.getElement())!;
+      expect(el.classList.contains("has-long-query")).toBe(false);
+
+      const queryEl = el.querySelector(".vocab-query")!;
+      expect(queryEl.classList.contains("is-long-query")).toBe(false);
+
+      popover.hide();
+    });
+
+    it("should apply data-font-size attribute and dataset matching popoverFontSize option", () => {
+      const popoverSmall = new FloatingPopover();
+      popoverSmall.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { popoverFontSize: "small" as any }
+      );
+      const elSmall = asMockElement(popoverSmall.getElement())!;
+      expect(elSmall.getAttribute("data-font-size") || elSmall.dataset?.fontSize).toBe("small");
+      popoverSmall.hide();
+
+      const popoverLarge = new FloatingPopover();
+      popoverLarge.show(
+        { top: 100, bottom: 120, left: 200, right: 280 },
+        mockResult,
+        { onSave: vi.fn() },
+        { popoverFontSize: "large" as any }
+      );
+      const elLarge = asMockElement(popoverLarge.getElement())!;
+      expect(elLarge.getAttribute("data-font-size") || elLarge.dataset?.fontSize).toBe("large");
+      popoverLarge.hide();
     });
   });
 });

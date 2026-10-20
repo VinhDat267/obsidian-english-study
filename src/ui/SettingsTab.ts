@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import {
   PluginSettings,
   TriggerMode,
+  PopoverFontSize,
   VocabFormat,
   PreferredAccent,
   BilingualStyle,
@@ -92,6 +93,21 @@ export class EnglishStudySettingTab extends PluginSettingTab {
     if (isAutoTranslate) {
       manualSetting.setClass("setting-item-disabled");
     }
+
+    new Setting(containerEl)
+      .setName("Cỡ chữ cửa sổ tra cứu nổi (Popover)")
+      .setDesc("Điều chỉnh tỷ lệ kích thước chữ hiển thị của Popover tra cứu khi đọc.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("small", "Nhỏ (Compact)")
+          .addOption("medium", "Vừa (Tiêu chuẩn)")
+          .addOption("large", "Lớn (Dễ đọc)")
+          .setValue(this.pluginInstance.settings.popoverFontSize || "medium")
+          .onChange(async (value: string) => {
+            this.pluginInstance.settings.popoverFontSize = value as PopoverFontSize;
+            await this.pluginInstance.saveSettings();
+          })
+      );
 
     new Setting(containerEl)
       .setName("Màu bút dạ quang mặc định")

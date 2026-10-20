@@ -508,6 +508,9 @@ describe("EnglishStudyPlugin Integration (main.ts)", () => {
         "breakthrough",
         expect.objectContaining({
           onClose: expect.any(Function),
+        }),
+        expect.objectContaining({
+          popoverFontSize: "medium",
         })
       );
       expect(showSpy).not.toHaveBeenCalled();
